@@ -17,6 +17,9 @@ const config: Config = {
       fontFamily: {
         heading: ['var(--font-playfair)', 'serif'],
         body: ['var(--font-lato)', 'sans-serif'],
+        balgor: ['var(--font-balgor)', 'sans-serif'],
+        acollia: ['var(--font-acollia)', 'sans-serif'],
+        ladinta: ['var(--font-ladinta)', 'sans-serif'],
       },
     },
   },

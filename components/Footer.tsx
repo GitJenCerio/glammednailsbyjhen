@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 export default function Footer() {
   return (
     <footer id="book" className="bg-gray-100 section-padding">
@@ -7,7 +9,15 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-8">
           {/* About Section */}
           <div>
-            <h3 className="text-2xl font-heading font-bold mb-4">glammednailsbyjhen</h3>
+            <div className="mb-4">
+              <Image
+                src="/logo-1.svg"
+                alt="glammednailsbyjhen logo"
+                width={250}
+                height={80}
+                className="h-12 w-auto"
+              />
+            </div>
             <p className="text-gray-600 mb-4">
               Premium nail care services for the modern you.
             </p>

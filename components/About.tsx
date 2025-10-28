@@ -35,7 +35,7 @@ export default function About() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6">
+            <h2 className="text-5xl md:text-5xl font-acollia mb-6">
               About Us
             </h2>
             <p className="text-gray-600 mb-4 text-lg">

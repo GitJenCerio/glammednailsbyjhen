@@ -50,9 +50,9 @@ export default function Header() {
         <div className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
           <Link href="/" className="flex items-center px-4">
             <img 
-              src="/logo.svg" 
+              src="/logo-1.svg" 
               alt="glammednailsbyjhen logo" 
-              className="h-12 md:h-16 lg:h-20 w-auto"
+              className="h-10 md:h-16 m:h-23 w-auto"
             />
           </Link>
           <div className="flex items-center gap-8">
@@ -80,15 +80,15 @@ export default function Header() {
         {/* Book Appointment Button - Far Right */}
         <Link
           href="#book"
-          className="hidden md:block px-6 py-2.5 bg-black text-white font-medium hover:bg-black/90 transition-colors text-sm whitespace-nowrap"
+          className="hidden md:block px-6 py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-sm whitespace-nowrap"
         >
-          Book Appointment
+          Book Now
         </Link>
 
         {/* Mobile Book Button - Right */}
         <Link
           href="#book"
-          className="md:hidden px-4 py-1.5 bg-black text-white font-medium hover:bg-black/90 transition-colors text-xs"
+          className="md:hidden px-4 py-1.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs"
         >
           Book
         </Link>
@@ -117,9 +117,9 @@ export default function Header() {
               <Link
                 href="#book"
                 onClick={() => setIsOpen(false)}
-                className="block w-full px-6 py-2 bg-black text-white font-medium text-center"
+                className="block w-full px-6 py-2 bg-black text-white font-medium text-center border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
               >
-                Book Appointment
+                Book Now
               </Link>
             </div>
           </motion.div>

@@ -26,21 +26,28 @@ export default function Hero() {
         transition={{ duration: 0.8 }}
         className="relative z-10 max-w-3xl w-full mx-auto"
       >
-        <div className="border-4 md:border-8 border-black bg-white/95 backdrop-blur p-8 md:p-12 lg:p-16">
-          <motion.h1
+        <div className="border-4 md:border-6 border-black backdrop-blur p-8 md:p-12 lg:p-16">
+          <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.8 }}
-            className="text-4xl md:text-6xl lg:text-7xl font-heading font-bold text-center mb-6"
+            transition={{ delay: 0.2, duration: 0.8 }}
+            className="flex justify-center mb-0"
           >
-            glammednailsbyjhen
-          </motion.h1>
+            <Image
+              src="/logo-1.svg"
+              alt="glammednailsbyjhen logo"
+              width={800}
+              height={150}
+              className="w-full max-w-xlg h-auto"
+              priority
+            />
+          </motion.div>
           
           <motion.p
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8 }}
-            className="text-lg md:text-xl text-center text-gray-700 mb-8"
+            className="text-lg md:text-xl text-center text-gray-700 mb-6"
           >
             Your nails, your style, reimagined.
           </motion.p>
@@ -53,9 +60,9 @@ export default function Hero() {
           >
             <a
               href="#book"
-              className="px-8 py-4 bg-black text-white font-semibold hover:bg-transparent hover:text-black border-2 border-black transition-all duration-300"
+              className="px-8 py-4 bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
             >
-              Book Appointment
+              Book Now
             </a>
           </motion.div>
         </div>

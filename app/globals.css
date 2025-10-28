@@ -4,10 +4,37 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Lato:wght@300;400;500;600;700&display=swap');
 
+@font-face {
+  font-family: 'Balgor';
+  src: url('/Balgor.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Acollia';
+  src: url('/Acollia Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Ladinta';
+  src: url('/Ladinta Semibold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --font-playfair: 'Playfair Display', serif;
     --font-lato: 'Lato', sans-serif;
+    --font-balgor: 'Balgor', sans-serif;
+    --font-acollia: 'Acollia', sans-serif;
+    --font-ladinta: 'Ladinta', sans-serif;
   }
 
   body {

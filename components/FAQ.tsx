@@ -43,7 +43,7 @@ export default function FAQ() {
         transition={{ duration: 0.6 }}
         className="max-w-4xl mx-auto"
       >
-        <h2 className="text-4xl md:text-5xl font-heading font-bold text-center mb-4">
+        <h2 className="text-4xl md:text-5xl font-acollia text-center mb-4">
           Frequently Asked Questions
         </h2>
         <p className="text-center text-gray-600 mb-12">
