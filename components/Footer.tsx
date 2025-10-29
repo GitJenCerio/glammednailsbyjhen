@@ -11,7 +11,7 @@ export default function Footer() {
           <div>
             <div className="mb-4">
               <Image
-                src="/logo-1.svg"
+                src="/logo.svg"
                 alt="glammednailsbyjhen logo"
                 width={250}
                 height={80}

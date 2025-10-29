@@ -149,7 +149,7 @@ export default function Pricing() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: index * 0.1 }}
-              className="bg-white p-8 border-2 border-black hover:border-black/50 transition-all"
+              className="bg-white p-8 border-2 border-black hover:border-black/50 transition-all flex flex-col"
             >
               <h3 className="text-2xl font-heading font-bold mb-4">{plan.name}</h3>
               <div className="mb-6">
@@ -182,8 +182,9 @@ export default function Pricing() {
                 <p>• P500 advance deposit upon booking is required to secure the slot; non-refundable, but deductible from the total payment.</p>
               </div>
               <a
-                href="#book"
-                className="block w-full text-center px-6 py-3 bg-black text-white font-medium hover:bg-transparent hover:text-black border-2 border-black transition-all"
+                href="https://forms.gle/o6k3veo5HY2NkYAu9"
+                target="_blank" rel="noopener noreferrer"
+                className="block w-full text-center px-6 py-3 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto"
               >
                 Book Now
               </a>

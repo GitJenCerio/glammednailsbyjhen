@@ -26,7 +26,7 @@ export default function Hero() {
         transition={{ duration: 0.8 }}
         className="relative z-10 max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl w-full mx-auto px-4"
       >
-        <div className="border-4 md:border-6 border-black backdrop-blur p-4 sm:p-6 md:p-12 lg:p-16">
+        <div className="border-2 md:border-[6px] border-white shadow-[0_0_0_2px_#000000] md:shadow-[0_0_0_6px_#000000] backdrop-blur p-4 sm:p-6 md:p-12 lg:p-16">
           <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -59,7 +59,8 @@ export default function Hero() {
             className="flex justify-center"
           >
             <a
-              href="#book"
+              href="https://forms.gle/o6k3veo5HY2NkYAu9"
+              target="_blank" rel="noopener noreferrer"
               className="px-4 py-2 text-sm sm:px-6 sm:py-3 sm:text-base bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
             >
               Book Now

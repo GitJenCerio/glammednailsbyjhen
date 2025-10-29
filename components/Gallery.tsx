@@ -4,20 +4,21 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 
-const galleryImages = [
-  '/images/gallery-1.jpg',
-  '/images/gallery-2.jpg',
-  '/images/gallery-3.jpg',
-  '/images/gallery-4.jpg',
-  '/images/gallery-5.jpg',
-  '/images/gallery-6.jpg',
-  '/images/gallery-7.jpg',
-  '/images/gallery-8.jpg',
-  '/images/gallery-9.jpg',
-];
+// Build images 1..41, skipping 27 (file is misspelled as galley-27.JPG)
+const galleryImages = Array.from({ length: 41 }, (_, i) => i + 1)
+  .filter((n) => n !== 27)
+  .map((n) => ({ src: `/images/gallery-${n}.JPG` }));
 
 export default function Gallery() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Deterministic, varied heights so adjacent items rarely match
+  const getTileHeight = (index: number) => {
+    const baseHeights = [180, 210, 240, 270, 300, 330, 360, 390];
+    const base = baseHeights[(index * 7 + 3) % baseHeights.length];
+    const jitter = ((index * 13) % 40) - 20; // -20..19px
+    return Math.max(160, base + jitter);
+  };
 
   return (
     <section id="gallery" className="section-padding bg-white">
@@ -35,24 +36,24 @@ export default function Gallery() {
           Browse our latest work and get inspired
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {galleryImages.map((image, index) => (
+        <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
+          {galleryImages.map((item, index) => (
             <motion.div
               key={index}
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="relative h-64 md:h-80 cursor-pointer group"
-              onClick={() => setSelectedImage(image)}
+              transition={{ duration: 0.4, delay: index * 0.05 }}
+              className={`mb-4 break-inside-avoid overflow-hidden rounded-2xl md:rounded-3xl cursor-pointer group`}
+              style={{ height: `${getTileHeight(index)}px` }}
+              onClick={() => setSelectedImage(item.src)}
             >
-              <Image
-                src={image}
+              <img
+                src={item.src}
                 alt={`Gallery image ${index + 1}`}
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-300"
+                className="w-full h-full object-cover rounded-2xl md:rounded-3xl group-hover:opacity-95 transition"
+                loading="lazy"
               />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
             </motion.div>
           ))}
         </div>
@@ -79,7 +80,7 @@ export default function Gallery() {
                 src={selectedImage}
                 alt="Gallery image"
                 fill
-                className="object-contain"
+                className="object-contain rounded-lg"
               />
               <button
                 onClick={() => setSelectedImage(null)}

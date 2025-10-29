@@ -22,7 +22,7 @@ export default function Header() {
       animate={{ y: 0 }}
       className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md"
     >
-      <nav className="px-6 md:px-12 lg:px-16 xl:px-24 flex items-center justify-between py-8 relative">
+      <nav className="px-6 md:px-16 lg:px-32 xl:px-64 flex items-center justify-between py-8 relative">
         {/* Mobile Menu Button - Left */}
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -79,7 +79,8 @@ export default function Header() {
 
         {/* Book Appointment Button - Far Right */}
         <Link
-          href="#book"
+          href="https://forms.gle/o6k3veo5HY2NkYAu9"
+          target="_blank"
           className="hidden md:block px-6 py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-sm whitespace-nowrap"
         >
           Book Now
@@ -87,7 +88,8 @@ export default function Header() {
 
         {/* Mobile Book Button - Right */}
         <Link
-          href="#book"
+          href="https://forms.gle/o6k3veo5HY2NkYAu9"
+          target="_blank"
           className="md:hidden px-4 py-1.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs"
         >
           Book
@@ -115,7 +117,8 @@ export default function Header() {
                 </Link>
               ))}
               <Link
-                href="#book"
+                href="https://forms.gle/o6k3veo5HY2NkYAu9"
+                target="_blank"
                 onClick={() => setIsOpen(false)}
                 className="block w-full px-6 py-2 bg-black text-white font-medium text-center border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
               >
