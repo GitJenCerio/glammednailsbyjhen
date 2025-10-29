@@ -5,7 +5,7 @@ import Image from 'next/image';
 
 export default function Hero() {
   return (
-    <section id="home" className="relative h-screen flex items-center justify-center overflow-hidden pt-16">
+    <section id="home" className="relative h-[65vh] md:h-screen flex items-center justify-center overflow-hidden pt-16">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
@@ -24,9 +24,9 @@ export default function Hero() {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.8 }}
-        className="relative z-10 max-w-3xl w-full mx-auto"
+        className="relative z-10 max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl w-full mx-auto px-4"
       >
-        <div className="border-4 md:border-6 border-black backdrop-blur p-8 md:p-12 lg:p-16">
+        <div className="border-4 md:border-6 border-black backdrop-blur p-4 sm:p-6 md:p-12 lg:p-16">
           <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -34,11 +34,11 @@ export default function Hero() {
             className="flex justify-center mb-0"
           >
             <Image
-              src="/logo-1.svg"
+              src="/logo.svg"
               alt="glammednailsbyjhen logo"
               width={800}
               height={150}
-              className="w-full max-w-xlg h-auto"
+              className="w-full h-auto max-w-[260px] sm:max-w-[420px] md:max-w-[600px]"
               priority
             />
           </motion.div>
@@ -47,7 +47,7 @@ export default function Hero() {
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8 }}
-            className="text-lg md:text-xl text-center text-gray-700 mb-6"
+            className="text-sm sm:text-base md:text-xl text-center text-gray-700 mb-6"
           >
             Your nails, your style, reimagined.
           </motion.p>
@@ -60,7 +60,7 @@ export default function Hero() {
           >
             <a
               href="#book"
-              className="px-8 py-4 bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
+              className="px-4 py-2 text-sm sm:px-6 sm:py-3 sm:text-base bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
             >
               Book Now
             </a>

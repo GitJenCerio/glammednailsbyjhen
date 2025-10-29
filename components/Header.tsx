@@ -50,7 +50,7 @@ export default function Header() {
         <div className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
           <Link href="/" className="flex items-center px-4">
             <img 
-              src="/logo-1.svg" 
+              src="/logo.svg" 
               alt="glammednailsbyjhen logo" 
               className="h-10 md:h-16 m:h-23 w-auto"
             />
@@ -73,7 +73,7 @@ export default function Header() {
           <img 
             src="/logo.svg" 
             alt="glammednailsbyjhen logo" 
-            className="h-10 w-auto"
+            className="h-14 w-auto"
           />
         </Link>
 
