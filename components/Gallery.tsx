@@ -43,7 +43,7 @@ export default function Gallery() {
               initial={{ opacity: 0, scale: 0.98 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: index * 0.05 }}
+              transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.2) }}
               className={`mb-4 break-inside-avoid overflow-hidden rounded-2xl md:rounded-3xl cursor-pointer group`}
               style={{ height: `${getTileHeight(index)}px` }}
               onClick={() => setSelectedImage(item.src)}
@@ -53,6 +53,8 @@ export default function Gallery() {
                 alt={`Gallery image ${index + 1}`}
                 className="w-full h-full object-cover rounded-2xl md:rounded-3xl group-hover:opacity-95 transition"
                 loading="lazy"
+                decoding="async"
+                fetchPriority={index < 6 ? "high" : "low"}
               />
             </motion.div>
           ))}

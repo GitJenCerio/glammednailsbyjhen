@@ -25,6 +25,8 @@ export default function About() {
               src="/images/about.jpg"
               alt="About us"
               fill
+              loading="lazy"
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover rounded-lg"
             />
           </motion.div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 
 const services = [
@@ -37,6 +38,8 @@ const services = [
 ];
 
 export default function Services() {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
   return (
     <section id="services" className="section-padding bg-white">
       <motion.div
@@ -60,14 +63,19 @@ export default function Services() {
               initial={{ opacity: 0, y: 50 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: index * 0.1 }}
+              transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3) }}
               className="group cursor-pointer"
             >
-              <div className="relative h-80 md:h-96 mb-4 overflow-hidden rounded-2xl md:rounded-3xl">
+              <div 
+                className="relative h-80 md:h-96 mb-4 overflow-hidden rounded-2xl md:rounded-3xl"
+                onClick={() => setSelectedImage(service.image)}
+              >
                 <Image
                   src={service.image}
                   alt={service.title}
                   fill
+                  loading="lazy"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="object-cover group-hover:scale-110 transition-transform duration-300 rounded-2xl md:rounded-3xl"
                 />
               </div>
@@ -79,6 +87,40 @@ export default function Services() {
           ))}
         </div>
       </motion.div>
+
+      {/* Lightbox */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setSelectedImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+              className="relative max-w-5xl w-full h-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Image
+                src={selectedImage}
+                alt="Service image"
+                fill
+                className="object-contain rounded-lg"
+              />
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute top-4 right-4 text-white text-4xl font-bold hover:text-gray-300"
+              >
+                ×
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

@@ -148,7 +148,7 @@ export default function Pricing() {
               initial={{ opacity: 0, y: 50 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: index * 0.1 }}
+              transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3) }}
               className="bg-white p-8 border-2 border-black hover:border-black/50 transition-all flex flex-col"
             >
               <h3 className="text-2xl font-heading font-bold mb-4">{plan.name}</h3>
@@ -177,9 +177,9 @@ export default function Pricing() {
                   </li>
                 ))}
               </ul>
-              <div className="text-xs text-red-500 opacity-80 mb-4">
-                <p className="mb-1">• All nail services come with 5 days warranty.</p>
-                <p>• P500 advance deposit upon booking is required to secure the slot; non-refundable, but deductible from the total payment.</p>
+              <div className="text-xs mb-4">
+                <p className="mb-1 text-black text-center">• All nail services come with 5 days warranty.</p>
+                <p className="text-red-600 font-bold">• P500 advance deposit upon booking is required to secure the slot; non-refundable, but deductible from the total payment.</p>
               </div>
               <a
                 href="https://forms.gle/o6k3veo5HY2NkYAu9"
