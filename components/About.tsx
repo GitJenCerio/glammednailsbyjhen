@@ -19,7 +19,7 @@ export default function About() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative h-[400px] lg:h-[500px]"
+            className="relative h-[400px] lg:h-[500px] mx-auto lg:mx-0"
           >
             <Image
               src="/images/about.jpg"
@@ -34,6 +34,7 @@ export default function About() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
+            className="text-center lg:text-left"
           >
             <h2 className="text-5xl md:text-5xl font-acollia mb-6">
               About Us
