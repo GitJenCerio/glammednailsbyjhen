@@ -5,9 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 
 // Build images 1..41, skipping 27 (file is misspelled as galley-27.JPG)
+// Note: File extensions vary - use lowercase for files 1-9, uppercase for 10+
 const galleryImages = Array.from({ length: 41 }, (_, i) => i + 1)
   .filter((n) => n !== 27)
-  .map((n) => ({ src: `/images/gallery-${n}.JPG` }));
+  .map((n) => ({ 
+    src: n <= 9 ? `/images/gallery-${n}.jpg` : `/images/gallery-${n}.JPG` 
+  }));
 
 export default function Gallery() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

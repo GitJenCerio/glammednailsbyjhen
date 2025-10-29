@@ -16,7 +16,7 @@ export default function About() {
             className="relative h-[400px] lg:h-[500px] w-full mx-auto lg:mx-0 overflow-hidden rounded-lg"
           >
             <Image
-              src="/images/about.JPG"
+              src="/images/about.jpg"
               alt="About us"
               fill
               loading="lazy"
