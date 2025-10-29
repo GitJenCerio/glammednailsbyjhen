@@ -22,7 +22,7 @@ export default function About() {
             className="relative h-[400px] lg:h-[500px] mx-auto lg:mx-0"
           >
             <Image
-              src="/images/about.jpg"
+              src="/images/about.JPG"
               alt="About us"
               fill
               loading="lazy"

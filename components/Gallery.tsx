@@ -48,13 +48,16 @@ export default function Gallery() {
               style={{ height: `${getTileHeight(index)}px` }}
               onClick={() => setSelectedImage(item.src)}
             >
-              <img
+              <Image
                 src={item.src}
                 alt={`Gallery image ${index + 1}`}
-                className="w-full h-full object-cover rounded-2xl md:rounded-3xl group-hover:opacity-95 transition"
+                fill
+                className="object-cover rounded-2xl md:rounded-3xl group-hover:opacity-95 transition"
                 loading="lazy"
-                decoding="async"
-                fetchPriority={index < 6 ? "high" : "low"}
+                sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                onError={(e) => {
+                  console.error(`Failed to load image: ${item.src}`);
+                }}
               />
             </motion.div>
           ))}

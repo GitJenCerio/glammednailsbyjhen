@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function Header() {
@@ -49,10 +50,13 @@ export default function Header() {
         {/* Center Group: Logo + Navigation - Centered */}
         <div className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
           <Link href="/" className="flex items-center px-4">
-            <img 
+            <Image 
               src="/logo.svg" 
               alt="glammednailsbyjhen logo" 
-              className="h-10 md:h-16 m:h-23 w-auto"
+              width={200}
+              height={64}
+              className="h-10 md:h-16 w-auto"
+              priority
             />
           </Link>
           <div className="flex items-center gap-8">
@@ -70,10 +74,13 @@ export default function Header() {
 
         {/* Mobile Logo - Centered */}
         <Link href="/" className="md:hidden absolute left-1/2 -translate-x-1/2 px-4">
-          <img 
+          <Image 
             src="/logo.svg" 
             alt="glammednailsbyjhen logo" 
+            width={200}
+            height={56}
             className="h-14 w-auto"
+            priority
           />
         </Link>
 
