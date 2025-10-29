@@ -6,20 +6,14 @@ import Image from 'next/image';
 export default function About() {
   return (
     <section id="about" className="section-padding bg-gray-50">
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="max-w-7xl mx-auto"
-      >
+      <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="relative h-[400px] lg:h-[500px] mx-auto lg:mx-0"
+            viewport={{ once: true, margin: "0px" }}
+            transition={{ duration: 0.5 }}
+            className="relative h-[400px] lg:h-[500px] w-full mx-auto lg:mx-0 overflow-hidden rounded-lg"
           >
             <Image
               src="/images/about.JPG"
@@ -28,14 +22,15 @@ export default function About() {
               loading="lazy"
               sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover rounded-lg"
+              quality={90}
             />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            viewport={{ once: true, margin: "0px" }}
+            transition={{ duration: 0.5 }}
             className="text-center lg:text-left"
           >
             <h2 className="text-5xl md:text-5xl font-acollia mb-6">
@@ -57,7 +52,7 @@ export default function About() {
             </p>
           </motion.div>
         </div>
-      </motion.div>
+      </div>
     </section>
   );
 }

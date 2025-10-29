@@ -22,13 +22,7 @@ export default function Gallery() {
 
   return (
     <section id="gallery" className="section-padding bg-white">
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="max-w-7xl mx-auto"
-      >
+      <div className="max-w-7xl mx-auto">
         <h2 className="text-4xl md:text-5xl font-acollia text-center mb-4">
           Gallery
         </h2>
@@ -42,9 +36,9 @@ export default function Gallery() {
               key={index}
               initial={{ opacity: 0, scale: 0.98 }}
               whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.2) }}
-              className={`mb-4 break-inside-avoid overflow-hidden rounded-2xl md:rounded-3xl cursor-pointer group`}
+              viewport={{ once: true, margin: "0px" }}
+              transition={{ duration: 0.4, delay: Math.min(index * 0.015, 0.15) }}
+              className={`mb-4 break-inside-avoid overflow-hidden rounded-2xl md:rounded-3xl cursor-pointer group relative`}
               style={{ height: `${getTileHeight(index)}px` }}
               onClick={() => setSelectedImage(item.src)}
             >
@@ -62,7 +56,7 @@ export default function Gallery() {
             </motion.div>
           ))}
         </div>
-      </motion.div>
+      </div>
 
       {/* Lightbox */}
       <AnimatePresence>
