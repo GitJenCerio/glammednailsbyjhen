@@ -9,12 +9,13 @@ export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
 
   const navLinks = [
-    { href: '#home', label: 'Home' },
-    { href: '#services', label: 'Services' },
-    { href: '#about', label: 'About' },
-    { href: '#gallery', label: 'Gallery' },
-    { href: '#pricing', label: 'Pricing' },
-    { href: '#faq', label: 'FAQ' },
+    { href: '#home', label: 'Home', isRoute: false },
+    { href: '#services', label: 'Services', isRoute: false },
+    { href: '#about', label: 'About', isRoute: false },
+    { href: '#gallery', label: 'Gallery', isRoute: false },
+    { href: '#pricing', label: 'Pricing', isRoute: false },
+    { href: '#faq', label: 'FAQ', isRoute: false },
+    { href: '/booking', label: 'Booking Calendar', isRoute: true },
   ];
 
   const scrollToId = (hash: string) => {
@@ -72,17 +73,27 @@ export default function Header() {
           </Link>
           <div className="flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToId(link.href);
-                }}
-                className="text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer"
-              >
-                {link.label}
-              </a>
+              link.isRoute ? (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId(link.href);
+                  }}
+                  className="text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer"
+                >
+                  {link.label}
+                </a>
+              )
             ))}
           </div>
         </div>
@@ -129,20 +140,31 @@ export default function Header() {
           >
             <div className="px-4 py-4 space-y-3">
               {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsOpen(false);
-                    setTimeout(() => {
-                      scrollToId(link.href);
-                    }, 150);
-                  }}
-                  className="block text-base font-medium text-gray-600 hover:text-black cursor-pointer px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  {link.label}
-                </a>
+                link.isRoute ? (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setIsOpen(false)}
+                    className="block text-base font-medium text-gray-600 hover:text-black cursor-pointer px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsOpen(false);
+                      setTimeout(() => {
+                        scrollToId(link.href);
+                      }, 150);
+                    }}
+                    className="block text-base font-medium text-gray-600 hover:text-black cursor-pointer px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    {link.label}
+                  </a>
+                )
               ))}
               <Link
                 href="https://forms.gle/o6k3veo5HY2NkYAu9"
