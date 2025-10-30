@@ -132,8 +132,9 @@ export default function Pricing() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="max-w-7xl mx-auto"
+        className="max-w-7xl mx-auto px-0"
       >
+        <div id="pricing" style={{ scrollMarginTop: '180px', height: 0 }} />
         <h2 className="text-4xl md:text-5xl font-acollia text-center mb-4">
           Pricing
         </h2>
@@ -149,11 +150,11 @@ export default function Pricing() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3) }}
-              className="bg-white p-8 border-2 border-black hover:border-black/50 transition-all flex flex-col"
+              className="bg-white p-4 border-2 border-black hover:border-black/50 transition-all rounded-lg flex flex-col shadow-lg shadow-black/15"
             >
-              <h3 className="text-2xl font-heading font-bold mb-4">{plan.name}</h3>
-              <div className="mb-6">
-                <div className="text-4xl font-bold text-black">{(plan as any).price}</div>
+              <h3 className="text-xl font-heading font-bold mb-2">{plan.name}</h3>
+              <div className="mb-3">
+                <div className="text-3xl font-bold text-black">{(plan as any).price}</div>
                 {(plan as any).addOnPrice && (
                   <div className="text-sm text-gray-500 mt-1">
                     <div className="font-medium">Add-ons:</div>
@@ -169,7 +170,7 @@ export default function Pricing() {
                   </div>
                 )}
               </div>
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-1 mb-4">
                 {plan.features.map((feature, idx) => (
                   <li key={idx} className="flex items-start">
                     <span className="text-black mr-2">✓</span>
@@ -177,14 +178,14 @@ export default function Pricing() {
                   </li>
                 ))}
               </ul>
-              <div className="text-xs mb-4">
-                <p className="mb-1 text-black text-center">• All nail services come with 5 days warranty.</p>
+              <div className="text-xs mb-2">
+                <p className="mb-0.5 text-black text-center">• All nail services come with 5 days warranty.</p>
                 <p className="text-red-600 font-bold">• P500 advance deposit upon booking is required to secure the slot; non-refundable, but deductible from the total payment.</p>
               </div>
               <a
                 href="https://forms.gle/o6k3veo5HY2NkYAu9"
                 target="_blank" rel="noopener noreferrer"
-                className="block w-full text-center px-6 py-3 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto"
+                className="block w-full text-center px-6 py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto"
               >
                 Book Now
               </a>

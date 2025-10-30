@@ -47,8 +47,9 @@ export default function Services() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="max-w-7xl mx-auto"
+        className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-0"
       >
+        <div id="services" style={{ scrollMarginTop: '180px', height: 0 }} />
         <h2 className="text-5xl md:text-5xl text-center mb-5 font-acollia">
           Our Services
         </h2>
@@ -82,7 +83,7 @@ export default function Services() {
               <h3 className="text-xl font-heading font-semibold mb-2">
                 {service.title}
               </h3>
-              <p className="text-gray-600 text-sm">{service.description}</p>
+              <p className="text-gray-600 text-sm text-justify">{service.description}</p>
             </motion.div>
           ))}
         </div>

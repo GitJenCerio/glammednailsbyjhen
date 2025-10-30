@@ -33,20 +33,21 @@ export default function About() {
             transition={{ duration: 0.5 }}
             className="text-center lg:text-left"
           >
+            <div id="about" style={{ scrollMarginTop: '180px', height: 0 }} />
             <h2 className="text-5xl md:text-5xl font-acollia mb-6">
               About Us
             </h2>
-            <p className="text-gray-600 mb-4 text-lg">
+            <p className="text-gray-600 mb-4 text-lg text-justify">
               Welcome to glammednailsbyjhen, where your nail dreams become reality. 
               We specialize in creating beautiful, long-lasting manicures and pedicures 
               that reflect your unique style.
             </p>
-            <p className="text-gray-600 mb-4 text-lg">
+            <p className="text-gray-600 mb-4 text-lg text-justify">
               Our experienced team uses only the highest quality products and the latest 
               techniques to ensure your nails look flawless and stay that way. From classic 
               styles to intricate nail art, we bring your vision to life.
             </p>
-            <p className="text-gray-600 text-lg">
+            <p className="text-gray-600 text-lg text-justify">
               Book your appointment today and experience the difference that professional 
               nail care can make.
             </p>

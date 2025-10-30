@@ -5,11 +5,11 @@ import Image from 'next/image';
 
 export default function Hero() {
   return (
-    <section id="home" className="relative h-[65vh] md:h-screen flex items-center justify-center overflow-hidden pt-16">
+    <section id="home" className="relative h-[45vh] md:h-screen flex items-center justify-center overflow-hidden pt-16">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/images/hero.jpg"
+          src="/images/hero-1.jpg"
           alt="Hero background"
           fill
           className="object-cover"
@@ -35,7 +35,7 @@ export default function Hero() {
             className="flex justify-center mb-0"
           >
             <Image
-              src="/logo.svg"
+              src="/logo.png"
               alt="glammednailsbyjhen logo"
               width={800}
               height={150}
@@ -50,7 +50,7 @@ export default function Hero() {
             transition={{ delay: 0.5, duration: 0.8 }}
             className="text-sm sm:text-base md:text-xl text-center text-gray-700 mb-6"
           >
-            Your nails, your style, reimagined.
+            I will make your nails look expensive.
           </motion.p>
 
           <motion.div
