@@ -88,7 +88,7 @@ export default function Header() {
         </div>
 
         {/* Mobile Logo - Centered */}
-        <Link href="/" className="md:hidden absolute left-1/2 -translate-x-1/2 px-4">
+        <Link href="/" className="md:hidden absolute left-1/2 -translate-x-1/2 px-4 mb-2">
           <Image 
             src="/logo.png" 
             alt="glammednailsbyjhen logo" 
@@ -112,7 +112,7 @@ export default function Header() {
         <Link
           href="https://forms.gle/o6k3veo5HY2NkYAu9"
           target="_blank"
-          className="md:hidden px-6 py-1.5 mx-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs"
+          className="md:hidden px-6 py-1.5 mx-2 ml-16 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs"
         >
           Book
         </Link>

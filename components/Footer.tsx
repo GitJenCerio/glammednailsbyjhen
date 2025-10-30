@@ -93,7 +93,11 @@ export default function Footer() {
 
         {/* Copyright */}
         <div className="border-t-2 border-black pt-8 text-center text-gray-600">
-          <p>&copy; {new Date().getFullYear()} glammednailsbyjhen. All rights reserved.</p>
+          <span className="text-sm text-gray-600">© {new Date().getFullYear()} GlammedNailsByJhen</span>
+          <div className="flex space-x-4">
+            <a href="/privacy-policy" className="text-gray-500 hover:text-black text-sm">Privacy Policy</a>
+            <a href="/cookies-policy" className="text-gray-500 hover:text-black text-sm">Cookies Policy</a>
+          </div>
         </div>
       </div>
     </footer>
