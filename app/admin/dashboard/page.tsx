@@ -1,551 +1,374 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
-import {
-  IoGridOutline,
-  IoCalendarOutline,
-  IoPeopleOutline,
-  IoBookOutline,
-  IoBagHandleOutline,
-  IoNotificationsOutline,
-  IoSettingsOutline,
-  IoSearchOutline,
-} from 'react-icons/io5';
-import { eachDayOfInterval, format, startOfMonth, isSameMonth } from 'date-fns';
-import dynamic from 'next/dynamic';
-import type { CalendarEvent as CalendarViewEvent } from '@/components/CalendarView';
+import { useEffect, useMemo, useState } from 'react';
+import { format, startOfMonth } from 'date-fns';
+import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
+import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
+import { SlotCard } from '@/components/admin/SlotCard';
+import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
+import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
+import { BookingList } from '@/components/admin/BookingList';
+import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 
-const CalendarView = dynamic(() => import('@/components/CalendarView'), { ssr: false });
+const navItems = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'bookings', label: 'Bookings' },
+  { id: 'customers', label: 'Customers' },
+  { id: 'services', label: 'Services' },
+] as const;
 
-const themes = {
-  slate: {
-    name: 'Classic Slate',
-    palette: ['#0f172a', '#475569'],
-    pageBg: 'bg-slate-50',
-    pageText: 'text-slate-900',
-    mutedText: 'text-slate-500',
-    subtleText: 'text-slate-400',
-    sidebarBg: 'bg-white',
-    sidebarBorder: 'border-slate-200',
-    navActive: 'bg-slate-900 text-white shadow-lg shadow-slate-900/10',
-    navInactive: 'text-slate-500 hover:bg-slate-100',
-    navBadge: 'bg-slate-200 text-slate-600',
-    navBadgeActive: 'bg-white/20 text-white',
-    panelBg: 'bg-white',
-    panelRing: 'ring-slate-100',
-    panelBorder: 'border-slate-100',
-    accentSoft: 'bg-slate-900/5 text-slate-900',
-    inputBorder: 'border-slate-200 focus:border-slate-900',
-    inputBg: 'bg-white',
-    iconButton: 'border-slate-200 text-slate-500',
-    iconButtonHover: 'hover:border-slate-900 hover:text-slate-900',
-    avatarBg: 'bg-slate-900',
-    avatarText: 'text-white',
-    quickAction: 'border-slate-100 text-slate-600',
-    quickActionHover: 'hover:border-slate-900 hover:text-slate-900',
-    surfaceBorder: 'border-slate-100',
-  },
-  rose: {
-    name: 'Blush Bloom',
-    palette: ['#f43f5e', '#fb7185'],
-    pageBg: 'bg-rose-50',
-    pageText: 'text-rose-950',
-    mutedText: 'text-rose-600',
-    subtleText: 'text-rose-400',
-    sidebarBg: 'bg-white',
-    sidebarBorder: 'border-rose-100',
-    navActive: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30',
-    navInactive: 'text-rose-500 hover:bg-rose-100/70',
-    navBadge: 'bg-rose-100 text-rose-600',
-    navBadgeActive: 'bg-white/20 text-white',
-    panelBg: 'bg-white',
-    panelRing: 'ring-rose-100',
-    panelBorder: 'border-rose-100',
-    accentSoft: 'bg-rose-100 text-rose-700',
-    inputBorder: 'border-rose-200 focus:border-rose-500',
-    inputBg: 'bg-white',
-    iconButton: 'border-rose-100 text-rose-400',
-    iconButtonHover: 'hover:border-rose-500 hover:text-rose-600',
-    avatarBg: 'bg-rose-500',
-    avatarText: 'text-white',
-    quickAction: 'border-rose-100 text-rose-600',
-    quickActionHover: 'hover:border-rose-500 hover:text-rose-700',
-    surfaceBorder: 'border-rose-100',
-  },
-  midnight: {
-    name: 'Midnight Glow',
-    palette: ['#312e81', '#1f2937'],
-    pageBg: 'bg-slate-950',
-    pageText: 'text-slate-50',
-    mutedText: 'text-slate-400',
-    subtleText: 'text-slate-500',
-    sidebarBg: 'bg-slate-900',
-    sidebarBorder: 'border-slate-800',
-    navActive: 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/40',
-    navInactive: 'text-slate-400 hover:bg-slate-800',
-    navBadge: 'bg-slate-800 text-slate-300',
-    navBadgeActive: 'bg-white/20 text-white',
-    panelBg: 'bg-slate-900',
-    panelRing: 'ring-slate-800',
-    panelBorder: 'border-slate-800',
-    accentSoft: 'bg-indigo-500/10 text-indigo-200',
-    inputBorder: 'border-slate-700 focus:border-indigo-400',
-    inputBg: 'bg-slate-900',
-    iconButton: 'border-slate-800 text-slate-400',
-    iconButtonHover: 'hover:border-indigo-400 hover:text-indigo-300',
-    avatarBg: 'bg-indigo-500',
-    avatarText: 'text-white',
-    quickAction: 'border-slate-800 text-slate-300',
-    quickActionHover: 'hover:border-indigo-400 hover:text-white',
-    surfaceBorder: 'border-slate-800',
-  },
-} as const;
-
-type ThemeKey = keyof typeof themes;
-
-const stats = [
-  {
-    label: 'Total Bookings',
-    value: '128',
-    trend: '+12%',
-    trendLabel: 'vs last week',
-    icon: IoBookOutline,
-  },
-  {
-    label: 'Active Customers',
-    value: '87',
-    trend: '+8%',
-    trendLabel: 'new this month',
-    icon: IoPeopleOutline,
-  },
-  {
-    label: 'Services Offered',
-    value: '14',
-    trend: '+2',
-    trendLabel: 'new add-ons',
-    icon: IoBagHandleOutline,
-  },
-  {
-    label: 'Upcoming Events',
-    value: '9',
-    trend: '+3',
-    trendLabel: 'this week',
-    icon: IoCalendarOutline,
-  },
-];
-
-const quickActions = [
-  { label: 'Add Booking', icon: IoBookOutline },
-  { label: 'New Customer', icon: IoPeopleOutline },
-  { label: 'Create Service', icon: IoBagHandleOutline },
-  { label: 'Schedule Event', icon: IoCalendarOutline },
-];
-
-const dailyBookings = [
-  { time: '09:00 AM', customer: 'Alexis Ray', service: 'Gel Manicure', status: 'Confirmed' },
-  { time: '11:30 AM', customer: 'Hailey Sage', service: 'Russian Manicure', status: 'Pending' },
-  { time: '02:15 PM', customer: 'Mila Cruz', service: 'Acrylic Full Set', status: 'Confirmed' },
-  { time: '04:00 PM', customer: 'Summer Leigh', service: 'Gel Removal', status: 'Cancelled' },
-];
-
-const customers = [
-  { name: 'Alexis Ray', visits: 12, lastVisit: 'Nov 12', spend: '$860', status: 'VIP' },
-  { name: 'Hailey Sage', visits: 8, lastVisit: 'Nov 8', spend: '$540', status: 'Loyal' },
-  { name: 'Mila Cruz', visits: 5, lastVisit: 'Nov 15', spend: '$320', status: 'Active' },
-  { name: 'Summer Leigh', visits: 3, lastVisit: 'Nov 10', spend: '$180', status: 'New' },
-];
-
-type CalendarActionMode = 'slot' | 'booking' | 'block';
-
-type CalendarListItem = {
-  date: string;
-  title: string;
-  status: 'Booked' | 'Blocked' | 'Available';
-};
-
-const seedCalendarEvents: CalendarListItem[] = [
-  { date: '2025-11-03', title: 'Full set w/ Alexis Ray', status: 'Booked' },
-  { date: '2025-11-08', title: 'Gel refill w/ Hailey Sage', status: 'Booked' },
-  { date: '2025-11-14', title: 'Studio maintenance', status: 'Blocked' },
-  { date: '2025-11-17', title: 'VIP appointment w/ Mila', status: 'Booked' },
-  { date: '2025-11-24', title: 'New client discovery call', status: 'Available' },
-  { date: '2025-12-05', title: 'Holiday campaign shoot', status: 'Booked' },
-  { date: '2025-12-20', title: 'Studio deep clean', status: 'Blocked' },
-];
+type AdminSection = (typeof navItems)[number]['id'];
 
 export default function AdminDashboard() {
-  const [theme, setTheme] = useState<ThemeKey>('slate');
-  const themeStyles = themes[theme];
-  const [activeSection, setActiveSection] = useState<'overview' | 'bookings' | 'customers' | 'services' | 'calendar'>(
-    'overview',
-  );
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
-  const [calendarData, setCalendarData] = useState<CalendarListItem[]>(seedCalendarEvents);
-  const [calendarModalMode, setCalendarModalMode] = useState<CalendarActionMode | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [slotModalOpen, setSlotModalOpen] = useState(false);
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
+  const [blockDefaults, setBlockDefaults] = useState<{ start?: string | null; end?: string | null }>({});
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<AdminSection>('bookings');
 
-  const calendarEntries = useMemo<CalendarViewEvent[]>(() => {
-    const statusToType: Record<CalendarListItem['status'], CalendarViewEvent['type']> = {
-      Booked: 'booked',
-      Blocked: 'pending',
-      Available: 'available',
-    };
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    return calendarData.map((event, index) => ({
-      id: index + 1,
-      date: event.date,
-      title: event.title,
-      type: statusToType[event.status],
-    }));
-  }, [calendarData]);
-
-  const sectionTitle = useMemo(() => {
-    switch (activeSection) {
-      case 'bookings':
-        return 'Bookings';
-      case 'customers':
-        return 'Customers';
-      case 'services':
-        return 'Services';
-      case 'calendar':
-        return 'Calendar';
-      default:
-        return 'Overview';
+  async function loadData() {
+    try {
+      const [slotsRes, blocksRes, bookingsRes] = await Promise.all([
+        fetch('/api/slots').then((res) => res.json()),
+        fetch('/api/blocks').then((res) => res.json()),
+        fetch('/api/bookings').then((res) => res.json()),
+      ]);
+      setSlots(slotsRes.slots);
+      setBlockedDates(blocksRes.blockedDates);
+      setBookings(bookingsRes.bookings);
+    } catch (error) {
+      console.error('Failed to load admin data', error);
+      setToast('Unable to load data. Check your backend configuration.');
+    } finally {
+      setLoading(false);
     }
-  }, [activeSection]);
+  }
 
-  const monthLabel = useMemo(() => format(currentMonth, 'MMMM yyyy'), [currentMonth]);
+  const selectedSlots = useMemo(() => slots.filter((slot) => slot.date === selectedDate), [slots, selectedDate]);
 
-  const monthEvents = useMemo(
-    () =>
-      calendarEvents
-        .filter((event) => isSameMonth(new Date(event.date), currentMonth))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-    [currentMonth],
+  const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
+    const list: BookingWithSlot[] = [];
+    bookings.forEach((booking) => {
+      const slot = slots.find((candidate) => candidate.id === booking.slotId);
+      if (!slot) return;
+      const pairedSlot = booking.pairedSlotId
+        ? slots.find((candidate) => candidate.id === booking.pairedSlotId)
+        : undefined;
+      list.push({ ...booking, slot, pairedSlot });
+    });
+    return list;
+  }, [bookings, slots]);
+
+  const selectedBooking =
+    bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? bookingsWithSlots[0] ?? null;
+
+  async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; notes?: string }) {
+    const url = editingSlot ? `/api/slots/${editingSlot.id}` : '/api/slots';
+    const method = editingSlot ? 'PATCH' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    setEditingSlot(null);
+    await loadData();
+    setToast('Slot saved.');
+  }
+
+  async function handleDeleteSlot(slot: Slot) {
+    if (!confirm('Delete this slot?')) return;
+    await fetch(`/api/slots/${slot.id}`, { method: 'DELETE' });
+    await loadData();
+    setToast('Slot deleted.');
+  }
+
+  async function handleBlockDates(payload: { startDate: string; endDate: string; scope: BlockedDate['scope']; reason?: string }) {
+    const res = await fetch('/api/blocks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    await loadData();
+    setToast('Dates blocked.');
+  }
+
+  async function handleConfirmBooking(id: string) {
+    await fetch(`/api/bookings/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'confirm' }),
+    });
+    await loadData();
+    setToast('Booking confirmed.');
+  }
+
+  async function handleSyncSheets() {
+    const res = await fetch('/api/google/sync', { method: 'POST' });
+    const data = await res.json();
+    await loadData();
+    setToast(`Processed ${data.processed} new form responses.`);
+  }
+
+  const renderBookingsSection = () => (
+    <>
+      {toast && (
+        <div className="mb-6 rounded-2xl bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+          {toast}
+          <button className="ml-4 text-xs uppercase" onClick={() => setToast(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+          <div className="space-y-6">
+            <CalendarGrid
+              referenceDate={currentMonth}
+              slots={slots}
+              blockedDates={blockedDates}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              onChangeMonth={setCurrentMonth}
+            />
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <header className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Slots</p>
+                  <h2 className="text-2xl font-semibold">{format(new Date(selectedDate), 'EEEE, MMM d')}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSlot(null);
+                    setSlotModalOpen(true);
+                  }}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold hover:border-slate-900"
+                >
+                  Add slot
+                </button>
+              </header>
+
+              <div className="space-y-4">
+                {selectedSlots.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                    No slots yet. Create one to open this day for booking.
+                  </div>
+                )}
+                {selectedSlots.map((slot) => (
+                  <SlotCard
+                    key={slot.id}
+                    slot={slot}
+                    onEdit={(value) => {
+                      setEditingSlot(value);
+                      setSlotModalOpen(true);
+                    }}
+                    onDelete={handleDeleteSlot}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <header className="mb-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Blocked dates</p>
+                <h2 className="text-2xl font-semibold">Overrides</h2>
+              </header>
+              <div className="space-y-3">
+                {blockedDates.length === 0 && <p className="text-sm text-slate-500">No blocked dates.</p>}
+                {blockedDates.map((block) => (
+                  <div key={block.id} className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                    <p className="text-sm font-semibold text-rose-700">
+                      {block.startDate} → {block.endDate}
+                    </p>
+                    <p className="text-xs text-rose-500 capitalize">Scope: {block.scope}</p>
+                    {block.reason && <p className="text-xs text-rose-700">{block.reason}</p>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="space-y-6">
+            <BookingList
+              bookings={bookingsWithSlots}
+              onSelect={(booking) => setSelectedBookingId(booking.id)}
+              selectedId={selectedBooking?.id ?? null}
+            />
+            <BookingDetailPanel
+              booking={selectedBooking ?? null}
+              slotLabel={
+                selectedBooking?.slot ? `${selectedBooking.slot.date} · ${selectedBooking.slot.time}` : undefined
+              }
+              onConfirm={handleConfirmBooking}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 
-  const handleMonthChange = (date: Date) => {
-    setCurrentMonth(startOfMonth(date));
+  const renderPlaceholder = (title: string, body: string) => (
+    <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
+      <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+      <p className="mt-2 text-sm text-slate-500">{body}</p>
+    </div>
+  );
+
+  const sectionDescription: Record<AdminSection, string> = {
+    overview: 'High-level metrics coming soon.',
+    bookings: 'Create slots, block dates, and track booking statuses.',
+    customers: 'See relationship insights and client history.',
+    services: 'Manage offerings, durations, and pricing.',
   };
 
   return (
-    <div className={`min-h-screen ${themeStyles.pageBg} ${themeStyles.pageText} transition-colors`}>
+    <div className="min-h-screen bg-slate-50">
       <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className={`hidden lg:flex w-72 flex-col border-r ${themeStyles.sidebarBorder} ${themeStyles.sidebarBg}`}>
-          <div className={`px-6 py-8 border-b ${themeStyles.sidebarBorder}`}>
-            <div className="flex items-center gap-3">
-              <div className={`h-10 w-10 rounded-2xl flex items-center justify-center font-semibold ${themeStyles.avatarBg} ${themeStyles.avatarText}`}>
-                G
-              </div>
-              <div>
-                <p className={`text-sm uppercase tracking-[0.2em] ${themeStyles.subtleText}`}>Admin</p>
-                <p className={`font-semibold text-lg ${themeStyles.pageText}`}>Glammed Nails</p>
-              </div>
-            </div>
-        </div>
-
-          <nav className="flex-1 px-4 py-6 space-y-1">
-            {[
-              { id: 'overview', label: 'Overview', icon: IoGridOutline },
-              { id: 'bookings', label: 'Bookings', icon: IoBookOutline },
-              { id: 'customers', label: 'Customers', icon: IoPeopleOutline },
-              { id: 'services', label: 'Services', icon: IoBagHandleOutline },
-              { id: 'calendar', label: 'Calendar', icon: IoCalendarOutline },
-            ].map((item) => {
-              const Icon = item.icon;
-              const isActive = activeSection === item.id;
-
-              return (
-          <button
-                  key={item.id}
-                  onClick={() =>
-                    setActiveSection(item.id as 'overview' | 'bookings' | 'customers' | 'services' | 'calendar')
-                  }
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                    isActive ? themeStyles.navActive : themeStyles.navInactive
-                  }`}
-                >
-                  <Icon className="text-lg" />
-                  {item.label}
-                  {item.id === 'bookings' && (
-                    <span
-                      className={`ml-auto inline-flex items-center justify-center rounded-full px-2 text-xs ${
-                        isActive ? themeStyles.navBadgeActive : themeStyles.navBadge
-                      }`}
-                    >
-                      8
-                    </span>
-                  )}
-          </button>
-              );
-            })}
-          </nav>
-
-          <div className={`px-6 py-6 border-t ${themeStyles.sidebarBorder}`}>
-            <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${themeStyles.accentSoft}`}>
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-2xl shadow ${themeStyles.sidebarBg} ${themeStyles.pageText}`}
-              >
-                <IoSettingsOutline />
-              </div>
-              <div>
-                <p className={`text-xs uppercase tracking-[0.2em] ${themeStyles.subtleText}`}>Need help?</p>
-                <p className={`text-sm font-semibold ${themeStyles.pageText}`}>Support Center</p>
-              </div>
-            </div>
+        <aside className="hidden w-72 flex-col border-r border-slate-200 bg-white px-6 py-8 lg:flex">
+          <div className="mb-8">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Admin</p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">Glammed Nails</p>
           </div>
+          <nav className="space-y-2">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={[
+                  'flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition',
+                  activeSection === item.id
+                    ? 'bg-slate-900 text-white shadow-lg'
+                    : 'text-slate-500 hover:bg-slate-100',
+                ].join(' ')}
+              >
+                {item.label}
+                {item.id === 'bookings' && (
+                  <span
+                    className={[
+                      'rounded-full px-2 py-0.5 text-xs',
+                      activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
+                    ].join(' ')}
+                  >
+                    {bookings.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 px-6 py-8 lg:px-12">
-          <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-              <p className={`text-xs uppercase tracking-[0.4em] ${themeStyles.subtleText}`}>Dashboard</p>
-              <h1 className={`text-3xl font-semibold ${themeStyles.pageText}`}>{sectionTitle}</h1>
+        <main className="flex-1 p-6">
+          <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
+              <h1 className="text-3xl font-semibold text-slate-900">
+                {activeSection === 'bookings' ? 'Booking control center' : sectionDescription[activeSection]}
+              </h1>
+              {activeSection !== 'bookings' && (
+                <p className="text-sm text-slate-500">Use the navigation to access the booking workflow.</p>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div
-                className={`hidden lg:flex items-center gap-3 rounded-2xl border px-3 py-2 ${themeStyles.panelBg} ${themeStyles.panelBorder}`}
-              >
-                <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>Theme</p>
-                <div className="flex gap-2">
-                  {(Object.entries(themes) as [ThemeKey, (typeof themes)[ThemeKey]][]).map(([key, value]) => (
-                    <button
-                      key={key}
-                      onClick={() => setTheme(key)}
-                      type="button"
-                      aria-pressed={theme === key}
-                      className="h-8 w-8 rounded-xl border-2 border-transparent transition focus:outline-none"
-                      style={{
-                        background: `linear-gradient(135deg, ${value.palette[0]}, ${value.palette[1]})`,
-                        boxShadow: theme === key ? `0 0 0 3px ${value.palette[0]}33` : 'none',
-                      }}
-                      title={value.name}
-                    />
-                  ))}
-                  </div>
-                  </div>
-              <div className="relative">
-                <IoSearchOutline className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
-                    <input
-                      type="text"
-                  placeholder="Search anything..."
-                  className={`w-64 rounded-2xl border ${themeStyles.inputBorder} ${themeStyles.inputBg} py-2 pl-10 pr-4 text-sm focus:outline-none`}
-                    />
-                  </div>
-          <button
-                className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition ${themeStyles.iconButton} ${themeStyles.iconButtonHover}`}
-          >
-                <IoNotificationsOutline />
-          </button>
-              <div className={`flex items-center gap-3 rounded-2xl px-3 py-2 shadow-sm ${themeStyles.panelBg}`}>
-                <div
-                  className={`h-10 w-10 rounded-2xl flex items-center justify-center font-semibold ${themeStyles.avatarBg} ${themeStyles.avatarText}`}
+            {activeSection === 'bookings' && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBlockDefaults({
+                      start: selectedDate,
+                      end: selectedDate,
+                    });
+                    setBlockModalOpen(true);
+                  }}
+                  className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:border-rose-600"
                 >
-                  JR
-                </div>
-                <div>
-                  <p className={`text-sm font-semibold ${themeStyles.pageText}`}>Jhen Rivera</p>
-                  <p className={`text-xs ${themeStyles.mutedText}`}>Owner</p>
-                </div>
-              </div>
-        </div>
-      </header>
-
-          {/* Overview Section */}
-          {activeSection === 'overview' && (
-            <div className="space-y-8">
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-                {stats.map((stat) => {
-                  const Icon = stat.icon;
-                  return (
-                    <div
-                      key={stat.label}
-                      className={`rounded-3xl ${themeStyles.panelBg} p-6 shadow-sm ring-1 ${themeStyles.panelRing} transition hover:-translate-y-1 hover:shadow-md`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className={`rounded-2xl p-3 ${themeStyles.accentSoft}`}>
-                          <Icon className="text-xl" />
-                        </div>
-                        <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-600">
-                          {stat.trend}
-                        </span>
-                      </div>
-                      <p className={`mt-6 text-sm uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>{stat.label}</p>
-                      <p className={`mt-2 text-3xl font-semibold ${themeStyles.pageText}`}>{stat.value}</p>
-                      <p className={`text-xs ${themeStyles.subtleText}`}>{stat.trendLabel}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-                <div className={`rounded-3xl ${themeStyles.panelBg} p-6 shadow-sm ring-1 ${themeStyles.panelRing}`}>
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <p className={`text-xs uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>Today</p>
-                      <h2 className={`text-2xl font-semibold ${themeStyles.pageText}`}>Upcoming Bookings</h2>
-                    </div>
-                    <button className={`text-sm font-semibold ${themeStyles.mutedText} hover:opacity-80`}>View all</button>
-                  </div>
-                  <div className="space-y-4">
-                    {dailyBookings.map((booking) => (
-                      <div
-                        key={booking.time}
-                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${themeStyles.surfaceBorder}`}
-                      >
-                        <div>
-                          <p className={`text-sm font-semibold ${themeStyles.pageText}`}>{booking.customer}</p>
-                          <p className={`text-xs ${themeStyles.mutedText}`}>
-                            {booking.service} • {booking.time}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${
-                            booking.status === 'Confirmed'
-                              ? 'bg-emerald-50 text-emerald-600'
-                              : booking.status === 'Pending'
-                                ? 'bg-amber-50 text-amber-600'
-                                : 'bg-rose-50 text-rose-600'
-                          }`}
-                        >
-                          {booking.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className={`rounded-3xl ${themeStyles.panelBg} p-6 shadow-sm ring-1 ${themeStyles.panelRing}`}>
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <p className={`text-xs uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>Actions</p>
-                      <h2 className={`text-xl font-semibold ${themeStyles.pageText}`}>Quick Create</h2>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {quickActions.map((action) => {
-                      const Icon = action.icon;
-                      return (
-          <button
-                          key={action.label}
-                          className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${themeStyles.quickAction} ${themeStyles.quickActionHover}`}
-                        >
-                          <div className={`rounded-2xl p-2 ${themeStyles.accentSoft}`}>
-                            <Icon />
-                          </div>
-                          {action.label}
-          </button>
-                      );
-                    })}
-                  </div>
-                </div>
-        </div>
-
-              <div className={`rounded-3xl ${themeStyles.panelBg} p-6 shadow-sm ring-1 ${themeStyles.panelRing}`}>
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <p className={`text-xs uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>Top Clients</p>
-                    <h2 className={`text-2xl font-semibold ${themeStyles.pageText}`}>Customer Spotlight</h2>
-                  </div>
-                  <button className={`text-sm font-semibold ${themeStyles.mutedText} hover:opacity-80`}>
-                    See customers
-              </button>
-            </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {customers.map((customer) => (
-                    <div key={customer.name} className={`rounded-2xl border p-5 ${themeStyles.surfaceBorder}`}>
-                      <p className={`text-sm font-semibold ${themeStyles.pageText}`}>{customer.name}</p>
-                      <p className={`text-xs ${themeStyles.subtleText}`}>{customer.status}</p>
-                      <div className={`mt-4 flex items-center justify-between text-sm ${themeStyles.mutedText}`}>
-                  <div>
-                          <p className={`text-xs uppercase tracking-[0.2em] ${themeStyles.subtleText}`}>Visits</p>
-                          <p className={`text-lg font-semibold ${themeStyles.pageText}`}>{customer.visits}</p>
-                  </div>
-                  <div>
-                          <p className={`text-xs uppercase tracking-[0.2em] ${themeStyles.subtleText}`}>Last visit</p>
-                          <p className={`text-sm font-medium ${themeStyles.pageText}`}>{customer.lastVisit}</p>
-                  </div>
-                  <div>
-                          <p className={`text-xs uppercase tracking-[0.2em] ${themeStyles.subtleText}`}>Spend</p>
-                          <p className={`text-sm font-medium ${themeStyles.pageText}`}>{customer.spend}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  </div>
-                </div>
+                  Block selected date
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+                    const end = format(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0), 'yyyy-MM-dd');
+                    setBlockDefaults({ start, end });
+                    setBlockModalOpen(true);
+                  }}
+                  className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:border-rose-600"
+                >
+                  Block entire month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSlot(null);
+                    setSlotModalOpen(true);
+                  }}
+                  className="rounded-full bg-slate-900 px-6 py-2 text-sm font-semibold text-white"
+                >
+                  New slot
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSyncSheets}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold hover:border-slate-900"
+                >
+                  Sync Google Sheet
+                </button>
               </div>
             )}
+          </header>
 
-          {/* Calendar Section */}
-          {activeSection === 'calendar' && (
-            <div className="space-y-8">
-              <div className={`rounded-3xl ${themeStyles.panelBg} p-4 md:p-6 shadow-sm ring-1 ${themeStyles.panelRing}`}>
-                <CalendarView events={calendarEntries} onMonthChange={handleMonthChange} />
-              </div>
-
-              <div className={`rounded-3xl ${themeStyles.panelBg} p-6 shadow-sm ring-1 ${themeStyles.panelRing}`}>
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <p className={`text-xs uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>This Month</p>
-                    <h2 className={`text-2xl font-semibold ${themeStyles.pageText}`}>Upcoming Events</h2>
-                  </div>
-                  <button className={`text-sm font-semibold ${themeStyles.mutedText} hover:opacity-80`}>
-                    Add event
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {monthEvents.length === 0 ? (
-                    <p className={`text-sm ${themeStyles.mutedText}`}>
-                      Nothing scheduled for {monthLabel}. Tap a day to add a booking.
-                    </p>
-                  ) : (
-                    monthEvents.map((event) => (
-                      <div
-                        key={event.title + event.date}
-                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${themeStyles.surfaceBorder}`}
-                      >
-                        <div>
-                          <p className={`text-xs uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>
-                            {format(new Date(event.date), 'MMM dd')}
-                          </p>
-                          <p className={`text-sm font-semibold ${themeStyles.pageText}`}>{event.title}</p>
-                        </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            event.status === 'Booked'
-                              ? 'bg-amber-50 text-amber-600'
-                              : event.status === 'Blocked'
-                                ? 'bg-rose-50 text-rose-600'
-                                : 'bg-emerald-50 text-emerald-600'
-                          }`}
-                        >
-                          {event.status}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Placeholder sections for other tabs */}
-          {activeSection !== 'overview' && activeSection !== 'calendar' && (
-            <div className={`rounded-3xl ${themeStyles.panelBg} p-10 text-center shadow-sm ring-1 ${themeStyles.panelRing}`}>
-              <p className={`text-sm uppercase tracking-[0.3em] ${themeStyles.subtleText}`}>Coming Soon</p>
-              <h2 className={`mt-4 text-2xl font-semibold ${themeStyles.pageText}`}>
-                {sectionTitle} section template is ready for your data.
-              </h2>
-              <p className={`mt-2 text-sm ${themeStyles.mutedText}`}>
-                Plug in your API or database to transform this placeholder into a fully interactive experience.
-                        </p>
-                      </div>
-                )}
+          {activeSection === 'bookings'
+            ? renderBookingsSection()
+            : renderPlaceholder(
+                activeSection === 'overview'
+                  ? 'Overview coming soon'
+                  : activeSection === 'customers'
+                    ? 'Customer insights'
+                    : 'Service catalog',
+                sectionDescription[activeSection],
+              )}
         </main>
-              </div>
-            </div>
+      </div>
+
+      <SlotEditorModal
+        open={slotModalOpen}
+        slot={editingSlot}
+        defaultDate={selectedDate}
+        onClose={() => {
+          setSlotModalOpen(false);
+          setEditingSlot(null);
+        }}
+        onSubmit={handleSaveSlot}
+      />
+
+      <BlockDateModal
+        open={blockModalOpen}
+        initialStart={blockDefaults.start ?? selectedDate}
+        initialEnd={blockDefaults.end ?? selectedDate}
+        onClose={() => setBlockModalOpen(false)}
+        onSubmit={handleBlockDates}
+      />
+    </div>
   );
 }
 

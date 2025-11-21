@@ -104,6 +104,7 @@ Create a Firebase project at https://console.firebase.google.com/
 Create `.env.local` in project root:
 
 ```env
+# Firebase Web SDK
 NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
@@ -111,7 +112,19 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 NEXT_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abc123
 
-NEXT_PUBLIC_GOOGLE_FORM_URL=https://forms.gle/o6k3veo5HY2NkYAu9
+# Firebase Admin SDK
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project-id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# Google Form Prefill + Sheet sync
+GOOGLE_FORM_BASE_URL=https://docs.google.com/forms/d/e/<form-id>/viewform?usp=pp_url
+GOOGLE_FORM_BOOKING_ID_ENTRY=entry.1234567890
+GOOGLE_SHEETS_ID=your_google_sheet_id
+GOOGLE_SHEETS_RANGE='Form Responses 1'!A:Z
+GOOGLE_SHEETS_BOOKING_ID_COLUMN=bookingId
+GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@project.iam.gserviceaccount.com
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
 ### 3. Vercel Deployment
