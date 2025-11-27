@@ -9,6 +9,7 @@ import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
+import { ServicesManager } from '@/components/admin/ServicesManager';
 
 const navItems = [
   { id: 'overview', label: 'Overview' },
@@ -337,16 +338,20 @@ export default function AdminDashboard() {
             )}
           </header>
 
-          {activeSection === 'bookings'
-            ? renderBookingsSection()
-            : renderPlaceholder(
-                activeSection === 'overview'
-                  ? 'Overview coming soon'
-                  : activeSection === 'customers'
-                    ? 'Customer insights'
-                    : 'Service catalog',
-                sectionDescription[activeSection],
-              )}
+          {activeSection === 'bookings' ? (
+            renderBookingsSection()
+          ) : activeSection === 'services' ? (
+            <ServicesManager />
+          ) : (
+            renderPlaceholder(
+              activeSection === 'overview'
+                ? 'Overview coming soon'
+                : activeSection === 'customers'
+                  ? 'Customer insights'
+                  : 'Service catalog',
+              sectionDescription[activeSection],
+            )
+          )}
         </main>
       </div>
 
