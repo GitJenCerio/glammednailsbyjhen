@@ -7,7 +7,7 @@ type SlotEditorModalProps = {
   slot?: Slot | null;
   defaultDate?: string | null;
   onClose: () => void;
-  onSubmit: (payload: { date: string; time: string; status: SlotStatus; notes?: string }) => Promise<void>;
+  onSubmit: (payload: { date: string; time: string; status: SlotStatus; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string }) => Promise<void>;
 };
 
 const statuses: SlotStatus[] = ['available', 'pending', 'confirmed', 'blocked'];
@@ -16,6 +16,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
   const [date, setDate] = useState('');
   const [time, setTime] = useState<SlotTime>(SLOT_TIMES[0]);
   const [status, setStatus] = useState<SlotStatus>('available');
+  const [slotType, setSlotType] = useState<'regular' | 'with_squeeze_fee'>('regular');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +26,13 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
       setDate(slot.date);
       setTime(slot.time as SlotTime);
       setStatus(slot.status);
+      setSlotType(slot.slotType ?? 'regular');
       setNotes(slot.notes ?? '');
     } else if (defaultDate) {
       setDate(defaultDate);
       setTime(SLOT_TIMES[0]);
       setStatus('available');
+      setSlotType('regular');
       setNotes('');
     }
   }, [slot, defaultDate, open]);
@@ -50,7 +53,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ date, time, status, notes });
+      await onSubmit({ date, time, status, slotType, notes });
       onClose();
     } catch (err: any) {
       setError(err.message ?? 'Unable to save slot.');
@@ -60,29 +63,29 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
-        <h3 className="text-2xl font-semibold">{slot ? 'Edit slot' : 'Create slot'}</h3>
-        <p className="text-sm text-slate-500 mb-6">Slots cannot overlap blocked ranges.</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-2xl sm:rounded-3xl bg-white p-4 sm:p-6 shadow-xl my-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl sm:text-2xl font-semibold">{slot ? 'Edit slot' : 'Create slot'}</h3>
+        <p className="text-xs sm:text-sm text-slate-500 mb-4 sm:mb-6">Slots cannot overlap blocked ranges.</p>
 
-        <div className="space-y-4">
-          <label className="block text-sm font-medium">
+        <div className="space-y-3 sm:space-y-4">
+          <label className="block text-xs sm:text-sm font-medium">
             Date
             <input
               type="date"
               value={date}
               required
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
             />
           </label>
 
-          <label className="block text-sm font-medium">
+          <label className="block text-xs sm:text-sm font-medium">
             Time
             <select
               value={time}
               onChange={(e) => setTime(e.target.value as SlotTime)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
               required
             >
               {SLOT_TIMES.map((value) => (
@@ -93,12 +96,12 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
             </select>
           </label>
 
-          <label className="block text-sm font-medium">
+          <label className="block text-xs sm:text-sm font-medium">
             Status
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as SlotStatus)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
             >
               {statuses.map((value) => (
                 <option key={value} value={value}>
@@ -108,31 +111,43 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
             </select>
           </label>
 
-          <label className="block text-sm font-medium">
+          <label className="block text-xs sm:text-sm font-medium">
+            Type
+            <select
+              value={slotType}
+              onChange={(e) => setSlotType(e.target.value as 'regular' | 'with_squeeze_fee')}
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+            >
+              <option value="regular">Regular</option>
+              <option value="with_squeeze_fee">With Squeeze in fee</option>
+            </select>
+          </label>
+
+          <label className="block text-xs sm:text-sm font-medium">
             Notes
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
               rows={3}
             />
           </label>
         </div>
 
-        {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</p>}
+        {error && <p className="mt-4 rounded-xl sm:rounded-2xl bg-rose-50 px-3 py-2 text-xs sm:text-sm text-rose-600">{error}</p>}
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold hover:border-slate-900"
+            className="w-full sm:w-auto rounded-full border border-slate-200 px-4 py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="rounded-full bg-slate-900 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="w-full sm:w-auto rounded-full bg-slate-900 px-6 py-2 text-xs sm:text-sm font-semibold text-white disabled:opacity-50 touch-manipulation"
           >
             {saving ? 'Saving...' : 'Save slot'}
           </button>

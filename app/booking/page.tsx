@@ -8,12 +8,17 @@ import Footer from '@/components/Footer';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import type { Slot, BlockedDate, ServiceType } from '@/lib/types';
 import { getNextSlotTime } from '@/lib/constants/slots';
+import { formatTime12Hour } from '@/lib/utils';
 
 const SERVICE_OPTIONS: { value: ServiceType; label: string }[] = [
   { value: 'manicure', label: 'Manicure only (1 slot)' },
   { value: 'pedicure', label: 'Pedicure only (1 slot)' },
   { value: 'mani_pedi', label: 'Mani + Pedi (2 slots)' },
+  { value: 'home_service_2slots', label: 'Home Service (2 slots)' },
 ];
+
+type ClientType = 'new' | 'repeat';
+type ServiceLocation = 'homebased_studio' | 'home_service';
 
 interface SlotModalProps {
   slot: Slot | null;
@@ -22,6 +27,12 @@ interface SlotModalProps {
   serviceOptions: { value: ServiceType; label: string }[];
   pairedSlot: Slot | null;
   serviceMessage: string | null;
+  clientType: ClientType;
+  onClientTypeChange: (value: ClientType) => void;
+  serviceLocation: ServiceLocation;
+  onServiceLocationChange: (value: ServiceLocation) => void;
+  squeezeFeeAcknowledged: boolean;
+  onSqueezeFeeAcknowledgedChange: (value: boolean) => void;
   disableProceed: boolean;
   onClose: () => void;
   onProceed: () => void;
@@ -34,6 +45,12 @@ function SlotModal({
   serviceOptions,
   pairedSlot,
   serviceMessage,
+  clientType,
+  onClientTypeChange,
+  serviceLocation,
+  onServiceLocationChange,
+  squeezeFeeAcknowledged,
+  onSqueezeFeeAcknowledgedChange,
   disableProceed,
   onClose,
   onProceed,
@@ -41,40 +58,54 @@ function SlotModal({
   if (!slot) return null;
 
   const doubleSlotUnavailable =
-    serviceType === 'mani_pedi' && (!pairedSlot || pairedSlot.status !== 'available');
+    (serviceType === 'mani_pedi' || serviceType === 'home_service_2slots') && (!pairedSlot || pairedSlot.status !== 'available');
+  const hasSqueezeFee = slot.slotType === 'with_squeeze_fee';
+  const isHomeService = serviceLocation === 'home_service';
+  const homeServiceRequiresManiPedi = isHomeService && serviceType !== 'mani_pedi' && serviceType !== 'home_service_2slots';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-lg max-w-md w-full p-8 shadow-xl"
+        className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto"
       >
-        <h3 className="text-2xl font-heading font-semibold mb-4">Book This Slot</h3>
+        <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4">Book This Slot</h3>
         
-        <div className="space-y-3 mb-6">
+        <div className="space-y-2.5 sm:space-y-3 mb-4 sm:mb-6">
           <div>
-            <span className="text-gray-600">Date:</span>
-            <p className="font-medium">{format(new Date(slot.date), 'EEEE, MMMM d, yyyy')}</p>
+            <span className="text-sm sm:text-base text-gray-600">Date:</span>
+            <p className="font-medium text-sm sm:text-base">{format(new Date(slot.date), 'EEEE, MMMM d, yyyy')}</p>
           </div>
           <div>
-            <span className="text-gray-600">Time:</span>
-            <p className="font-medium">{slot.time}</p>
+            <span className="text-sm sm:text-base text-gray-600">Time:</span>
+            <p className="font-medium text-sm sm:text-base">{formatTime12Hour(slot.time)}</p>
           </div>
           <div>
-            <span className="text-gray-600">Status:</span>
-            <p className="font-medium capitalize">{slot.status}</p>
+            <span className="text-sm sm:text-base text-gray-600">Status:</span>
+            <p className="font-medium capitalize text-sm sm:text-base">{slot.status}</p>
           </div>
           <div>
-            <span className="text-gray-600">Notes:</span>
-            <p className="font-medium">{slot.notes || 'No notes'}</p>
+            <span className="text-sm sm:text-base text-gray-600">Notes:</span>
+            <p className="font-medium text-sm sm:text-base">{slot.notes || 'No notes'}</p>
           </div>
           <div>
-            <span className="text-gray-600">Service:</span>
+            <span className="text-sm sm:text-base text-gray-600">Service:</span>
             <select
               value={serviceType}
-              onChange={(e) => onServiceChange(e.target.value as ServiceType)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              onChange={(e) => {
+                const newServiceType = e.target.value as ServiceType;
+                onServiceChange(newServiceType);
+                // Auto-set service location to home_service if home_service_2slots is selected
+                if (newServiceType === 'home_service_2slots') {
+                  onServiceLocationChange('home_service');
+                }
+                // If home service is selected and user changes away from mani_pedi and home_service_2slots, switch back to homebased_studio
+                else if (isHomeService && (newServiceType === 'manicure' || newServiceType === 'pedicure')) {
+                  onServiceLocationChange('homebased_studio');
+                }
+              }}
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
             >
               {serviceOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -83,12 +114,51 @@ function SlotModal({
               ))}
             </select>
           </div>
-          {serviceType === 'mani_pedi' && (
+          <div>
+            <span className="text-sm sm:text-base text-gray-600">Client Type:</span>
+            <select
+              value={clientType}
+              onChange={(e) => onClientTypeChange(e.target.value as ClientType)}
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
+            >
+              <option value="new">New Client</option>
+              <option value="repeat">Repeat Client</option>
+            </select>
+          </div>
+          <div>
+            <span className="text-sm sm:text-base text-gray-600">Service Location:</span>
+            <select
+              value={serviceLocation}
+              onChange={(e) => {
+                const newLocation = e.target.value as ServiceLocation;
+                onServiceLocationChange(newLocation);
+                // Auto-select mani_pedi if home service is selected (unless home_service_2slots is already selected)
+                if (newLocation === 'home_service' && serviceType !== 'mani_pedi' && serviceType !== 'home_service_2slots') {
+                  onServiceChange('mani_pedi');
+                }
+              }}
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
+            >
+              <option value="homebased_studio">Homebased Studio</option>
+              <option value="home_service">Home Service (+₱1,000)</option>
+            </select>
+            {isHomeService && serviceType !== 'home_service_2slots' && serviceType !== 'mani_pedi' && (
+              <p className="mt-1.5 text-[10px] sm:text-xs text-amber-700">
+                ⚠️ Home service requires a minimum of 2 services (Mani + Pedi or Home Service 2 slots)
+              </p>
+            )}
+          </div>
+          {homeServiceRequiresManiPedi && (
+            <div className="rounded-2xl border-2 border-rose-400 bg-rose-200 px-4 py-3 text-sm text-rose-800">
+              <p>Home service requires Mani + Pedi or Home Service (2 slots). Please select one of these options from the Service dropdown.</p>
+            </div>
+          )}
+          {(serviceType === 'mani_pedi' || serviceType === 'home_service_2slots') && (
             <div
-              className={`rounded-2xl px-4 py-3 text-sm ${
+              className={`rounded-2xl border-2 px-4 py-3 text-sm ${
                 doubleSlotUnavailable
-                  ? 'border border-rose-200 bg-rose-50 text-rose-700'
-                  : 'border border-emerald-100 bg-emerald-50 text-emerald-800'
+                  ? 'border-rose-400 bg-rose-200 text-rose-800'
+                  : 'border-emerald-400 bg-emerald-200 text-emerald-800'
               }`}
             >
               {serviceMessage ? <p>{serviceMessage}</p> : null}
@@ -96,21 +166,48 @@ function SlotModal({
           )}
         </div>
 
-        <p className="mb-6 text-sm text-gray-600">
-          This slot is available. Click “Proceed to Booking Form” and you’ll be redirected to our Google Form to finish your reservation.
+        {hasSqueezeFee && (
+          <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl border-2 border-purple-400 bg-purple-200 px-3 sm:px-4 py-2.5 sm:py-3">
+            <p className="text-xs sm:text-sm font-semibold text-purple-900 mb-2">⚠️ Squeeze-in Fee</p>
+            <p className="text-[10px] sm:text-xs text-purple-900 leading-relaxed mb-3">
+              This slot has a squeeze-in fee of ₱500. This is an additional charge on top of the regular service fee.
+            </p>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={squeezeFeeAcknowledged}
+                onChange={(e) => onSqueezeFeeAcknowledgedChange(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-2 border-purple-600 text-purple-600 focus:ring-purple-500 focus:ring-2"
+              />
+              <span className="text-[10px] sm:text-xs text-purple-900 font-medium">
+                I understand and agree to pay the ₱500 squeeze-in fee for this slot.
+              </span>
+            </label>
+          </div>
+        )}
+
+        <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl border-2 border-amber-400 bg-amber-200 px-3 sm:px-4 py-2.5 sm:py-3">
+          <p className="text-xs sm:text-sm font-semibold text-amber-900 mb-1">Deposit Required</p>
+          <p className="text-[10px] sm:text-xs text-amber-900 leading-relaxed">
+            ₱500 deposit upon booking is required to reserve your desired date and time, it is consumable and non-refundable. (NO DEPOSIT, NO APPOINTMENT)
+          </p>
+        </div>
+
+        <p className="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-600 leading-relaxed">
+          This slot is available. Click "Proceed to Booking Form" and you'll be redirected to our Google Form to finish your reservation.
         </p>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 border-2 border-black text-black font-medium hover:bg-gray-100 transition-colors"
+            className="flex-1 px-4 py-3 sm:py-2 border-2 border-black text-black font-medium hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation text-sm sm:text-base"
           >
             Close
           </button>
           <button
             onClick={onProceed}
             disabled={disableProceed}
-            className="flex-1 px-4 py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 px-4 py-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation text-sm sm:text-base"
           >
             Proceed to Booking Form
           </button>
@@ -129,8 +226,11 @@ export default function BookingPage() {
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedService, setSelectedService] = useState<ServiceType>('manicure');
+  const [clientType, setClientType] = useState<ClientType>('new');
+  const [serviceLocation, setServiceLocation] = useState<ServiceLocation>('homebased_studio');
   const [pairedSlot, setPairedSlot] = useState<Slot | null>(null);
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
+  const [squeezeFeeAcknowledged, setSqueezeFeeAcknowledged] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -152,6 +252,7 @@ export default function BookingPage() {
     }
   }
 
+
   useEffect(() => {
     if (!selectedSlot) {
       setPairedSlot(null);
@@ -159,7 +260,7 @@ export default function BookingPage() {
       return;
     }
 
-    if (selectedService === 'mani_pedi') {
+    if (selectedService === 'mani_pedi' || selectedService === 'home_service_2slots') {
       const nextTime = getNextSlotTime(selectedSlot.time);
       const nextSlot =
         nextTime && selectedSlot
@@ -171,7 +272,10 @@ export default function BookingPage() {
       } else if (nextSlot.status !== 'available') {
         setServiceMessage('This service requires two consecutive slots, but the next slot is already taken. Please select another time or date.');
       } else {
-        setServiceMessage(`This service will use ${selectedSlot.time} and ${nextSlot.time}.`);
+        const serviceLabel = selectedService === 'home_service_2slots' 
+          ? 'Home service (2 slots - for 2 clients or 1 client booking 2 slots)'
+          : 'This service';
+        setServiceMessage(`${serviceLabel} will use ${formatTime12Hour(selectedSlot.time)} and ${formatTime12Hour(nextSlot.time)}.`);
       }
     } else {
       setPairedSlot(null);
@@ -184,15 +288,24 @@ export default function BookingPage() {
     [slots, selectedDate],
   );
 
-  const requiresDouble = selectedService === 'mani_pedi';
+  const requiresDouble = selectedService === 'mani_pedi' || selectedService === 'home_service_2slots';
+  const hasSqueezeFee = selectedSlot?.slotType === 'with_squeeze_fee';
+  const isHomeService = serviceLocation === 'home_service';
+  const homeServiceRequiresManiPedi = isHomeService && selectedService !== 'mani_pedi' && selectedService !== 'home_service_2slots';
   const disableProceed =
-    !selectedSlot || (requiresDouble && (!pairedSlot || pairedSlot.status !== 'available'));
+    !selectedSlot || 
+    (requiresDouble && (!pairedSlot || pairedSlot.status !== 'available')) ||
+    (hasSqueezeFee && !squeezeFeeAcknowledged) ||
+    homeServiceRequiresManiPedi;
 
   const handleSelectSlot = (slot: Slot) => {
     if (slot.status !== 'available') return;
     setSelectedService('manicure');
+    setClientType('new');
+    setServiceLocation('homebased_studio');
     setPairedSlot(null);
     setServiceMessage(null);
+    setSqueezeFeeAcknowledged(false);
     setSelectedSlot(slot);
   };
 
@@ -214,6 +327,8 @@ export default function BookingPage() {
           slotId: selectedSlot.id,
           serviceType: selectedService,
           pairedSlotId,
+          clientType,
+          serviceLocation,
         }),
       });
 
@@ -225,8 +340,11 @@ export default function BookingPage() {
       window.location.href = data.googleFormUrl;
       setSelectedSlot(null);
       setSelectedService('manicure');
+      setClientType('new');
+      setServiceLocation('homebased_studio');
       setPairedSlot(null);
       setServiceMessage(null);
+      setSqueezeFeeAcknowledged(false);
       await loadData();
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -239,16 +357,16 @@ export default function BookingPage() {
     <main className="min-h-screen bg-white">
       <Header />
       
-      <section className="section-padding pt-32">
+      <section className="mt-24 sm:mt-28 md:mt-32 lg:mt-36 pt-4 sm:pt-6 md:pt-8 px-4 sm:px-6 pb-8 sm:pb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="max-w-7xl mx-auto"
         >
-          <h1 className="text-4xl md:text-5xl font-acollia text-center mb-4">
+          <h1 id="booking-heading" className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4 text-slate-900 scroll-mt-24 sm:scroll-mt-28">
             Book Your Appointment
           </h1>
-          <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+          <p className="text-center text-gray-600 mb-6 sm:mb-8 md:mb-12 max-w-2xl mx-auto px-4 text-sm sm:text-base">
             Select an available time slot to proceed with your booking
           </p>
 
@@ -258,7 +376,7 @@ export default function BookingPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-6 lg:grid-cols-[1.2fr,1fr]">
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.2fr,1fr]">
                 <CalendarGrid
                   referenceDate={currentMonth}
                   slots={slots}
@@ -268,20 +386,20 @@ export default function BookingPage() {
                   onChangeMonth={setCurrentMonth}
                 />
 
-                <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <header className="mb-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Available slots</p>
-                    <h2 className="text-2xl font-semibold">
+                <section className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-4 sm:p-6 shadow-md shadow-slate-900/10">
+                  <header className="mb-3 sm:mb-4">
+                    <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Available slots</p>
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900">
                       {format(new Date(selectedDate), 'EEEE, MMM d')}
                     </h2>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-xs sm:text-sm text-slate-600">
                       Tap a time to reserve it instantly.
                     </p>
                   </header>
 
                   <div className="space-y-3">
                     {availableSlotsForDate.length === 0 && (
-                      <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                      <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
                         No available slots for this day. Choose another date on the calendar.
                       </p>
                     )}
@@ -290,18 +408,25 @@ export default function BookingPage() {
                         key={slot.id}
                         type="button"
                         onClick={() => handleSelectSlot(slot)}
-                        className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left transition hover:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full rounded-xl sm:rounded-2xl border-2 border-emerald-400 bg-emerald-200 px-3 sm:px-4 py-3 sm:py-3.5 text-left transition-all hover:border-emerald-600 hover:bg-emerald-300 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-500 touch-manipulation"
                       >
-                        <p className="text-xs uppercase tracking-[0.3em] text-emerald-600">Available</p>
-                        <p className="text-lg font-semibold text-emerald-900">{slot.time}</p>
-                        {slot.notes && <p className="text-sm text-emerald-700">{slot.notes}</p>}
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-emerald-700 font-semibold">Available</p>
+                          {slot.slotType === 'with_squeeze_fee' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-purple-200 text-purple-900 border border-purple-300">
+                              ₱500 Squeeze-in Fee
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-base sm:text-lg font-semibold text-emerald-900">{formatTime12Hour(slot.time)}</p>
+                        {slot.notes && <p className="text-xs sm:text-sm text-emerald-800 mt-0.5">{slot.notes}</p>}
                       </button>
                     ))}
                   </div>
                 </section>
               </div>
 
-              <div className="mt-8 text-center text-sm text-gray-600">
+              <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-gray-600 px-4">
                 {error ? (
                   <p className="text-red-600">{error}</p>
                 ) : (
@@ -320,12 +445,21 @@ export default function BookingPage() {
         serviceOptions={SERVICE_OPTIONS}
         pairedSlot={pairedSlot}
         serviceMessage={serviceMessage}
+        clientType={clientType}
+        onClientTypeChange={setClientType}
+        serviceLocation={serviceLocation}
+        onServiceLocationChange={setServiceLocation}
+        squeezeFeeAcknowledged={squeezeFeeAcknowledged}
+        onSqueezeFeeAcknowledgedChange={setSqueezeFeeAcknowledged}
         disableProceed={disableProceed}
         onClose={() => {
           setSelectedSlot(null);
           setSelectedService('manicure');
+          setClientType('new');
+          setServiceLocation('homebased_studio');
           setPairedSlot(null);
           setServiceMessage(null);
+          setSqueezeFeeAcknowledged(false);
         }}
         onProceed={handleProceedToBooking}
       />

@@ -1,4 +1,5 @@
 import type { Booking, BookingStatus, Slot } from '@/lib/types';
+import { formatTime12Hour } from '@/lib/utils';
 
 type BookingRow = Booking & { slot?: Slot; pairedSlot?: Slot };
 
@@ -18,6 +19,7 @@ const serviceLabels: Record<string, string> = {
   manicure: 'Manicure',
   pedicure: 'Pedicure',
   mani_pedi: 'Mani + Pedi',
+  home_service_2slots: 'Home Service (2 slots)',
 };
 
 export function BookingList({ bookings, onSelect, selectedId }: BookingListProps) {
@@ -30,22 +32,22 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
   );
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <header className="mb-4">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Bookings</p>
-        <h2 className="text-2xl font-semibold">Status overview</h2>
+    <div className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
+      <header className="mb-3 sm:mb-4">
+        <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Bookings</p>
+        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">Status overview</h2>
       </header>
 
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-6 md:space-y-8">
         {(Object.keys(grouped) as BookingStatus[]).map((status) => (
           <div key={status}>
-            <div className="mb-2 flex items-center justify-between text-sm">
+            <div className="mb-2 flex items-center justify-between text-xs sm:text-sm">
               <span className="font-semibold capitalize">{statusLabels[status]}</span>
               <span className="text-slate-500">{grouped[status].length} bookings</span>
             </div>
             <div className="space-y-2">
               {grouped[status].length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">No bookings.</div>
+                <div className="rounded-xl sm:rounded-2xl border border-dashed border-slate-200 p-3 sm:p-4 text-xs sm:text-sm text-slate-500">No bookings.</div>
               )}
               {grouped[status].map((booking) => (
                 <button
@@ -53,32 +55,34 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
                   type="button"
                   onClick={() => onSelect(booking)}
                   className={[
-                    'w-full rounded-2xl border px-4 py-3 text-left transition',
-                    selectedId === booking.id ? 'border-slate-900 shadow-lg' : 'border-slate-200 hover:border-slate-900',
+                    'w-full rounded-xl sm:rounded-2xl border bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-left transition-all duration-200 touch-manipulation',
+                    selectedId === booking.id
+                      ? 'border-slate-900 shadow-lg shadow-slate-900/10 ring-2 ring-slate-900/5'
+                      : 'border-slate-200 shadow-sm hover:border-slate-300 hover:shadow-md hover:shadow-slate-900/5 active:scale-[0.98]',
                   ].join(' ')}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">{booking.bookingId}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-semibold truncate">{booking.bookingId}</p>
                       {booking.slot && (
-                        <p className="text-xs text-slate-500">
-                          {booking.slot.date} · {booking.slot.time}
+                        <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+                          {booking.slot.date} · {formatTime12Hour(booking.slot.time)}
                         </p>
                       )}
                       {booking.serviceType && (
-                        <p className="text-xs text-slate-400">
+                        <p className="text-[10px] sm:text-xs text-slate-400 truncate">
                           {serviceLabels[booking.serviceType] ?? booking.serviceType}
-                          {booking.serviceType === 'mani_pedi' && booking.slot && (
+                          {(booking.serviceType === 'mani_pedi' || booking.serviceType === 'home_service_2slots') && booking.slot && (
                             <>
                               {' '}
-                              ({booking.slot.time}
-                              {booking.pairedSlot ? ` + ${booking.pairedSlot.time}` : ''})
+                              ({formatTime12Hour(booking.slot.time)}
+                              {booking.pairedSlot ? ` + ${formatTime12Hour(booking.pairedSlot.time)}` : ''})
                             </>
                           )}
                         </p>
                       )}
                     </div>
-                    <span className="text-xs uppercase tracking-wide text-slate-500">{booking.status}</span>
+                    <span className="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500 flex-shrink-0">{booking.status}</span>
                   </div>
                 </button>
               ))}

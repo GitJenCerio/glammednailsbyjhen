@@ -67,6 +67,7 @@ function docToSlot(id: string, data: FirebaseFirestore.DocumentData): Slot {
     date: data.date,
     time: data.time,
     status: data.status,
+    slotType: data.slotType ?? null,
     notes: data.notes ?? null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,

@@ -20,7 +20,11 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 
 # Google Form Prefill + Sheet sync
 GOOGLE_FORM_BASE_URL=https://docs.google.com/forms/d/e/<form-id>/viewform?usp=pp_url
+# To get this URL: Open your form → Three dots (⋮) → "Get pre-filled link" → Copy the URL from address bar
+# See HOW_TO_GET_GOOGLE_FORM_BASE_URL.md for detailed instructions
 GOOGLE_FORM_BOOKING_ID_ENTRY=entry.1234567890
+GOOGLE_FORM_DATE_ENTRY=entry.0987654321  # Optional: for auto-filling appointment date
+GOOGLE_FORM_TIME_ENTRY=entry.1122334455  # Optional: for auto-filling appointment time (handles single and paired slots)
 GOOGLE_SHEETS_ID=your_google_sheet_id
 GOOGLE_SHEETS_RANGE='Form Responses 1'!A:Z
 GOOGLE_SHEETS_BOOKING_ID_COLUMN=bookingId
@@ -34,7 +38,10 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END P
 2. Generate a JSON key and copy the `client_email` / `private_key` into `.env.local`
 3. Enable the **Google Sheets API** for your project
 4. Share the Google Sheet that stores form responses with the service-account email so it can read responses
-5. In Google Forms, open the prefill view, note the `entry.<id>` value of the Booking ID question, and store it in `GOOGLE_FORM_BOOKING_ID_ENTRY`
+5. In Google Forms, open the prefill view, note the `entry.<id>` values:
+   - **Booking ID field**: Store in `GOOGLE_FORM_BOOKING_ID_ENTRY`
+   - **Appointment Date field** (optional): Store in `GOOGLE_FORM_DATE_ENTRY` - this will auto-fill the date when clients book
+   - **Appointment Time field** (optional): Store in `GOOGLE_FORM_TIME_ENTRY` - this will auto-fill the time (or time range for mani-pedi)
 
 ## Firebase Setup
 

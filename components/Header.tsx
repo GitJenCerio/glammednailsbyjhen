@@ -21,6 +21,13 @@ export default function Header() {
   const scrollToId = (hash: string) => {
     if (!hash || !hash.startsWith('#')) return;
     const id = hash.slice(1);
+    
+    // If we're not on the home page, navigate there first
+    if (window.location.pathname !== '/') {
+      window.location.href = `/${hash}`;
+      return;
+    }
+    
     const el = document.getElementById(id);
     if (!el) return;
     // Header offset (tune if needed)
