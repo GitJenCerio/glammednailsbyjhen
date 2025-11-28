@@ -1,6 +1,6 @@
 export type SlotStatus = 'available' | 'blocked' | 'pending' | 'confirmed';
 export type BookingStatus = 'pending_form' | 'pending_payment' | 'confirmed';
-export type ServiceType = 'manicure' | 'pedicure' | 'mani_pedi' | 'home_service_2slots';
+export type ServiceType = 'manicure' | 'pedicure' | 'mani_pedi' | 'home_service_2slots' | 'home_service_3slots';
 
 export interface Slot {
   id: string;
@@ -27,6 +27,7 @@ export interface Booking {
   id: string;
   slotId: string;
   pairedSlotId?: string | null;
+  linkedSlotIds?: string[];
   bookingId: string;
   status: BookingStatus;
   serviceType?: ServiceType;
@@ -44,6 +45,7 @@ export interface Booking {
 export interface BookingWithSlot extends Booking {
   slot: Slot;
   pairedSlot?: Slot;
+  linkedSlots?: Slot[];
 }
 
 export type SlotInput = Omit<Slot, 'id' | 'createdAt' | 'updatedAt'>;

@@ -12,6 +12,8 @@ const serviceLabels: Record<string, string> = {
   manicure: 'Manicure',
   pedicure: 'Pedicure',
   mani_pedi: 'Mani + Pedi',
+  home_service_2slots: 'Home Service (2 pax)',
+  home_service_3slots: 'Home Service (3 pax)',
 };
 
 export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConfirm }: BookingDetailPanelProps) {

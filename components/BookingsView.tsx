@@ -28,7 +28,8 @@ const serviceLabels: Record<string, string> = {
   manicure: 'Manicure',
   pedicure: 'Pedicure',
   mani_pedi: 'Mani + Pedi',
-  home_service_2slots: 'Home Service (2 slots)',
+  home_service_2slots: 'Home Service (2 pax)',
+  home_service_3slots: 'Home Service (3 pax)',
 };
 
 export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProps) {
@@ -41,10 +42,11 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
     bookings.forEach((booking) => {
       const slot = slots.find((candidate) => candidate.id === booking.slotId);
       if (!slot) return;
-      const pairedSlot = booking.pairedSlotId
-        ? slots.find((candidate) => candidate.id === booking.pairedSlotId)
-        : undefined;
-      list.push({ ...booking, slot, pairedSlot });
+      const linkedSlots = (booking.linkedSlotIds ?? [])
+        .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
+        .filter((value): value is Slot => Boolean(value));
+      const pairedSlot = linkedSlots[0];
+      list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
   }, [bookings, slots]);
@@ -199,6 +201,10 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
 
   const getTimeRange = (booking: BookingWithSlot): string => {
     if (!booking.slot) return 'N/A';
+    if (booking.linkedSlots && booking.linkedSlots.length > 0) {
+      const lastSlot = booking.linkedSlots[booking.linkedSlots.length - 1];
+      return `${formatTime(booking.slot.time)} - ${formatTime(lastSlot.time)}`;
+    }
     if (booking.pairedSlot) {
       return `${formatTime(booking.slot.time)} - ${formatTime(booking.pairedSlot.time)}`;
     }

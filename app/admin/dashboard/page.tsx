@@ -68,10 +68,11 @@ export default function AdminDashboard() {
     bookings.forEach((booking) => {
       const slot = slots.find((candidate) => candidate.id === booking.slotId);
       if (!slot) return;
-      const pairedSlot = booking.pairedSlotId
-        ? slots.find((candidate) => candidate.id === booking.pairedSlotId)
-        : undefined;
-      list.push({ ...booking, slot, pairedSlot });
+      const linkedSlots = (booking.linkedSlotIds ?? [])
+        .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
+        .filter((value): value is Slot => Boolean(value));
+      const pairedSlot = linkedSlots[0];
+      list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
   }, [bookings, slots]);
@@ -257,6 +258,13 @@ export default function AdminDashboard() {
               booking={selectedBooking ?? null}
               slotLabel={
                 selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
+              }
+              pairedSlotLabel={
+                selectedBooking?.linkedSlots && selectedBooking.linkedSlots.length > 0
+                  ? formatTime12Hour(selectedBooking.linkedSlots[selectedBooking.linkedSlots.length - 1].time)
+                  : selectedBooking?.pairedSlot
+                    ? formatTime12Hour(selectedBooking.pairedSlot.time)
+                    : undefined
               }
               onConfirm={handleConfirmBooking}
             />

@@ -10,12 +10,30 @@ import type { Slot, BlockedDate, ServiceType } from '@/lib/types';
 import { getNextSlotTime } from '@/lib/constants/slots';
 import { formatTime12Hour } from '@/lib/utils';
 
-const SERVICE_OPTIONS: { value: ServiceType; label: string }[] = [
-  { value: 'manicure', label: 'Manicure only (1 slot)' },
-  { value: 'pedicure', label: 'Pedicure only (1 slot)' },
-  { value: 'mani_pedi', label: 'Mani + Pedi (2 slots)' },
-  { value: 'home_service_2slots', label: 'Home Service (2 slots)' },
-];
+const SERVICE_OPTIONS: Record<ServiceLocation, { value: ServiceType; label: string }[]> = {
+  homebased_studio: [
+    { value: 'manicure', label: 'Manicure only (1 slot)' },
+    { value: 'pedicure', label: 'Pedicure only (1 slot)' },
+    { value: 'mani_pedi', label: 'Mani + Pedi (2 slots)' },
+  ],
+  home_service: [
+    { value: 'mani_pedi', label: 'Mani + Pedi (2 slots)' },
+    { value: 'home_service_2slots', label: 'Home Service (2 pax)' },
+    { value: 'home_service_3slots', label: 'Home Service (3 pax)' },
+  ],
+};
+
+function getRequiredSlotCount(serviceType: ServiceType): number {
+  switch (serviceType) {
+    case 'mani_pedi':
+    case 'home_service_2slots':
+      return 2;
+    case 'home_service_3slots':
+      return 3;
+    default:
+      return 1;
+  }
+}
 
 type ClientType = 'new' | 'repeat';
 type ServiceLocation = 'homebased_studio' | 'home_service';
@@ -25,7 +43,7 @@ interface SlotModalProps {
   serviceType: ServiceType;
   onServiceChange: (value: ServiceType) => void;
   serviceOptions: { value: ServiceType; label: string }[];
-  pairedSlot: Slot | null;
+  linkedSlots: Slot[];
   serviceMessage: string | null;
   clientType: ClientType;
   onClientTypeChange: (value: ClientType) => void;
@@ -43,7 +61,7 @@ function SlotModal({
   serviceType,
   onServiceChange,
   serviceOptions,
-  pairedSlot,
+  linkedSlots,
   serviceMessage,
   clientType,
   onClientTypeChange,
@@ -57,11 +75,11 @@ function SlotModal({
 }: SlotModalProps) {
   if (!slot) return null;
 
-  const doubleSlotUnavailable =
-    (serviceType === 'mani_pedi' || serviceType === 'home_service_2slots') && (!pairedSlot || pairedSlot.status !== 'available');
+  const requiredSlots = getRequiredSlotCount(serviceType);
+  const requiresMultipleSlots = requiredSlots > 1;
+  const missingLinkedSlots = requiresMultipleSlots && linkedSlots.length !== requiredSlots - 1;
   const hasSqueezeFee = slot.slotType === 'with_squeeze_fee';
   const isHomeService = serviceLocation === 'home_service';
-  const homeServiceRequiresManiPedi = isHomeService && serviceType !== 'mani_pedi' && serviceType !== 'home_service_2slots';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
@@ -82,29 +100,26 @@ function SlotModal({
             <p className="font-medium text-sm sm:text-base">{formatTime12Hour(slot.time)}</p>
           </div>
           <div>
-            <span className="text-sm sm:text-base text-gray-600">Status:</span>
-            <p className="font-medium capitalize text-sm sm:text-base">{slot.status}</p>
-          </div>
-          <div>
-            <span className="text-sm sm:text-base text-gray-600">Notes:</span>
-            <p className="font-medium text-sm sm:text-base">{slot.notes || 'No notes'}</p>
+            <span className="text-sm sm:text-base text-gray-600">Service Location:</span>
+            <select
+              value={serviceLocation}
+              onChange={(e) => onServiceLocationChange(e.target.value as ServiceLocation)}
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
+            >
+              <option value="homebased_studio">Homebased Studio</option>
+              <option value="home_service">Home Service (+₱1,000)</option>
+            </select>
+            {isHomeService && (
+              <p className="mt-1.5 text-[10px] sm:text-xs text-amber-700">
+                ⚠️ Home service bookings require Mani + Pedi or a Home Service package (2 or 3 consecutive slots).
+              </p>
+            )}
           </div>
           <div>
             <span className="text-sm sm:text-base text-gray-600">Service:</span>
             <select
               value={serviceType}
-              onChange={(e) => {
-                const newServiceType = e.target.value as ServiceType;
-                onServiceChange(newServiceType);
-                // Auto-set service location to home_service if home_service_2slots is selected
-                if (newServiceType === 'home_service_2slots') {
-                  onServiceLocationChange('home_service');
-                }
-                // If home service is selected and user changes away from mani_pedi and home_service_2slots, switch back to homebased_studio
-                else if (isHomeService && (newServiceType === 'manicure' || newServiceType === 'pedicure')) {
-                  onServiceLocationChange('homebased_studio');
-                }
-              }}
+              onChange={(e) => onServiceChange(e.target.value as ServiceType)}
               className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
             >
               {serviceOptions.map((option) => (
@@ -125,43 +140,19 @@ function SlotModal({
               <option value="repeat">Repeat Client</option>
             </select>
           </div>
-          <div>
-            <span className="text-sm sm:text-base text-gray-600">Service Location:</span>
-            <select
-              value={serviceLocation}
-              onChange={(e) => {
-                const newLocation = e.target.value as ServiceLocation;
-                onServiceLocationChange(newLocation);
-                // Auto-select mani_pedi if home service is selected (unless home_service_2slots is already selected)
-                if (newLocation === 'home_service' && serviceType !== 'mani_pedi' && serviceType !== 'home_service_2slots') {
-                  onServiceChange('mani_pedi');
-                }
-              }}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
-            >
-              <option value="homebased_studio">Homebased Studio</option>
-              <option value="home_service">Home Service (+₱1,000)</option>
-            </select>
-            {isHomeService && serviceType !== 'home_service_2slots' && serviceType !== 'mani_pedi' && (
-              <p className="mt-1.5 text-[10px] sm:text-xs text-amber-700">
-                ⚠️ Home service requires a minimum of 2 services (Mani + Pedi or Home Service 2 slots)
-              </p>
-            )}
-          </div>
-          {homeServiceRequiresManiPedi && (
-            <div className="rounded-2xl border-2 border-rose-400 bg-rose-200 px-4 py-3 text-sm text-rose-800">
-              <p>Home service requires Mani + Pedi or Home Service (2 slots). Please select one of these options from the Service dropdown.</p>
-            </div>
-          )}
-          {(serviceType === 'mani_pedi' || serviceType === 'home_service_2slots') && (
+          {requiresMultipleSlots && (
             <div
               className={`rounded-2xl border-2 px-4 py-3 text-sm ${
-                doubleSlotUnavailable
+                missingLinkedSlots
                   ? 'border-rose-400 bg-rose-200 text-rose-800'
                   : 'border-emerald-400 bg-emerald-200 text-emerald-800'
               }`}
             >
-              {serviceMessage ? <p>{serviceMessage}</p> : null}
+              {serviceMessage ? (
+                <p>{serviceMessage}</p>
+              ) : missingLinkedSlots ? (
+                <p>This service requires consecutive slots. Please select a different time or date.</p>
+              ) : null}
             </div>
           )}
         </div>
@@ -228,9 +219,16 @@ export default function BookingPage() {
   const [selectedService, setSelectedService] = useState<ServiceType>('manicure');
   const [clientType, setClientType] = useState<ClientType>('new');
   const [serviceLocation, setServiceLocation] = useState<ServiceLocation>('homebased_studio');
-  const [pairedSlot, setPairedSlot] = useState<Slot | null>(null);
+  const [linkedSlots, setLinkedSlots] = useState<Slot[]>([]);
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
   const [squeezeFeeAcknowledged, setSqueezeFeeAcknowledged] = useState(false);
+  const serviceOptions = SERVICE_OPTIONS[serviceLocation];
+
+  useEffect(() => {
+    if (!serviceOptions.some((option) => option.value === selectedService)) {
+      setSelectedService(serviceOptions[0].value);
+    }
+  }, [serviceLocation, serviceOptions, selectedService]);
 
   useEffect(() => {
     loadData();
@@ -255,55 +253,80 @@ export default function BookingPage() {
 
   useEffect(() => {
     if (!selectedSlot) {
-      setPairedSlot(null);
+      setLinkedSlots([]);
       setServiceMessage(null);
       return;
     }
 
-    if (selectedService === 'mani_pedi' || selectedService === 'home_service_2slots') {
-      const nextTime = getNextSlotTime(selectedSlot.time);
-      const nextSlot =
-        nextTime && selectedSlot
-          ? slots.find((candidate) => candidate.date === selectedSlot.date && candidate.time === nextTime) ?? null
-          : null;
-      setPairedSlot(nextSlot);
-      if (!nextSlot) {
-        setServiceMessage('This service requires the next slot, but it is not available in the schedule. Please pick another time or date.');
-      } else if (nextSlot.status !== 'available') {
-        setServiceMessage('This service requires two consecutive slots, but the next slot is already taken. Please select another time or date.');
-      } else {
-        const serviceLabel = selectedService === 'home_service_2slots' 
-          ? 'Home service (2 slots - for 2 clients or 1 client booking 2 slots)'
-          : 'This service';
-        setServiceMessage(`${serviceLabel} will use ${formatTime12Hour(selectedSlot.time)} and ${formatTime12Hour(nextSlot.time)}.`);
-      }
-    } else {
-      setPairedSlot(null);
+    const requiredSlots = getRequiredSlotCount(selectedService);
+    if (requiredSlots === 1) {
+      setLinkedSlots([]);
       setServiceMessage(null);
+      return;
     }
-  }, [selectedSlot, selectedService, slots]);
+
+    const collected: Slot[] = [];
+    let referenceSlot = selectedSlot;
+    let errorMessage: string | null = null;
+
+    for (let step = 1; step < requiredSlots; step += 1) {
+      const nextTime = getNextSlotTime(referenceSlot.time);
+      if (!nextTime) {
+        errorMessage = 'This service requires additional consecutive slots, but there are no more later slots available.';
+        break;
+      }
+
+      const nextSlot =
+        slots.find((candidate) => candidate.date === selectedSlot.date && candidate.time === nextTime) ?? null;
+
+      if (!nextSlot) {
+        errorMessage = 'This service requires the next slot, but it is not available in the schedule. Please pick another time or date.';
+        break;
+      }
+
+      if (nextSlot.status !== 'available') {
+        errorMessage = 'This service requires consecutive slots, but one of them is already taken. Please select another time or date.';
+        break;
+      }
+
+      collected.push(nextSlot);
+      referenceSlot = nextSlot;
+    }
+
+    if (errorMessage) {
+      setLinkedSlots([]);
+      setServiceMessage(errorMessage);
+      return;
+    }
+
+    setLinkedSlots(collected);
+    const lastSlot = collected[collected.length - 1];
+    const serviceLabel =
+      serviceOptions.find((option) => option.value === selectedService)?.label ?? 'This service';
+    setServiceMessage(
+      `${serviceLabel} will use ${formatTime12Hour(selectedSlot.time)}${lastSlot ? ` to ${formatTime12Hour(lastSlot.time)}` : ''}.`,
+    );
+  }, [selectedSlot, selectedService, slots, serviceOptions]);
 
   const availableSlotsForDate = useMemo(
     () => slots.filter((slot) => slot.date === selectedDate && slot.status === 'available'),
     [slots, selectedDate],
   );
 
-  const requiresDouble = selectedService === 'mani_pedi' || selectedService === 'home_service_2slots';
+  const requiredSlots = getRequiredSlotCount(selectedService);
   const hasSqueezeFee = selectedSlot?.slotType === 'with_squeeze_fee';
-  const isHomeService = serviceLocation === 'home_service';
-  const homeServiceRequiresManiPedi = isHomeService && selectedService !== 'mani_pedi' && selectedService !== 'home_service_2slots';
+  const missingLinkedSlots = requiredSlots > 1 && linkedSlots.length !== requiredSlots - 1;
   const disableProceed =
-    !selectedSlot || 
-    (requiresDouble && (!pairedSlot || pairedSlot.status !== 'available')) ||
-    (hasSqueezeFee && !squeezeFeeAcknowledged) ||
-    homeServiceRequiresManiPedi;
+    !selectedSlot ||
+    missingLinkedSlots ||
+    (hasSqueezeFee && !squeezeFeeAcknowledged);
 
   const handleSelectSlot = (slot: Slot) => {
     if (slot.status !== 'available') return;
     setSelectedService('manicure');
     setClientType('new');
     setServiceLocation('homebased_studio');
-    setPairedSlot(null);
+    setLinkedSlots([]);
     setServiceMessage(null);
     setSqueezeFeeAcknowledged(false);
     setSelectedSlot(slot);
@@ -311,11 +334,11 @@ export default function BookingPage() {
 
   async function handleProceedToBooking() {
     if (!selectedSlot) return;
-    const requiresDouble = selectedService === 'mani_pedi';
-    const pairedSlotId = requiresDouble ? pairedSlot?.id : undefined;
+    const requiredSlots = getRequiredSlotCount(selectedService);
+    const linkedSlotIds = linkedSlots.map((slot) => slot.id);
 
-    if (requiresDouble && (!pairedSlotId || pairedSlot?.status !== 'available')) {
-      setServiceMessage('This service requires two consecutive slots. Please choose another time or date.');
+    if (requiredSlots > 1 && linkedSlotIds.length !== requiredSlots - 1) {
+      setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
       return;
     }
 
@@ -326,7 +349,8 @@ export default function BookingPage() {
         body: JSON.stringify({
           slotId: selectedSlot.id,
           serviceType: selectedService,
-          pairedSlotId,
+          pairedSlotId: linkedSlotIds[0],
+          linkedSlotIds,
           clientType,
           serviceLocation,
         }),
@@ -342,7 +366,7 @@ export default function BookingPage() {
       setSelectedService('manicure');
       setClientType('new');
       setServiceLocation('homebased_studio');
-      setPairedSlot(null);
+      setLinkedSlots([]);
       setServiceMessage(null);
       setSqueezeFeeAcknowledged(false);
       await loadData();
@@ -442,8 +466,8 @@ export default function BookingPage() {
         slot={selectedSlot}
         serviceType={selectedService}
         onServiceChange={setSelectedService}
-        serviceOptions={SERVICE_OPTIONS}
-        pairedSlot={pairedSlot}
+        serviceOptions={serviceOptions}
+        linkedSlots={linkedSlots}
         serviceMessage={serviceMessage}
         clientType={clientType}
         onClientTypeChange={setClientType}
@@ -457,7 +481,7 @@ export default function BookingPage() {
           setSelectedService('manicure');
           setClientType('new');
           setServiceLocation('homebased_studio');
-          setPairedSlot(null);
+          setLinkedSlots([]);
           setServiceMessage(null);
           setSqueezeFeeAcknowledged(false);
         }}

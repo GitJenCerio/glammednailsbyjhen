@@ -1,7 +1,7 @@
 import type { Booking, BookingStatus, Slot } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 
-type BookingRow = Booking & { slot?: Slot; pairedSlot?: Slot };
+type BookingRow = Booking & { slot?: Slot; pairedSlot?: Slot; linkedSlots?: Slot[] };
 
 type BookingListProps = {
   bookings: BookingRow[];
@@ -20,6 +20,7 @@ const serviceLabels: Record<string, string> = {
   pedicure: 'Pedicure',
   mani_pedi: 'Mani + Pedi',
   home_service_2slots: 'Home Service (2 slots)',
+  home_service_3slots: 'Home Service (3 slots)',
 };
 
 export function BookingList({ bookings, onSelect, selectedId }: BookingListProps) {
@@ -72,11 +73,18 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
                       {booking.serviceType && (
                         <p className="text-[10px] sm:text-xs text-slate-400 truncate">
                           {serviceLabels[booking.serviceType] ?? booking.serviceType}
-                          {(booking.serviceType === 'mani_pedi' || booking.serviceType === 'home_service_2slots') && booking.slot && (
+                          {booking.slot && (
                             <>
                               {' '}
                               ({formatTime12Hour(booking.slot.time)}
-                              {booking.pairedSlot ? ` + ${formatTime12Hour(booking.pairedSlot.time)}` : ''})
+                              {(() => {
+                                const endSlot =
+                                  booking.linkedSlots && booking.linkedSlots.length > 0
+                                    ? booking.linkedSlots[booking.linkedSlots.length - 1]
+                                    : booking.pairedSlot;
+                                return endSlot ? ` - ${formatTime12Hour(endSlot.time)}` : '';
+                              })()}
+                              )
                             </>
                           )}
                         </p>

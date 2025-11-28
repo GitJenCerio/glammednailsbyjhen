@@ -24,9 +24,22 @@ export async function getBookingById(id: string): Promise<Booking | null> {
 type CreateBookingOptions = {
   serviceType?: ServiceType;
   pairedSlotId?: string | null;
+  linkedSlotIds?: string[] | null;
   clientType?: 'new' | 'repeat';
   serviceLocation?: 'homebased_studio' | 'home_service';
 };
+
+function getRequiredSlotCount(serviceType: ServiceType): number {
+  switch (serviceType) {
+    case 'mani_pedi':
+    case 'home_service_2slots':
+      return 2;
+    case 'home_service_3slots':
+      return 3;
+    default:
+      return 1;
+  }
+}
 
 /**
  * Get the next sequential booking number
@@ -73,13 +86,13 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   }
 
   const serviceType = options?.serviceType ?? 'manicure';
-  const requiresPair = serviceType === 'mani_pedi' || serviceType === 'home_service_2slots';
-  const providedPairedSlotId = options?.pairedSlotId ?? null;
+  const requiredSlotCount = getRequiredSlotCount(serviceType);
+  const providedLinkedSlotIds = options?.linkedSlotIds ?? (options?.pairedSlotId ? [options.pairedSlotId] : []);
   const serviceLocation = options?.serviceLocation ?? 'homebased_studio';
   const blocks = await listBlockedDates();
   let slotDate: string | null = null;
   let slotTime: string | null = null;
-  let pairedSlotTime: string | null = null;
+  let finalLinkedSlotTime: string | null = null;
 
   await adminDb.runTransaction(async (transaction) => {
     const slotRef = slotsCollection.doc(slotId);
@@ -97,39 +110,51 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
       throw new Error('Slot is blocked.');
     }
 
-    let pairedSlotId: string | null = null;
-    if (requiresPair) {
-      if (!providedPairedSlotId) {
-        throw new Error('This service requires two consecutive slots.');
-      }
+    if (requiredSlotCount === 1 && providedLinkedSlotIds.length > 0) {
+      throw new Error('Additional slots provided for a single-slot service.');
+    }
 
-      const pairedRef = slotsCollection.doc(providedPairedSlotId);
-      const pairedSnap = await transaction.get(pairedRef);
-      if (!pairedSnap.exists) throw new Error('The consecutive slot was not found.');
-      const pairedSlot = docToSlot(pairedSnap.id, pairedSnap.data()!);
+    if (requiredSlotCount > 1 && providedLinkedSlotIds.length !== requiredSlotCount - 1) {
+      throw new Error(`This service requires ${requiredSlotCount} consecutive slots.`);
+    }
 
-      if (pairedSlot.status !== 'available') {
+    const linkedSlotIds: string[] = [];
+    const linkedSlotTimes: string[] = [];
+    let previousSlot = slot;
+
+    for (let index = 0; index < providedLinkedSlotIds.length; index += 1) {
+      const linkedSlotId = providedLinkedSlotIds[index];
+      const linkedRef = slotsCollection.doc(linkedSlotId);
+      const linkedSnap = await transaction.get(linkedRef);
+      if (!linkedSnap.exists) throw new Error('The consecutive slot was not found.');
+      const linkedSlot = docToSlot(linkedSnap.id, linkedSnap.data()!);
+
+      if (linkedSlot.status !== 'available') {
         throw new Error('The consecutive slot is no longer available.');
       }
-      if (pairedSlot.date !== slot.date) {
+      if (linkedSlot.date !== slot.date) {
         throw new Error('Consecutive slots must be on the same day.');
       }
-      const expectedNextTime = getNextSlotTime(slot.time);
-      if (!expectedNextTime || pairedSlot.time !== expectedNextTime) {
+      const expectedNextTime = getNextSlotTime(previousSlot.time);
+      if (!expectedNextTime || linkedSlot.time !== expectedNextTime) {
         throw new Error('Selected slots are not consecutive.');
       }
-      if (slotIsBlocked(pairedSlot, blocks)) {
-        throw new Error('The consecutive slot is blocked.');
+      if (slotIsBlocked(linkedSlot, blocks)) {
+        throw new Error('One of the consecutive slots is blocked.');
       }
 
-      transaction.update(pairedRef, {
+      transaction.update(linkedRef, {
         status: 'pending',
         updatedAt: Timestamp.now().toDate().toISOString(),
       });
-      pairedSlotId = pairedSlot.id;
-      pairedSlotTime = pairedSlot.time; // Store paired slot time for use after transaction
-    } else if (providedPairedSlotId) {
-      throw new Error('Paired slot provided for a single-slot service.');
+
+      linkedSlotIds.push(linkedSlot.id);
+      linkedSlotTimes.push(linkedSlot.time);
+      previousSlot = linkedSlot;
+    }
+
+    if (linkedSlotTimes.length > 0) {
+      finalLinkedSlotTime = linkedSlotTimes[linkedSlotTimes.length - 1];
     }
 
     transaction.update(slotRef, {
@@ -141,7 +166,8 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     const clientType = options?.clientType;
     transaction.set(bookingRef, {
       slotId,
-      pairedSlotId,
+      pairedSlotId: linkedSlotIds[0] ?? null,
+      linkedSlotIds: linkedSlotIds.length ? linkedSlotIds : undefined,
       bookingId,
       serviceType,
       clientType,
@@ -199,9 +225,9 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 
   let formattedTime: string | undefined = undefined;
   if (slotTime && formTimeEntryKey) {
-    if (pairedSlotTime) {
-      // For paired slots (mani-pedi), show time range: "10:30 AM - 1:00 PM"
-      formattedTime = `${formatTime12Hour(slotTime)} - ${formatTime12Hour(pairedSlotTime)}`;
+    if (finalLinkedSlotTime) {
+      // For multi-slot bookings, show time range: "10:30 AM - 3:00 PM"
+      formattedTime = `${formatTime12Hour(slotTime)} - ${formatTime12Hour(finalLinkedSlotTime)}`;
     } else {
       // For single slot, show single time: "10:30 AM"
       formattedTime = formatTime12Hour(slotTime);
@@ -310,12 +336,18 @@ export async function syncBookingWithForm(
         };
 
         let expectedTime: string;
-        if (booking.pairedSlotId) {
-          const pairedSlotRef = slotsCollection.doc(booking.pairedSlotId);
-          const pairedSlotSnap = await pairedSlotRef.get();
-          if (pairedSlotSnap.exists) {
-            const pairedSlot = docToSlot(pairedSlotSnap.id, pairedSlotSnap.data()!);
-            expectedTime = `${formatTime12Hour(slot.time)} - ${formatTime12Hour(pairedSlot.time)}`;
+        const linkedSlotIds = booking.linkedSlotIds?.length
+          ? booking.linkedSlotIds
+          : booking.pairedSlotId
+            ? [booking.pairedSlotId]
+            : [];
+        if (linkedSlotIds.length > 0) {
+          const lastLinkedId = linkedSlotIds[linkedSlotIds.length - 1];
+          const linkedSlotRef = slotsCollection.doc(lastLinkedId);
+          const linkedSlotSnap = await linkedSlotRef.get();
+          if (linkedSlotSnap.exists) {
+            const linkedSlot = docToSlot(linkedSlotSnap.id, linkedSlotSnap.data()!);
+            expectedTime = `${formatTime12Hour(slot.time)} - ${formatTime12Hour(linkedSlot.time)}`;
           } else {
             expectedTime = formatTime12Hour(slot.time);
           }
@@ -394,11 +426,16 @@ export async function confirmBooking(bookingId: string) {
       updatedAt: Timestamp.now().toDate().toISOString(),
     });
 
-    if (booking.pairedSlotId) {
-      const pairedRef = slotsCollection.doc(booking.pairedSlotId);
-      const pairedSnap = await transaction.get(pairedRef);
-      if (pairedSnap.exists) {
-        transaction.update(pairedRef, {
+    const linkedSlotIds = booking.linkedSlotIds?.length
+      ? booking.linkedSlotIds
+      : booking.pairedSlotId
+        ? [booking.pairedSlotId]
+        : [];
+    for (const linkedId of linkedSlotIds) {
+      const linkedRef = slotsCollection.doc(linkedId);
+      const linkedSnap = await transaction.get(linkedRef);
+      if (linkedSnap.exists) {
+        transaction.update(linkedRef, {
           status: 'confirmed',
           updatedAt: Timestamp.now().toDate().toISOString(),
         });
@@ -433,11 +470,17 @@ export async function releaseExpiredPendingBookings(maxAgeMinutes = 20) {
         const slotRef = slotsCollection.doc(data.slotId);
         const slotSnap = await transaction.get(slotRef);
 
-        let pairedRef: FirebaseFirestore.DocumentReference | null = null;
-        let pairedSnap: FirebaseFirestore.DocumentSnapshot | null = null;
-        if (data.pairedSlotId) {
-          pairedRef = slotsCollection.doc(data.pairedSlotId);
-          pairedSnap = await transaction.get(pairedRef);
+        const linkedSlotIds: string[] = Array.isArray(data.linkedSlotIds)
+          ? data.linkedSlotIds
+          : data.pairedSlotId
+            ? [data.pairedSlotId]
+            : [];
+        const linkedRefs: FirebaseFirestore.DocumentReference[] = [];
+        const linkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+        for (const linkedId of linkedSlotIds) {
+          const ref = slotsCollection.doc(linkedId);
+          linkedRefs.push(ref);
+          linkedSnaps.push(await transaction.get(ref));
         }
 
         transaction.delete(bookingRef);
@@ -448,12 +491,15 @@ export async function releaseExpiredPendingBookings(maxAgeMinutes = 20) {
             updatedAt: Timestamp.now().toDate().toISOString(),
           });
         }
-        if (pairedRef && pairedSnap?.exists && pairedSnap.data()?.status === 'pending') {
-          transaction.update(pairedRef, {
-            status: 'available',
-            updatedAt: Timestamp.now().toDate().toISOString(),
-          });
-        }
+        linkedRefs.forEach((ref, index) => {
+          const snap = linkedSnaps[index];
+          if (snap?.exists && snap.data()?.status === 'pending') {
+            transaction.update(ref, {
+              status: 'available',
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            });
+          }
+        });
       });
     }),
   );
@@ -464,6 +510,7 @@ function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking
     id,
     slotId: data.slotId,
     pairedSlotId: data.pairedSlotId ?? null,
+    linkedSlotIds: data.linkedSlotIds ?? undefined,
     bookingId: data.bookingId,
     status: data.status,
     serviceType: data.serviceType,
