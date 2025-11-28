@@ -56,7 +56,14 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 
 # Google Form + Sheets automation
 GOOGLE_FORM_BASE_URL=https://docs.google.com/forms/d/e/<form-id>/viewform?usp=pp_url
+# To get this: Open form → Three dots (⋮) → "Get pre-filled link" → Copy URL (must include ?usp=pp_url)
+# See HOW_TO_GET_GOOGLE_FORM_BASE_URL.md for detailed instructions
 GOOGLE_FORM_BOOKING_ID_ENTRY=entry.1234567890        # the field that holds bookingId
+GOOGLE_FORM_DATE_ENTRY=entry.0987654321              # optional: the field that holds appointment date (auto-filled)
+GOOGLE_FORM_TIME_ENTRY=entry.1122334455              # optional: the field that holds appointment time (auto-filled, handles single/paired slots)
+GOOGLE_FORM_SERVICE_LOCATION_ENTRY=entry.2233445566 # optional: the field that holds service location (auto-filled: "Homebased Studio" or "Home Service")
+GOOGLE_FORM_DATE_FORMAT=FULL                         # optional: date format for Google Forms. Default: FULL (e.g., "Friday, November 28, 2025")
+                                                    # Options: FULL, DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD
 GOOGLE_SHEETS_ID=your-google-sheet-id
 GOOGLE_SHEETS_RANGE='Form Responses 1'!A:Z
 GOOGLE_SHEETS_BOOKING_ID_COLUMN=bookingId           # header name in sheet

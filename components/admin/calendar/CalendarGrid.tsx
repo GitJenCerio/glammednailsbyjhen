@@ -36,59 +36,60 @@ export function CalendarGrid({
     const pendingCount = daySlots.filter((slot) => slot.status === 'pending').length;
     const confirmedCount = daySlots.filter((slot) => slot.status === 'confirmed').length;
 
-    let badgeColor = 'bg-slate-200 text-slate-700';
-    if (isBlocked) badgeColor = 'bg-rose-200 text-rose-800';
+    let badgeColor = 'bg-slate-300 text-slate-800';
+    if (isBlocked) badgeColor = 'bg-rose-300 text-rose-900';
     else if (confirmedCount) badgeColor = 'bg-slate-900 text-white';
-    else if (pendingCount) badgeColor = 'bg-amber-200 text-amber-900';
-    else if (availableCount) badgeColor = 'bg-emerald-100 text-emerald-700';
+    else if (pendingCount) badgeColor = 'bg-amber-300 text-amber-900';
+    else if (availableCount) badgeColor = 'bg-emerald-300 text-emerald-900';
 
+    // Show count with "slot" for available on all screen sizes
     const label = isBlocked
-      ? 'Blocked'
+      ? 'B'
       : confirmedCount
-        ? `${confirmedCount} confirmed`
+        ? `${confirmedCount}`
         : pendingCount
-          ? `${pendingCount} pending`
+          ? `${pendingCount}`
           : availableCount
-            ? `${availableCount} available`
+            ? `${availableCount} slot${availableCount !== 1 ? 's' : ''}`
             : null;
 
     return { isBlocked, label, badgeColor, isoDate };
   };
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-3 sm:p-4 md:p-6 shadow-md shadow-slate-900/10">
+      <header className="mb-3 sm:mb-4 md:mb-6 flex items-center justify-between flex-wrap gap-2">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Calendar</p>
-          <h2 className="text-2xl font-semibold">{format(referenceDate, 'MMMM yyyy')}</h2>
+          <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Calendar</p>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900">{format(referenceDate, 'MMMM yyyy')}</h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => onChangeMonth(subMonths(referenceDate, 1))}
-            className="rounded-full border border-slate-200 px-3 py-2 text-sm hover:border-slate-900"
+            className="rounded-full border-2 border-slate-300 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 active:scale-95 transition-all touch-manipulation"
           >
             Prev
           </button>
           <button
             type="button"
             onClick={() => onChangeMonth(addMonths(referenceDate, 1))}
-            className="rounded-full border border-slate-200 px-3 py-2 text-sm hover:border-slate-900"
+            className="rounded-full border-2 border-slate-300 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 active:scale-95 transition-all touch-manipulation"
           >
             Next
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-slate-500">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-semibold text-slate-600">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-          <span key={day} className="py-2">
+          <span key={day} className="py-1 sm:py-2">
             {day}
           </span>
         ))}
       </div>
 
-      <div className="mt-2 grid grid-cols-7 gap-2">
+      <div className="mt-1 sm:mt-2 grid grid-cols-7 gap-1 sm:gap-2">
         {weeks.map((week, index) => (
           <div key={index} className="contents">
             {week.map((date) => {
@@ -103,18 +104,20 @@ export function CalendarGrid({
                   type="button"
                   onClick={() => onSelectDate(isoDate)}
                   className={[
-                    'flex flex-col gap-2 rounded-2xl border p-3 text-left transition',
-                    isCurrentMonth ? 'border-slate-200' : 'border-transparent text-slate-400',
-                    isBlocked ? 'bg-rose-50 border-rose-200' : 'bg-slate-50',
-                    isSelected ? 'ring-2 ring-slate-900' : '',
-                    isToday ? 'shadow-inner border-slate-900/20' : '',
+                    'flex flex-col gap-0.5 sm:gap-1 md:gap-1.5 rounded-xl sm:rounded-2xl border-2 p-1 sm:p-1.5 md:p-2.5 lg:p-3 text-left transition-all shadow-sm touch-manipulation active:scale-95 min-h-[3rem] sm:min-h-[3.5rem] md:min-h-[4rem]',
+                    isCurrentMonth ? 'border-slate-300' : 'border-slate-200 text-slate-400',
+                    isBlocked ? 'bg-rose-200 border-rose-400 hover:bg-rose-300 hover:border-rose-500' : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400',
+                    isSelected ? 'ring-2 ring-slate-900 ring-offset-1 sm:ring-offset-2 border-slate-900' : '',
+                    isToday ? 'shadow-md border-slate-900/30 bg-slate-50' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  <span className="text-sm font-semibold">{format(date, 'd')}</span>
+                  <span className={`text-xs sm:text-sm font-semibold leading-tight ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>
+                    {format(date, 'd')}
+                  </span>
                   {label && (
-                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${badgeColor}`}>
+                    <span className={`inline-flex items-center justify-center rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-[11px] font-semibold whitespace-nowrap ${badgeColor}`}>
                       {label}
                     </span>
                   )}

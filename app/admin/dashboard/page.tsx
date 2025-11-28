@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
+import { formatTime12Hour } from '@/lib/utils';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
+import { BookingsView } from '@/components/BookingsView';
 import { ServicesManager } from '@/components/admin/ServicesManager';
 
 const navItems = [
@@ -34,6 +36,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<AdminSection>('bookings');
+  const [bookingsView, setBookingsView] = useState<'calendar' | 'list'>('calendar');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -75,7 +79,7 @@ export default function AdminDashboard() {
   const selectedBooking =
     bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? bookingsWithSlots[0] ?? null;
 
-  async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; notes?: string }) {
+  async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string }) {
     const url = editingSlot ? `/api/slots/${editingSlot.id}` : '/api/slots';
     const method = editingSlot ? 'PATCH' : 'POST';
     const res = await fetch(url, {
@@ -129,20 +133,53 @@ export default function AdminDashboard() {
   const renderBookingsSection = () => (
     <>
       {toast && (
-        <div className="mb-6 rounded-2xl bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
-          {toast}
-          <button className="ml-4 text-xs uppercase" onClick={() => setToast(null)}>
+        <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl bg-emerald-50 px-3 sm:px-4 py-2 text-xs sm:text-sm text-emerald-700 flex items-center justify-between gap-2">
+          <span className="flex-1">{toast}</span>
+          <button className="text-xs uppercase font-semibold touch-manipulation" onClick={() => setToast(null)}>
             Dismiss
           </button>
         </div>
       )}
+
+      {/* Sub-navigation for bookings view */}
+      <div className="mb-4 sm:mb-6 flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-fit">
+        <button
+          onClick={() => setBookingsView('calendar')}
+          className={`flex-1 sm:flex-none px-3 sm:px-6 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+            bookingsView === 'calendar'
+              ? 'bg-black text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <span className="hidden sm:inline">Calendar & Slots</span>
+          <span className="sm:hidden">Calendar</span>
+        </button>
+        <button
+          onClick={() => setBookingsView('list')}
+          className={`flex-1 sm:flex-none px-3 sm:px-6 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+            bookingsView === 'list'
+              ? 'bg-black text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <span className="hidden sm:inline">View Bookings</span>
+          <span className="sm:hidden">Bookings</span>
+        </button>
+      </div>
+
       {loading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="h-12 w-12 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
         </div>
+      ) : bookingsView === 'list' ? (
+        <BookingsView
+          bookings={bookings}
+          slots={slots}
+          selectedDate={selectedDate}
+        />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-          <div className="space-y-6">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr]">
+          <div className="space-y-4 sm:space-y-6">
             <CalendarGrid
               referenceDate={currentMonth}
               slots={slots}
@@ -152,11 +189,11 @@ export default function AdminDashboard() {
               onChangeMonth={setCurrentMonth}
             />
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <header className="mb-4 flex items-center justify-between">
+            <section className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
+              <header className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Slots</p>
-                  <h2 className="text-2xl font-semibold">{format(new Date(selectedDate), 'EEEE, MMM d')}</h2>
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Slots</p>
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">{format(new Date(selectedDate), 'EEEE, MMM d')}</h2>
                 </div>
                 <button
                   type="button"
@@ -164,7 +201,7 @@ export default function AdminDashboard() {
                     setEditingSlot(null);
                     setSlotModalOpen(true);
                   }}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold hover:border-slate-900"
+                  className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
                 >
                   Add slot
                 </button>
@@ -190,15 +227,15 @@ export default function AdminDashboard() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <header className="mb-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Blocked dates</p>
-                <h2 className="text-2xl font-semibold">Overrides</h2>
+            <section className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
+              <header className="mb-3 sm:mb-4">
+                <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Blocked dates</p>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">Overrides</h2>
               </header>
               <div className="space-y-3">
                 {blockedDates.length === 0 && <p className="text-sm text-slate-500">No blocked dates.</p>}
                 {blockedDates.map((block) => (
-                  <div key={block.id} className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                  <div key={block.id} className="rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm shadow-rose-900/5">
                     <p className="text-sm font-semibold text-rose-700">
                       {block.startDate} → {block.endDate}
                     </p>
@@ -210,7 +247,7 @@ export default function AdminDashboard() {
             </section>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <BookingList
               bookings={bookingsWithSlots}
               onSelect={(booking) => setSelectedBookingId(booking.id)}
@@ -219,7 +256,7 @@ export default function AdminDashboard() {
             <BookingDetailPanel
               booking={selectedBooking ?? null}
               slotLabel={
-                selectedBooking?.slot ? `${selectedBooking.slot.date} · ${selectedBooking.slot.time}` : undefined
+                selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
               }
               onConfirm={handleConfirmBooking}
             />
@@ -245,8 +282,64 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Mobile Header */}
+      <div className="lg:hidden sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Admin</p>
+          <p className="text-sm font-semibold text-slate-900">glammednails</p>
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 rounded-lg hover:bg-slate-100"
+          aria-label="Toggle menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-4">
+          <nav className="space-y-2">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveSection(item.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={[
+                  'flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition',
+                  activeSection === item.id
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-500 hover:bg-slate-100',
+                ].join(' ')}
+              >
+                {item.label}
+                {item.id === 'bookings' && (
+                  <span
+                    className={[
+                      'rounded-full px-2 py-0.5 text-xs',
+                      activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
+                    ].join(' ')}
+                  >
+                    {bookings.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+
       <div className="flex min-h-screen">
-        <aside className="hidden w-72 flex-col border-r border-slate-200 bg-white px-6 py-8 lg:flex">
+        <aside className="hidden lg:flex w-72 flex-col border-r border-slate-200 bg-white px-6 py-8">
           <div className="mb-8">
             <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Admin</p>
             <p className="mt-2 text-lg font-semibold text-slate-900">Glammed Nails</p>
@@ -279,19 +372,19 @@ export default function AdminDashboard() {
           </nav>
         </aside>
 
-        <main className="flex-1 p-6">
-          <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <main className="flex-1 p-3 sm:p-4 md:p-6">
+          <header className="mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
-              <h1 className="text-3xl font-semibold text-slate-900">
+              <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-slate-900">
                 {activeSection === 'bookings' ? 'Booking control center' : sectionDescription[activeSection]}
               </h1>
               {activeSection !== 'bookings' && (
-                <p className="text-sm text-slate-500">Use the navigation to access the booking workflow.</p>
+                <p className="text-xs sm:text-sm text-slate-500">Use the navigation to access the booking workflow.</p>
               )}
             </div>
-            {activeSection === 'bookings' && (
-              <div className="flex flex-wrap gap-3">
+            {activeSection === 'bookings' && bookingsView === 'calendar' && (
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -301,9 +394,10 @@ export default function AdminDashboard() {
                     });
                     setBlockModalOpen(true);
                   }}
-                  className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:border-rose-600"
+                  className="rounded-full border border-rose-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 touch-manipulation"
                 >
-                  Block selected date
+                  <span className="hidden sm:inline">Block selected date</span>
+                  <span className="sm:hidden">Block date</span>
                 </button>
                 <button
                   type="button"
@@ -313,9 +407,10 @@ export default function AdminDashboard() {
                     setBlockDefaults({ start, end });
                     setBlockModalOpen(true);
                   }}
-                  className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:border-rose-600"
+                  className="rounded-full border border-rose-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 touch-manipulation"
                 >
-                  Block entire month
+                  <span className="hidden sm:inline">Block entire month</span>
+                  <span className="sm:hidden">Block month</span>
                 </button>
                 <button
                   type="button"
@@ -323,16 +418,17 @@ export default function AdminDashboard() {
                     setEditingSlot(null);
                     setSlotModalOpen(true);
                   }}
-                  className="rounded-full bg-slate-900 px-6 py-2 text-sm font-semibold text-white"
+                  className="rounded-full bg-slate-900 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation"
                 >
                   New slot
                 </button>
                 <button
                   type="button"
                   onClick={handleSyncSheets}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold hover:border-slate-900"
+                  className="rounded-full border border-slate-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
                 >
-                  Sync Google Sheet
+                  <span className="hidden sm:inline">Sync Google Sheet</span>
+                  <span className="sm:hidden">Sync</span>
                 </button>
               </div>
             )}

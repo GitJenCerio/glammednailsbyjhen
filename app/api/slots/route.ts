@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       date: body.date,
       time: body.time,
       status: body.status ?? 'available',
+      slotType: body.slotType ?? 'regular',
       notes: body.notes ?? null,
     },
     blocks,
