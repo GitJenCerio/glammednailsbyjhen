@@ -19,22 +19,27 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  if (!body?.date || !body?.time) {
-    return NextResponse.json({ error: 'Missing slot fields.' }, { status: 400 });
-  }
+  try {
+    const body = await request.json();
+    if (!body?.date || !body?.time) {
+      return NextResponse.json({ error: 'Missing slot fields.' }, { status: 400 });
+    }
 
-  const blocks = await listBlockedDates();
-  const slot = await createSlot(
-    {
-      date: body.date,
-      time: body.time,
-      status: body.status ?? 'available',
-      slotType: body.slotType ?? 'regular',
-      notes: body.notes ?? null,
-    },
-    blocks,
-  );
-  return NextResponse.json({ slot }, { status: 201 });
+    const blocks = await listBlockedDates();
+    const slot = await createSlot(
+      {
+        date: body.date,
+        time: body.time,
+        status: body.status ?? 'available',
+        slotType: body.slotType ?? 'regular',
+        notes: body.notes ?? null,
+      },
+      blocks,
+    );
+    return NextResponse.json({ slot }, { status: 201 });
+  } catch (error: any) {
+    const errorMessage = error.message || 'Failed to create slot.';
+    return NextResponse.json({ error: errorMessage }, { status: 400 });
+  }
 }
 

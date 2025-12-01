@@ -3,10 +3,15 @@ import { listBlockedDates } from '@/lib/services/blockService';
 import { deleteSlot, updateSlot } from '@/lib/services/slotService';
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json();
-  const blocks = await listBlockedDates();
-  const slot = await updateSlot(params.id, body, blocks);
-  return NextResponse.json({ slot });
+  try {
+    const body = await request.json();
+    const blocks = await listBlockedDates();
+    const slot = await updateSlot(params.id, body, blocks);
+    return NextResponse.json({ slot });
+  } catch (error: any) {
+    const errorMessage = error.message || 'Failed to update slot.';
+    return NextResponse.json({ error: errorMessage }, { status: 400 });
+  }
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {

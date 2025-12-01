@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Slot, SlotStatus } from '@/lib/types';
 import { SLOT_TIMES, type SlotTime } from '@/lib/constants/slots';
+import { ErrorModal } from './ErrorModal';
 
 type SlotEditorModalProps = {
   open: boolean;
@@ -22,18 +23,21 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (slot) {
-      setDate(slot.date);
-      setTime(slot.time as SlotTime);
-      setStatus(slot.status);
-      setSlotType(slot.slotType ?? 'regular');
-      setNotes(slot.notes ?? '');
-    } else if (defaultDate) {
-      setDate(defaultDate);
-      setTime(SLOT_TIMES[0]);
-      setStatus('available');
-      setSlotType('regular');
-      setNotes('');
+    if (open) {
+      setError(null); // Clear error when modal opens
+      if (slot) {
+        setDate(slot.date);
+        setTime(slot.time as SlotTime);
+        setStatus(slot.status);
+        setSlotType(slot.slotType ?? 'regular');
+        setNotes(slot.notes ?? '');
+      } else if (defaultDate) {
+        setDate(defaultDate);
+        setTime(SLOT_TIMES[0]);
+        setStatus('available');
+        setSlotType('regular');
+        setNotes('');
+      }
     }
   }, [slot, defaultDate, open]);
 
@@ -134,8 +138,6 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
           </label>
         </div>
 
-        {error && <p className="mt-4 rounded-xl sm:rounded-2xl bg-rose-50 px-3 py-2 text-xs sm:text-sm text-rose-600">{error}</p>}
-
         <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
           <button
             type="button"
@@ -153,6 +155,13 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
           </button>
         </div>
       </form>
+
+      <ErrorModal
+        open={!!error}
+        title="Cannot Create Slot"
+        message={error || ''}
+        onClose={() => setError(null)}
+      />
     </div>
   );
 }

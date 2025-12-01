@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
+import { DeleteSlotModal } from '@/components/admin/modals/DeleteSlotModal';
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
@@ -30,6 +34,7 @@ const navItems = [
 type AdminSection = (typeof navItems)[number]['id'];
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [slots, setSlots] = useState<Slot[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -37,6 +42,9 @@ export default function AdminDashboard() {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [slotModalOpen, setSlotModalOpen] = useState(false);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [deleteSlotModalOpen, setDeleteSlotModalOpen] = useState(false);
+  const [slotToDelete, setSlotToDelete] = useState<Slot | null>(null);
+  const [isDeletingSlot, setIsDeletingSlot] = useState(false);
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [blockDefaults, setBlockDefaults] = useState<{ start?: string | null; end?: string | null }>({});
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
@@ -123,6 +131,10 @@ export default function AdminDashboard() {
     }));
 
     bookings.forEach((booking) => {
+      // Skip bookings with deleted slots
+      const slotExists = slots.some((slot) => slot.id === booking.slotId);
+      if (!slotExists) return;
+
       const dateStr = booking.invoice?.createdAt ?? booking.createdAt;
       if (!dateStr) return;
       const d = new Date(dateStr);
@@ -187,7 +199,7 @@ export default function AdminDashboard() {
       maxMonthlyBookings,
       maxMonthlyRevenue,
     };
-  }, [bookings]);
+  }, [bookings, slots]);
 
   useEffect(() => {
     loadData();
@@ -264,18 +276,40 @@ export default function AdminDashboard() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      throw new Error(await res.text());
+      let errorMessage = 'Failed to save slot.';
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        const errorText = await res.text();
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
     }
     setEditingSlot(null);
     await loadData();
     setToast('Slot saved.');
   }
 
-  async function handleDeleteSlot(slot: Slot) {
-    if (!confirm('Delete this slot?')) return;
-    await fetch(`/api/slots/${slot.id}`, { method: 'DELETE' });
-    await loadData();
-    setToast('Slot deleted.');
+  function handleDeleteSlot(slot: Slot) {
+    setSlotToDelete(slot);
+    setDeleteSlotModalOpen(true);
+  }
+
+  async function confirmDeleteSlot() {
+    if (!slotToDelete) return;
+    setIsDeletingSlot(true);
+    try {
+      await fetch(`/api/slots/${slotToDelete.id}`, { method: 'DELETE' });
+      await loadData();
+      setToast('Slot deleted.');
+      setDeleteSlotModalOpen(false);
+      setSlotToDelete(null);
+    } catch (error) {
+      setToast('Failed to delete slot.');
+    } finally {
+      setIsDeletingSlot(false);
+    }
   }
 
   async function handleBlockDates(payload: { startDate: string; endDate: string; scope: BlockedDate['scope']; reason?: string }) {
@@ -375,6 +409,16 @@ export default function AdminDashboard() {
     const data = await res.json();
     await loadData();
     setToast(`Processed ${data.processed} new form responses.`);
+  }
+
+  async function handleLogout() {
+    try {
+      await signOut(auth);
+      router.push('/admin');
+    } catch (error) {
+      console.error('Failed to sign out', error);
+      setToast('Failed to sign out. Please try again.');
+    }
   }
 
   const renderBookingsSection = () => (
@@ -595,6 +639,15 @@ export default function AdminDashboard() {
                 )}
               </button>
             ))}
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition mt-4 border border-rose-200"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
           </nav>
         </div>
       )}
@@ -605,7 +658,7 @@ export default function AdminDashboard() {
             <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Admin</p>
             <p className="mt-2 text-lg font-semibold text-slate-900">glammednailsbyjhen</p>
           </div>
-          <nav className="space-y-2">
+          <nav className="space-y-2 flex-1">
             {navItems.map((item) => (
               <button
                 key={item.id}
@@ -631,6 +684,17 @@ export default function AdminDashboard() {
               </button>
             ))}
           </nav>
+          <div className="mt-auto pt-4 border-t border-slate-200">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition border border-rose-200"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </div>
         </aside>
 
         <main className="flex-1 p-3 sm:p-4 md:p-6">
@@ -703,19 +767,19 @@ export default function AdminDashboard() {
             <div className="space-y-4 sm:space-y-6">
               {/* Customers overview stats */}
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">Total Customers</p>
                   <p className="text-xl sm:text-2xl font-bold text-slate-900">{customerStats.totalCustomers}</p>
                 </div>
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 shadow-lg shadow-emerald-200/50 hover:shadow-xl hover:shadow-emerald-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-emerald-600 mb-1">New Clients</p>
                   <p className="text-xl sm:text-2xl font-bold text-emerald-800">{customerStats.newClients}</p>
                 </div>
-                <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 shadow-sm">
+                <div className="rounded-2xl border-2 border-purple-300 bg-purple-50 p-4 shadow-lg shadow-purple-200/50 hover:shadow-xl hover:shadow-purple-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-purple-600 mb-1">Repeat Clients</p>
                   <p className="text-xl sm:text-2xl font-bold text-purple-800">{customerStats.repeatClients}</p>
                 </div>
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                <div className="rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 shadow-lg shadow-rose-200/50 hover:shadow-xl hover:shadow-rose-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-rose-600 mb-1">Cancelled Bookings</p>
                   <p className="text-xl sm:text-2xl font-bold text-rose-800">{customerStats.cancelledBookings}</p>
                   <p className="mt-1 text-[11px] text-rose-700">
@@ -762,68 +826,42 @@ export default function AdminDashboard() {
             /* Overview tab */
             <div className="space-y-4 sm:space-y-6">
               {/* Top-level KPIs */}
-              <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
-                    Total Bookings
+              <div className="grid gap-2 sm:gap-3 lg:gap-4 grid-cols-3">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2 sm:mb-3">
+                    Revenue (this month)
                   </p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900">{bookings.length}</p>
-                </div>
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-emerald-600 mb-1">
-                    Pending Form
+                  <p className="text-lg sm:text-3xl lg:text-5xl font-extrabold text-slate-900 mb-2 sm:mb-2 leading-tight">
+                    ₱{overviewStats.revenueThisMonth.toLocaleString('en-PH')}
                   </p>
-                  <p className="text-xl sm:text-2xl font-bold text-emerald-800">
-                    {bookings.filter((b) => b.status === 'pending_form').length}
+                  <p className="text-[10px] sm:text-xs lg:text-sm text-slate-500 mt-2 sm:mt-2 pt-2 sm:pt-2 border-t border-slate-100">
+                    Last month: ₱{overviewStats.revenueLastMonth.toLocaleString('en-PH')}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-amber-600 mb-1">
-                    Awaiting Payment
-                  </p>
-                  <p className="text-xl sm:text-2xl font-bold text-amber-800">
-                    {bookings.filter((b) => b.status === 'pending_payment').length}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-900 p-4 shadow-sm">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-300 mb-1">
-                    Confirmed
-                  </p>
-                  <p className="text-xl sm:text-2xl font-bold text-white">
-                    {bookings.filter((b) => b.status === 'confirmed').length}
-                  </p>
-                </div>
-              </div>
-
-              {/* Bookings & Revenue this month vs last month */}
-              <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2 sm:mb-3">
                     Bookings (this month)
                   </p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900">
+                  <p className="text-lg sm:text-3xl lg:text-5xl font-extrabold text-slate-900 mb-2 sm:mb-2 leading-tight">
                     {overviewStats.bookingsThisMonth}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-1">
+                  <p className="text-[10px] sm:text-xs lg:text-sm text-slate-500 mt-2 sm:mt-2 pt-2 sm:pt-2 border-t border-slate-100">
                     Last month: {overviewStats.bookingsLastMonth}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
-                    Revenue (this month)
+                <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2 sm:mb-3">
+                    Total Bookings
                   </p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900">
-                    ₱{overviewStats.revenueThisMonth.toLocaleString('en-PH')}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Last month: ₱{overviewStats.revenueLastMonth.toLocaleString('en-PH')}
+                  <p className="text-lg sm:text-3xl lg:text-5xl font-extrabold text-slate-900 leading-tight">
+                    {bookings.length}
                   </p>
                 </div>
               </div>
 
               {/* Customers + Revenue snapshot */}
               <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
                     Customers
                   </p>
@@ -849,7 +887,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-3">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow space-y-3">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
                     Revenue snapshot
                   </p>
@@ -882,7 +920,7 @@ export default function AdminDashboard() {
 
               {/* Top services & location breakdown */}
               <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
                     Top services
                   </p>
@@ -903,7 +941,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
                     Location breakdown
                   </p>
@@ -925,7 +963,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Bookings by status mini bar chart */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
                 <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-3">
                   Bookings by status
                 </p>
@@ -963,7 +1001,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Per-month bookings & revenue (current year) */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
                 <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-3">
                   Bookings & revenue by month
                 </p>
@@ -1039,6 +1077,17 @@ export default function AdminDashboard() {
         initialEnd={blockDefaults.end ?? selectedDate}
         onClose={() => setBlockModalOpen(false)}
         onSubmit={handleBlockDates}
+      />
+
+      <DeleteSlotModal
+        open={deleteSlotModalOpen}
+        slot={slotToDelete}
+        onClose={() => {
+          setDeleteSlotModalOpen(false);
+          setSlotToDelete(null);
+        }}
+        onConfirm={confirmDeleteSlot}
+        isDeleting={isDeletingSlot}
       />
       {quotationModalOpen && selectedBooking && (
         <QuotationModal

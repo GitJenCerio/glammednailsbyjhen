@@ -23,7 +23,7 @@ const paymentStatusLabels: Record<PaymentStatus, string> = {
 
 const paymentStatusColors: Record<PaymentStatus, string> = {
   unpaid: 'bg-red-100 text-red-800 border-red-200',
-  partial: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  partial: 'bg-orange-100 text-orange-800 border-orange-200',
   paid: 'bg-green-100 text-green-800 border-green-200',
   refunded: 'bg-gray-100 text-gray-800 border-gray-200',
 };
@@ -196,30 +196,32 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-slate-500 mb-1">Total Revenue</p>
-          <p className="text-2xl font-bold text-slate-900">₱{totals.total.toLocaleString('en-PH')}</p>
+      <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+        {/* First row: Total Revenue, Total Tips, Sister Commission */}
+        <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-slate-500 mb-2 sm:mb-2">Total Revenue</p>
+          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-slate-900 leading-tight">₱{totals.total.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-green-600 mb-1">Paid</p>
-          <p className="text-2xl font-bold text-green-700">₱{totals.paid.toLocaleString('en-PH')}</p>
+        <div className="rounded-2xl border-2 border-purple-300 bg-purple-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-purple-200/50 hover:shadow-xl hover:shadow-purple-300/50 transition-shadow flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-purple-600 mb-2 sm:mb-2">Total Tips</p>
+          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-purple-700 leading-tight">₱{totals.tips.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-yellow-600 mb-1">Partial</p>
-          <p className="text-2xl font-bold text-yellow-700">₱{totals.partial.toLocaleString('en-PH')}</p>
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-amber-200/50 hover:shadow-xl hover:shadow-amber-300/50 transition-shadow flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-amber-600 mb-2 sm:mb-2">Sister Commission (10%)</p>
+          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-amber-700 leading-tight">₱{totals.sisterCommissionTotal.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-red-600 mb-1">Unpaid</p>
-          <p className="text-2xl font-bold text-red-700">₱{totals.unpaid.toLocaleString('en-PH')}</p>
+        {/* Second row: Paid, Partial, Unpaid */}
+        <div className="rounded-2xl border-2 border-green-300 bg-green-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-green-200/50 hover:shadow-xl hover:shadow-green-300/50 transition-shadow flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-green-600 mb-2 sm:mb-2">Paid</p>
+          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-green-700 leading-tight">₱{totals.paid.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-purple-200 bg-purple-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-purple-600 mb-1">Total Tips</p>
-          <p className="text-2xl font-bold text-purple-700">₱{totals.tips.toLocaleString('en-PH')}</p>
+        <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-orange-200/50 hover:shadow-xl hover:shadow-orange-300/50 transition-shadow flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-orange-600 mb-2 sm:mb-2">Partial</p>
+          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-orange-700 leading-tight">₱{totals.partial.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-amber-600 mb-1">Sister Commission (10%)</p>
-          <p className="text-2xl font-bold text-amber-700">₱{totals.sisterCommissionTotal.toLocaleString('en-PH')}</p>
+        <div className="rounded-2xl border-2 border-red-300 bg-red-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-red-200/50 hover:shadow-xl hover:shadow-red-300/50 transition-shadow flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-red-600 mb-2 sm:mb-2">Unpaid</p>
+          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-red-700 leading-tight">₱{totals.unpaid.toLocaleString('en-PH')}</p>
         </div>
       </div>
 
@@ -459,7 +461,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                   <>
                     <button
                       onClick={() => handleUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
-                      className="rounded-full border-2 border-yellow-300 bg-white px-3 py-1.5 text-xs font-semibold text-yellow-700 touch-manipulation active:scale-[0.98] hover:bg-yellow-50"
+                      className="rounded-full border-2 border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 touch-manipulation active:scale-[0.98] hover:bg-orange-50"
                     >
                       Partial
                     </button>
@@ -684,7 +686,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                           <>
                             <button
                               onClick={() => handleUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
-                              className="rounded-full border-2 border-yellow-300 bg-white px-3 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-50"
+                              className="rounded-full border-2 border-orange-300 bg-white px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-50"
                             >
                               Partial
                             </button>

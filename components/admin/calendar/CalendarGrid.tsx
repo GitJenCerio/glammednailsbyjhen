@@ -37,24 +37,35 @@ export function CalendarGrid({
     const pendingCount = daySlots.filter((slot) => slot.status === 'pending').length;
     const confirmedCount = daySlots.filter((slot) => slot.status === 'confirmed').length;
 
-    let badgeColor = 'bg-slate-300 text-slate-800';
-    if (isBlocked) badgeColor = 'bg-rose-300 text-rose-900';
-    else if (confirmedCount) badgeColor = 'bg-slate-900 text-white';
-    else if (pendingCount) badgeColor = 'bg-amber-300 text-amber-900';
-    else if (availableCount) badgeColor = 'bg-emerald-300 text-emerald-900';
+    const badges: Array<{ label: string; labelMobile: string; color: string }> = [];
 
-    // Show count with "slot" for available on all screen sizes
-    const label = isBlocked
-      ? 'B'
-      : confirmedCount
-        ? `${confirmedCount}`
-        : pendingCount
-          ? `${pendingCount}`
-          : availableCount
-            ? `${availableCount} slot${availableCount !== 1 ? 's' : ''}`
-            : null;
+    if (isBlocked) {
+      badges.push({ label: 'B', labelMobile: 'B', color: 'bg-rose-300 text-rose-900' });
+    } else {
+      if (confirmedCount > 0) {
+        badges.push({ 
+          label: `${confirmedCount} Confirmed`, 
+          labelMobile: `${confirmedCount}C`,
+          color: 'bg-slate-900 text-white' 
+        });
+      }
+      if (availableCount > 0) {
+        badges.push({ 
+          label: `${availableCount} Available`, 
+          labelMobile: `${availableCount}A`,
+          color: 'bg-emerald-300 text-emerald-900' 
+        });
+      }
+      if (pendingCount > 0) {
+        badges.push({ 
+          label: `${pendingCount} Pending`, 
+          labelMobile: `${pendingCount}P`,
+          color: 'bg-amber-300 text-amber-900' 
+        });
+      }
+    }
 
-    return { isBlocked, label, badgeColor, isoDate };
+    return { isBlocked, badges, isoDate };
   };
 
   return (
@@ -94,7 +105,7 @@ export function CalendarGrid({
         {weeks.map((week, index) => (
           <div key={index} className="contents">
             {week.map((date) => {
-              const { isBlocked, label, badgeColor, isoDate } = getDayMeta(date);
+              const { isBlocked, badges, isoDate } = getDayMeta(date);
               const isCurrentMonth = isSameMonth(date, referenceDate);
               const isSelected = selectedDate === isoDate;
               const isToday = isSameDay(date, new Date());
@@ -120,10 +131,18 @@ export function CalendarGrid({
                   <span className={`text-xs sm:text-sm font-semibold leading-tight ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>
                     {format(date, 'd')}
                   </span>
-                  {label && (
-                    <span className={`inline-flex items-center justify-center rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-[11px] font-semibold whitespace-nowrap ${badgeColor}`}>
-                      {label}
-                    </span>
+                  {badges.length > 0 && (
+                    <div className="flex flex-col gap-0.5 sm:gap-1">
+                      {badges.map((badge, idx) => (
+                        <span
+                          key={idx}
+                          className={`inline-flex items-center justify-center rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-[11px] font-semibold whitespace-nowrap ${badge.color}`}
+                        >
+                          <span className="sm:hidden">{badge.labelMobile}</span>
+                          <span className="hidden sm:inline">{badge.label}</span>
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </button>
               );
