@@ -1,11 +1,16 @@
+'use client';
 
+import { useState } from 'react';
 import type { Booking } from '@/lib/types';
 
 type BookingDetailPanelProps = {
   booking: Booking | null;
   slotLabel?: string;
   pairedSlotLabel?: string;
-  onConfirm: (bookingId: string) => Promise<void>;
+  onConfirm: (bookingId: string, depositAmount?: number) => Promise<void>;
+  onCancel?: (bookingId: string) => Promise<void>;
+  onReschedule?: (bookingId: string) => Promise<void>;
+  onMakeQuotation?: (bookingId: string) => void;
 };
 
 const serviceLabels: Record<string, string> = {
@@ -16,7 +21,10 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConfirm }: BookingDetailPanelProps) {
+export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConfirm, onCancel, onReschedule, onMakeQuotation }: BookingDetailPanelProps) {
+  const [showDepositInput, setShowDepositInput] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+
   if (!booking) {
     return (
       <div className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
@@ -25,18 +33,64 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
     );
   }
 
-  const entries = Object.entries(booking.customerData ?? {});
+  // Use the stored field order if available, otherwise fall back to object entries
+  // This ensures fields appear in the exact order as they appear in the Google Form
+  const customerData = booking.customerData ?? {};
+  const fieldOrder = booking.customerDataOrder;
+  
+  let entries: [string, string][];
+  if (fieldOrder && fieldOrder.length > 0) {
+    // Use the stored order to display fields in the exact form order
+    entries = fieldOrder
+      .filter((key) => key in customerData) // Only include keys that exist in customerData
+      .map((key) => [key, customerData[key]] as [string, string]);
+  } else {
+    // Fallback to object entries if no order is stored (for backwards compatibility)
+    entries = Object.entries(customerData);
+  }
+
+  const handleConfirmClick = () => {
+    if (booking.status === 'pending_payment') {
+      setShowDepositInput(true);
+    } else {
+      onConfirm(booking.id);
+    }
+  };
+
+  const handleConfirmWithDeposit = async () => {
+    const amount = depositAmount ? Number(depositAmount) : undefined;
+    await onConfirm(booking.id, amount);
+    setShowDepositInput(false);
+    setDepositAmount('');
+  };
+  
+  // Get customer name (Name + Surname)
+  const getCustomerName = () => {
+    if (!booking.customerData) return booking.bookingId;
+    const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
+    const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
+    if (name || surname) {
+      return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
+    }
+    return booking.bookingId;
+  };
 
   return (
     <div className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
       <header className="mb-3 sm:mb-4">
         <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Booking</p>
-        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold break-words">{booking.bookingId}</h2>
+        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold break-words">{getCustomerName()}</h2>
+        <p className="text-xs sm:text-sm text-slate-400 break-words">{booking.bookingId}</p>
         {slotLabel && <p className="text-xs sm:text-sm text-slate-500 break-words">{slotLabel}</p>}
         {pairedSlotLabel && <p className="text-xs sm:text-sm text-slate-500 break-words">+ {pairedSlotLabel}</p>}
         {booking.serviceType && (
           <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">
             {serviceLabels[booking.serviceType] ?? booking.serviceType}
+          </p>
+        )}
+        {booking.serviceLocation && (
+          <p className="text-xs sm:text-sm text-slate-600 break-words">
+            📍 {booking.serviceLocation === 'home_service' ? 'Home Service (+₱1,000)' : 'Homebased Studio'}
           </p>
         )}
       </header>
@@ -81,15 +135,83 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
         </div>
       </div>
 
-      {booking.status === 'pending_payment' && (
-        <button
-          type="button"
-          onClick={() => onConfirm(booking.id)}
-          className="mt-4 sm:mt-6 w-full rounded-full bg-emerald-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98]"
-        >
-          Confirm booking
-        </button>
-      )}
+      <div className="mt-4 sm:mt-6 space-y-2">
+        {booking.status === 'pending_payment' && !showDepositInput && (
+          <button
+            type="button"
+            onClick={handleConfirmClick}
+            className="w-full rounded-full bg-emerald-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98]"
+          >
+            Confirm booking
+          </button>
+        )}
+        {booking.status === 'pending_payment' && showDepositInput && (
+          <div className="rounded-xl sm:rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-3 sm:p-4 space-y-3">
+            <div>
+              <label className="block text-xs sm:text-sm font-semibold text-emerald-900 mb-2">
+                Deposit Amount (₱)
+              </label>
+              <input
+                type="number"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="500"
+                className="w-full rounded-xl border-2 border-emerald-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="text-xs text-emerald-700 mt-1">Leave empty if no deposit received</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDepositInput(false);
+                  setDepositAmount('');
+                }}
+                className="flex-1 rounded-full border-2 border-emerald-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-emerald-700 touch-manipulation active:scale-[0.98]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmWithDeposit}
+                className="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98]"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        )}
+        
+        <div className="flex flex-col sm:flex-row gap-2">
+          {onMakeQuotation && (
+            <button
+              type="button"
+              onClick={() => onMakeQuotation(booking.id)}
+              className="flex-1 rounded-full bg-rose-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98]"
+            >
+              Make Quotation
+            </button>
+          )}
+          {onReschedule && booking.status !== 'confirmed' && (
+            <button
+              type="button"
+              onClick={() => onReschedule(booking.id)}
+              className="flex-1 rounded-full border-2 border-slate-300 bg-white px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
+            >
+              Reschedule
+            </button>
+          )}
+          {onCancel && booking.status !== 'confirmed' && (
+            <button
+              type="button"
+              onClick={() => onCancel(booking.id)}
+              className="flex-1 rounded-full border-2 border-red-300 bg-white px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -12,10 +12,14 @@ import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
 import { ServicesManager } from '@/components/admin/ServicesManager';
+import { QuotationModal } from '@/components/admin/modals/QuotationModal';
+import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
+import { FinanceView } from '@/components/admin/FinanceView';
 
 const navItems = [
   { id: 'overview', label: 'Overview' },
   { id: 'bookings', label: 'Bookings' },
+  { id: 'finance', label: 'Finance' },
   { id: 'customers', label: 'Customers' },
   { id: 'services', label: 'Services' },
 ] as const;
@@ -38,6 +42,9 @@ export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState<AdminSection>('bookings');
   const [bookingsView, setBookingsView] = useState<'calendar' | 'list'>('calendar');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [quotationModalOpen, setQuotationModalOpen] = useState(false);
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -114,14 +121,84 @@ export default function AdminDashboard() {
     setToast('Dates blocked.');
   }
 
-  async function handleConfirmBooking(id: string) {
+  async function handleConfirmBooking(id: string, depositAmount?: number) {
     await fetch(`/api/bookings/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'confirm' }),
+      body: JSON.stringify({ 
+        action: 'confirm',
+        depositAmount: depositAmount !== undefined ? depositAmount : null,
+      }),
     });
     await loadData();
-    setToast('Booking confirmed.');
+    setToast(depositAmount ? `Booking confirmed. Deposit: ₱${depositAmount.toLocaleString('en-PH')}` : 'Booking confirmed.');
+  }
+
+  async function handleCancelBooking(id: string) {
+    if (!confirm('Are you sure you want to cancel this booking?')) return;
+    const res = await fetch(`/api/bookings/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel' }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      setToast(`Error: ${error.error || 'Failed to cancel booking'}`);
+      return;
+    }
+    await loadData();
+    setToast('Booking cancelled.');
+    setSelectedBookingId(null);
+  }
+
+  function handleRescheduleBooking(id: string) {
+    setReschedulingBookingId(id);
+    setRescheduleModalOpen(true);
+  }
+
+  async function handleRescheduleConfirm(bookingId: string, newSlotId: string, linkedSlotIds?: string[]) {
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'reschedule',
+        newSlotId,
+        linkedSlotIds,
+      }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      setToast(`Error: ${error.error || 'Failed to reschedule booking'}`);
+      return;
+    }
+    await loadData();
+    setToast('Booking rescheduled successfully.');
+    setRescheduleModalOpen(false);
+    setReschedulingBookingId(null);
+  }
+
+  function handleMakeQuotation(id: string) {
+    setSelectedBookingId(id);
+    setQuotationModalOpen(true);
+  }
+
+  async function handleSendInvoice(bookingId: string, invoiceData: { items: any[]; total: number; notes: string }) {
+    // Save invoice data to booking - this will also update status to pending_payment
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save_invoice',
+        invoice: invoiceData,
+      }),
+    });
+    if (res.ok) {
+      await loadData();
+      setToast('Invoice generated and saved.');
+      setQuotationModalOpen(false);
+    } else {
+      setToast('Failed to save invoice.');
+    }
   }
 
   async function handleSyncSheets() {
@@ -177,6 +254,29 @@ export default function AdminDashboard() {
           bookings={bookings}
           slots={slots}
           selectedDate={selectedDate}
+          onCancel={handleCancelBooking}
+          onReschedule={handleRescheduleBooking}
+          onMakeQuotation={handleMakeQuotation}
+          onConfirm={handleConfirmBooking}
+          onUpdatePayment={async (bookingId, paymentStatus, paidAmount, tipAmount) => {
+            const res = await fetch(`/api/bookings/${bookingId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'update_payment',
+                paymentStatus,
+                paidAmount,
+                tipAmount,
+              }),
+            });
+            if (res.ok) {
+              await loadData();
+              const message = tipAmount && tipAmount > 0 
+                ? `Payment status updated. Tip: ₱${tipAmount.toLocaleString('en-PH')}`
+                : 'Payment status updated.';
+              setToast(message);
+            }
+          }}
         />
       ) : (
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr]">
@@ -284,6 +384,7 @@ export default function AdminDashboard() {
   const sectionDescription: Record<AdminSection, string> = {
     overview: 'High-level metrics coming soon.',
     bookings: 'Create slots, block dates, and track booking statuses.',
+    finance: 'View invoices, track payments, and manage revenue.',
     customers: 'See relationship insights and client history.',
     services: 'Manage offerings, durations, and pricing.',
   };
@@ -444,6 +545,8 @@ export default function AdminDashboard() {
 
           {activeSection === 'bookings' ? (
             renderBookingsSection()
+          ) : activeSection === 'finance' ? (
+            <FinanceView bookings={bookings} slots={slots} />
           ) : activeSection === 'services' ? (
             <ServicesManager />
           ) : (
@@ -477,6 +580,30 @@ export default function AdminDashboard() {
         onClose={() => setBlockModalOpen(false)}
         onSubmit={handleBlockDates}
       />
+      {quotationModalOpen && selectedBooking && (
+        <QuotationModal
+          booking={selectedBooking}
+          slotLabel={
+            selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
+          }
+          onClose={() => setQuotationModalOpen(false)}
+          onSendInvoice={handleSendInvoice}
+        />
+      )}
+
+      {rescheduleModalOpen && reschedulingBookingId && (
+        <RescheduleModal
+          open={rescheduleModalOpen}
+          booking={bookings.find(b => b.id === reschedulingBookingId) || null}
+          slots={slots}
+          blockedDates={blockedDates}
+          onClose={() => {
+            setRescheduleModalOpen(false);
+            setReschedulingBookingId(null);
+          }}
+          onReschedule={handleRescheduleConfirm}
+        />
+      )}
     </div>
   );
 }

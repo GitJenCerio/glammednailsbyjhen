@@ -4,17 +4,47 @@ const sheets = google.sheets('v4');
 
 function getAuthClient() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
   if (!clientEmail || !privateKey) {
-    throw new Error('Missing Google service account credentials.');
+    throw new Error('Missing Google service account credentials. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY in your .env.local file.');
   }
 
-  return new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
+  // Handle private key formatting - remove surrounding quotes if present
+  privateKey = privateKey.trim();
+  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    privateKey = privateKey.slice(1, -1);
+  }
+  if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
+    privateKey = privateKey.slice(1, -1);
+  }
+  
+  // Replace escaped newlines with actual newlines
+  privateKey = privateKey.replace(/\\n/g, '\n');
+  
+  // Ensure the key starts and ends with the correct markers
+  if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
+    throw new Error('Invalid Google service account private key format. The key must include "-----BEGIN PRIVATE KEY-----" and "-----END PRIVATE KEY-----" markers.');
+  }
+
+  try {
+    return new google.auth.JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+  } catch (error: any) {
+    if (error.code === 'ERR_OSSL_UNSUPPORTED') {
+      throw new Error(
+        'Private key format error. Please ensure:\n' +
+        '1. The private key is in PKCS#8 format (starts with "-----BEGIN PRIVATE KEY-----")\n' +
+        '2. The key includes all \\n characters between lines\n' +
+        '3. The key is properly quoted in your .env.local file\n' +
+        'Original error: ' + error.message
+      );
+    }
+    throw error;
+  }
 }
 
 export async function fetchSheetRows(range: string) {

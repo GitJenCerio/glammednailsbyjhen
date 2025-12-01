@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { format, parseISO } from 'date-fns';
 import { adminDb } from '../firebaseAdmin';
-import { Booking, BookingStatus, ServiceType, Slot } from '../types';
+import { Booking, BookingStatus, ServiceType, Slot, Invoice, PaymentStatus } from '../types';
 import { listBlockedDates } from './blockService';
 import { slotIsBlocked } from '../scheduling';
 import { buildPrefilledGoogleFormUrl } from '../googleForms';
@@ -103,7 +103,7 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     slotTime = slot.time; // Store time for use after transaction
 
     if (slot.status !== 'available') {
-      throw new Error('Slot is no longer available.');
+      throw new Error(`Slot is no longer available. Current status: ${slot.status}. Please select a different slot.`);
     }
 
     if (slotIsBlocked(slot, blocks)) {
@@ -164,18 +164,31 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 
     const bookingRef = bookingsCollection.doc();
     const clientType = options?.clientType;
-    transaction.set(bookingRef, {
+    const bookingData: any = {
       slotId,
-      pairedSlotId: linkedSlotIds[0] ?? null,
-      linkedSlotIds: linkedSlotIds.length ? linkedSlotIds : undefined,
       bookingId,
       serviceType,
-      clientType,
-      serviceLocation,
       status: 'pending_form' as BookingStatus,
       createdAt: Timestamp.now().toDate().toISOString(),
       updatedAt: Timestamp.now().toDate().toISOString(),
-    });
+    };
+    
+    if (linkedSlotIds.length > 0) {
+      bookingData.pairedSlotId = linkedSlotIds[0];
+      bookingData.linkedSlotIds = linkedSlotIds;
+    } else {
+      bookingData.pairedSlotId = null;
+    }
+    
+    if (clientType) {
+      bookingData.clientType = clientType;
+    }
+    
+    if (options?.serviceLocation) {
+      bookingData.serviceLocation = options.serviceLocation;
+    }
+    
+    transaction.set(bookingRef, bookingData);
   });
 
   // Format date for Google Forms
@@ -281,6 +294,7 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 export async function syncBookingWithForm(
   bookingId: string,
   formData: Record<string, string>,
+  fieldOrder?: string[],
   formResponseId?: string,
 ) {
   const bookingSnapshot = await bookingsCollection.where('bookingId', '==', bookingId).limit(1).get();
@@ -367,18 +381,30 @@ export async function syncBookingWithForm(
     }
   }
 
-  await doc.ref.set(
-    {
-      customerData: formData,
-      status: 'pending_payment',
-      formResponseId,
-      dateChanged: dateChanged || undefined,
-      timeChanged: timeChanged || undefined,
-      validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined,
-      updatedAt: Timestamp.now().toDate().toISOString(),
-    },
-    { merge: true },
-  );
+  const updateData: any = {
+    customerData: formData,
+    status: 'pending_payment',
+    formResponseId,
+    updatedAt: Timestamp.now().toDate().toISOString(),
+  };
+  
+  // Store field order to preserve exact form order when displaying
+  if (fieldOrder && fieldOrder.length > 0) {
+    updateData.customerDataOrder = fieldOrder;
+  }
+
+  // Only include these fields if they are true (Firestore doesn't allow undefined)
+  if (dateChanged) {
+    updateData.dateChanged = true;
+  }
+  if (timeChanged) {
+    updateData.timeChanged = true;
+  }
+  if (validationWarnings.length > 0) {
+    updateData.validationWarnings = validationWarnings;
+  }
+
+  await doc.ref.set(updateData, { merge: true });
 
   // Log warning if date/time was changed
   if (validationWarnings.length > 0) {
@@ -387,7 +413,8 @@ export async function syncBookingWithForm(
 
   return docToBooking(doc.id, { 
     ...doc.data(), 
-    customerData: formData, 
+    customerData: formData,
+    customerDataOrder: fieldOrder && fieldOrder.length > 0 ? fieldOrder : undefined,
     status: 'pending_payment',
     dateChanged,
     timeChanged,
@@ -395,8 +422,9 @@ export async function syncBookingWithForm(
   });
 }
 
-export async function confirmBooking(bookingId: string) {
+export async function confirmBooking(bookingId: string, depositAmount?: number) {
   await adminDb.runTransaction(async (transaction) => {
+    // ALL READS MUST HAPPEN FIRST
     const bookingRef = bookingsCollection.doc(bookingId);
     const bookingSnap = await transaction.get(bookingRef);
     if (!bookingSnap.exists) throw new Error('Booking not found.');
@@ -407,6 +435,23 @@ export async function confirmBooking(bookingId: string) {
     if (!slotSnap.exists) throw new Error('Slot not found.');
     const slot = docToSlot(slotSnap.id, slotSnap.data()!);
 
+    // Get linked slot IDs first
+    const linkedSlotIds = booking.linkedSlotIds?.length
+      ? booking.linkedSlotIds
+      : booking.pairedSlotId
+        ? [booking.pairedSlotId]
+        : [];
+
+    // Read all linked slots BEFORE any writes
+    const linkedRefs: FirebaseFirestore.DocumentReference[] = [];
+    const linkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+    for (const linkedId of linkedSlotIds) {
+      const linkedRef = slotsCollection.doc(linkedId);
+      linkedRefs.push(linkedRef);
+      linkedSnaps.push(await transaction.get(linkedRef));
+    }
+
+    // Validate before writes
     if (slot.status === 'blocked') {
       throw new Error('Cannot confirm booking on a blocked slot.');
     }
@@ -416,31 +461,35 @@ export async function confirmBooking(bookingId: string) {
       throw new Error('Cannot confirm booking on a blocked date.');
     }
 
-    transaction.update(bookingRef, {
+    // NOW ALL WRITES CAN HAPPEN
+    const updateData: any = {
       status: 'confirmed',
       updatedAt: Timestamp.now().toDate().toISOString(),
-    });
+    };
+    
+    if (depositAmount !== undefined && depositAmount !== null && depositAmount > 0) {
+      updateData.depositAmount = depositAmount;
+      updateData.paymentStatus = 'partial';
+      updateData.paidAmount = depositAmount;
+    }
+    
+    transaction.update(bookingRef, updateData);
 
     transaction.update(slotRef, {
       status: 'confirmed',
       updatedAt: Timestamp.now().toDate().toISOString(),
     });
 
-    const linkedSlotIds = booking.linkedSlotIds?.length
-      ? booking.linkedSlotIds
-      : booking.pairedSlotId
-        ? [booking.pairedSlotId]
-        : [];
-    for (const linkedId of linkedSlotIds) {
-      const linkedRef = slotsCollection.doc(linkedId);
-      const linkedSnap = await transaction.get(linkedRef);
-      if (linkedSnap.exists) {
+    // Update linked slots
+    linkedRefs.forEach((linkedRef, index) => {
+      const linkedSnap = linkedSnaps[index];
+      if (linkedSnap?.exists) {
         transaction.update(linkedRef, {
           status: 'confirmed',
           updatedAt: Timestamp.now().toDate().toISOString(),
         });
       }
-    }
+    });
   });
 }
 
@@ -452,6 +501,164 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
     },
     { merge: true },
   );
+}
+
+export async function saveInvoice(bookingId: string, invoice: Invoice) {
+  // Get current booking to preserve status if already confirmed
+  const bookingRef = bookingsCollection.doc(bookingId);
+  const bookingSnap = await bookingRef.get();
+  const currentBooking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
+  
+  const updateData: any = {
+    invoice: {
+      ...invoice,
+      createdAt: invoice.createdAt || Timestamp.now().toDate().toISOString(),
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    },
+    updatedAt: Timestamp.now().toDate().toISOString(),
+  };
+  
+  // Only update status if booking is not already confirmed
+  // If booking is confirmed (with or without deposit), keep it as confirmed
+  if (currentBooking?.status !== 'confirmed') {
+    updateData.status = 'pending_payment';
+    updateData.paymentStatus = 'unpaid';
+  } else {
+    // If already confirmed, only set paymentStatus if not already set
+    if (!currentBooking.paymentStatus) {
+      updateData.paymentStatus = currentBooking.depositAmount ? 'partial' : 'unpaid';
+    }
+  }
+  
+  await bookingRef.set(updateData, { merge: true });
+}
+
+export async function updatePaymentStatus(bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number) {
+  const updateData: any = {
+    paymentStatus,
+    updatedAt: Timestamp.now().toDate().toISOString(),
+  };
+  
+  // When payment is fully paid, set booking status to confirmed (done)
+  if (paymentStatus === 'paid') {
+    updateData.status = 'confirmed';
+  }
+  
+  if (paidAmount !== undefined) {
+    updateData.paidAmount = paidAmount;
+  }
+  if (tipAmount !== undefined && tipAmount > 0) {
+    updateData.tipAmount = tipAmount;
+  }
+  
+  await bookingsCollection.doc(bookingId).set(updateData, { merge: true });
+}
+
+export async function updateDepositAmount(bookingId: string, depositAmount: number) {
+  await bookingsCollection.doc(bookingId).set(
+    {
+      depositAmount,
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+export async function rescheduleBooking(bookingId: string, newSlotId: string, linkedSlotIds?: string[]) {
+  await adminDb.runTransaction(async (transaction) => {
+    // ALL READS FIRST
+    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists) throw new Error('Booking not found.');
+    const booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
+
+    // Get old slots
+    const oldSlotRef = slotsCollection.doc(booking.slotId);
+    const oldSlotSnap = await transaction.get(oldSlotRef);
+    if (!oldSlotSnap.exists) throw new Error('Old slot not found.');
+
+    const oldLinkedSlotIds = booking.linkedSlotIds?.length
+      ? booking.linkedSlotIds
+      : booking.pairedSlotId
+        ? [booking.pairedSlotId]
+        : [];
+
+    const oldLinkedRefs: FirebaseFirestore.DocumentReference[] = [];
+    const oldLinkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+    for (const linkedId of oldLinkedSlotIds) {
+      const ref = slotsCollection.doc(linkedId);
+      oldLinkedRefs.push(ref);
+      oldLinkedSnaps.push(await transaction.get(ref));
+    }
+
+    // Get new slots
+    const newSlotRef = slotsCollection.doc(newSlotId);
+    const newSlotSnap = await transaction.get(newSlotRef);
+    if (!newSlotSnap.exists) throw new Error('New slot not found.');
+    const newSlot = docToSlot(newSlotSnap.id, newSlotSnap.data()!);
+
+    if (newSlot.status !== 'available') {
+      throw new Error('New slot is not available.');
+    }
+
+    const newLinkedRefs: FirebaseFirestore.DocumentReference[] = [];
+    const newLinkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+    if (linkedSlotIds && linkedSlotIds.length > 0) {
+      for (const linkedId of linkedSlotIds) {
+        const ref = slotsCollection.doc(linkedId);
+        newLinkedRefs.push(ref);
+        const snap = await transaction.get(ref);
+        if (!snap.exists) throw new Error(`Linked slot ${linkedId} not found.`);
+        if (snap.data()?.status !== 'available') {
+          throw new Error(`Linked slot ${linkedId} is not available.`);
+        }
+        newLinkedSnaps.push(snap);
+      }
+    }
+
+    // NOW ALL WRITES
+    // Release old slots
+    transaction.update(oldSlotRef, {
+      status: 'available',
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    });
+
+    oldLinkedRefs.forEach((ref) => {
+      transaction.update(ref, {
+        status: 'available',
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      });
+    });
+
+    // Reserve new slots
+    transaction.update(newSlotRef, {
+      status: booking.status === 'confirmed' ? 'confirmed' : 'pending',
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    });
+
+    newLinkedRefs.forEach((ref) => {
+      transaction.update(ref, {
+        status: booking.status === 'confirmed' ? 'confirmed' : 'pending',
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      });
+    });
+
+    // Update booking
+    const updateData: any = {
+      slotId: newSlotId,
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    };
+
+    if (linkedSlotIds && linkedSlotIds.length > 0) {
+      updateData.pairedSlotId = linkedSlotIds[0];
+      updateData.linkedSlotIds = linkedSlotIds;
+    } else {
+      updateData.pairedSlotId = null;
+      updateData.linkedSlotIds = [];
+    }
+
+    transaction.update(bookingRef, updateData);
+  });
 }
 
 export async function releaseExpiredPendingBookings(maxAgeMinutes = 20) {
@@ -517,10 +724,16 @@ function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking
     clientType: data.clientType,
     serviceLocation: data.serviceLocation,
     customerData: data.customerData ?? undefined,
+    customerDataOrder: data.customerDataOrder ?? undefined,
     formResponseId: data.formResponseId,
     dateChanged: data.dateChanged,
     timeChanged: data.timeChanged,
     validationWarnings: data.validationWarnings,
+    invoice: data.invoice ?? undefined,
+    paymentStatus: data.paymentStatus ?? undefined,
+    paidAmount: data.paidAmount ?? undefined,
+    depositAmount: data.depositAmount ?? undefined,
+    tipAmount: data.tipAmount ?? undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };

@@ -5,9 +5,10 @@ import { slotIsBlocked } from '@/lib/scheduling';
 import { releaseExpiredPendingBookings } from '@/lib/services/bookingService';
 
 export async function GET() {
-  await releaseExpiredPendingBookings(20);
+  await releaseExpiredPendingBookings(30);
   const [slots, blockedDates] = await Promise.all([listSlots(), listBlockedDates()]);
-  const availableSlots = slots.filter((slot) => slot.status === 'available' && !slotIsBlocked(slot, blockedDates));
-  return NextResponse.json({ slots: availableSlots, blockedDates });
+  // Return all slots (including booked ones) so we can detect gaps in consecutive slot checking
+  // Frontend will filter to show only available slots for display
+  return NextResponse.json({ slots, blockedDates });
 }
 

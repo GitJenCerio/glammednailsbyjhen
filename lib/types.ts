@@ -1,6 +1,22 @@
 export type SlotStatus = 'available' | 'blocked' | 'pending' | 'confirmed';
 export type BookingStatus = 'pending_form' | 'pending_payment' | 'confirmed';
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'refunded';
 export type ServiceType = 'manicure' | 'pedicure' | 'mani_pedi' | 'home_service_2slots' | 'home_service_3slots';
+
+export interface QuoteItem {
+  id: string;
+  description: string;
+  unitPrice: number;
+  quantity: number;
+}
+
+export interface Invoice {
+  items: QuoteItem[];
+  total: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Slot {
   id: string;
@@ -34,10 +50,16 @@ export interface Booking {
   clientType?: 'new' | 'repeat';
   serviceLocation?: 'homebased_studio' | 'home_service';
   customerData?: Record<string, string>;
+  customerDataOrder?: string[]; // Preserves the exact order of fields from the form
   formResponseId?: string;
   dateChanged?: boolean;
   timeChanged?: boolean;
   validationWarnings?: string[];
+  invoice?: Invoice;
+  paymentStatus?: PaymentStatus;
+  paidAmount?: number;
+  depositAmount?: number;
+  tipAmount?: number;
   createdAt: string;
   updatedAt: string;
 }

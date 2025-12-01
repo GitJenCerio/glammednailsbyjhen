@@ -1,15 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import type { Booking, Slot, BookingWithSlot } from '@/lib/types';
 
-type FilterPeriod = 'day' | 'week' | 'month';
+type FilterPeriod = 'day' | 'week' | 'month' | 'all';
 
 interface BookingsViewProps {
   bookings: Booking[];
   slots: Slot[];
   selectedDate: string;
+  onCancel?: (bookingId: string) => void;
+  onReschedule?: (bookingId: string) => void;
+  onMakeQuotation?: (bookingId: string) => void;
+  onConfirm?: (bookingId: string) => void;
+  onUpdatePayment?: (bookingId: string, paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded', paidAmount?: number, tipAmount?: number) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -32,9 +37,11 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProps) {
-  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('week');
+export function BookingsView({ bookings, slots, selectedDate, onCancel, onReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod | 'all'>('all');
   const [clientTypeMap, setClientTypeMap] = useState<Record<string, 'repeat' | 'new'>>({});
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Combine bookings with slots
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
@@ -112,6 +119,20 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
 
   // Filter bookings by period
   const filteredBookings = useMemo(() => {
+    // If filter is 'all', show all bookings without date filtering
+    if (filterPeriod === 'all') {
+      return bookingsWithSlots.filter((booking) => {
+        return booking.slot !== undefined; // Only filter out bookings without slots
+      }).sort((a, b) => {
+        // Sort by date and time (most recent first)
+        if (!a.slot || !b.slot) return 0;
+        const dateCompare = b.slot.date.localeCompare(a.slot.date); // Reverse for newest first
+        if (dateCompare !== 0) return dateCompare;
+        return b.slot.time.localeCompare(a.slot.time); // Reverse for newest first
+      });
+    }
+
+    // Otherwise, filter by the selected period
     const baseDate = parseISO(selectedDate);
     let start: Date;
     let end: Date;
@@ -129,6 +150,9 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
         start = startOfMonth(baseDate);
         end = endOfMonth(baseDate);
         break;
+      default:
+        // Should not reach here, but handle gracefully
+        return bookingsWithSlots.filter((booking) => booking.slot !== undefined);
     }
 
     return bookingsWithSlots.filter((booking) => {
@@ -145,12 +169,13 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
   }, [bookingsWithSlots, selectedDate, filterPeriod]);
 
   const getCustomerName = (booking: BookingWithSlot): string => {
-    if (!booking.customerData) return 'N/A';
-    return booking.customerData['Name'] || 
-           booking.customerData['name'] || 
-           booking.customerData['Full Name'] || 
-           booking.customerData['fullName'] || 
-           'N/A';
+    if (!booking.customerData) return booking.bookingId;
+    const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
+    const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
+    if (name || surname) {
+      return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
+    }
+    return booking.bookingId;
   };
 
   const getCustomerPhone = (booking: BookingWithSlot): string => {
@@ -199,6 +224,24 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
     return `${hour12}:${minutes} ${ampm}`;
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdownId) {
+        // Check both mobile and desktop dropdown refs
+        const allRefs = Object.values(dropdownRefs.current);
+        const clickedOutside = allRefs.every(
+          (ref) => ref && !ref.contains(event.target as Node)
+        );
+        if (clickedOutside) {
+          setOpenDropdownId(null);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdownId]);
+
   const getTimeRange = (booking: BookingWithSlot): string => {
     if (!booking.slot) return 'N/A';
     if (booking.linkedSlots && booking.linkedSlots.length > 0) {
@@ -216,6 +259,16 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
       {/* Filter Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-auto">
+          <button
+            onClick={() => setFilterPeriod('all')}
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+              filterPeriod === 'all'
+                ? 'bg-black text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            All
+          </button>
           <button
             onClick={() => setFilterPeriod('day')}
             className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
@@ -248,7 +301,10 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
           </button>
         </div>
         <div className="text-xs sm:text-sm text-slate-600">
-          Showing {filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}
+          {filterPeriod === 'all' 
+            ? `Showing all ${filteredBookings.length} booking${filteredBookings.length !== 1 ? 's' : ''}`
+            : `Showing ${filteredBookings.length} booking${filteredBookings.length !== 1 ? 's' : ''}`
+          }
         </div>
       </div>
 
@@ -256,7 +312,10 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
       <div className="lg:hidden space-y-3">
         {filteredBookings.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-xs sm:text-sm text-slate-500">
-            No bookings found for the selected {filterPeriod}.
+            {filterPeriod === 'all' 
+              ? 'No bookings found.'
+              : `No bookings found for the selected ${filterPeriod}.`
+            }
           </div>
         ) : (
           filteredBookings.map((booking) => {
@@ -317,6 +376,139 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
                     )}
                   </div>
                 </div>
+                <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center">
+                  {onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
+                    <>
+                      <button
+                        onClick={() => onUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
+                        className="rounded-full border-2 border-yellow-300 bg-white px-3 py-1.5 text-xs font-semibold text-yellow-700 touch-manipulation active:scale-[0.98] hover:bg-yellow-50"
+                      >
+                        Partial
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const total = booking.invoice?.total || 0;
+                          const deposit = booking.depositAmount || 0;
+                          const balance = total - deposit;
+                          const paidAmount = booking.paidAmount || 0;
+                          const remainingBalance = balance - paidAmount;
+                          
+                          const amountPaidStr = prompt(
+                            `Enter amount paid (₱):\n\nBalance: ₱${remainingBalance.toLocaleString('en-PH')}\nDeposit: ₱${deposit.toLocaleString('en-PH')}\nTotal: ₱${total.toLocaleString('en-PH')}`
+                          );
+                          if (!amountPaidStr || isNaN(Number(amountPaidStr))) return;
+                          
+                          const amountPaid = Number(amountPaidStr);
+                          const totalPaid = (booking.paidAmount || 0) + amountPaid;
+                          const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
+                          
+                          await onUpdatePayment(booking.id, 'paid', totalPaid, tipAmount);
+                        }}
+                        className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                      >
+                        Paid
+                      </button>
+                    </>
+                  )}
+                  {/* Mobile: Show buttons directly, Desktop: Use dropdown */}
+                  <div className="lg:hidden flex flex-wrap gap-2">
+                    {onMakeQuotation && (
+                      <button
+                        onClick={() => onMakeQuotation(booking.id)}
+                        className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700"
+                      >
+                        Quote
+                      </button>
+                    )}
+                    {onReschedule && booking.status !== 'cancelled' && !booking.invoice && (
+                      <button
+                        onClick={() => onReschedule(booking.id)}
+                        className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
+                      >
+                        Resched
+                      </button>
+                    )}
+                    {onCancel && booking.status !== 'cancelled' && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Are you sure you want to cancel this booking?')) {
+                            onCancel(booking.id);
+                          }
+                        }}
+                        className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  {/* Desktop: Actions Dropdown */}
+                  {(onMakeQuotation || onReschedule || onCancel) && (
+                    <div className="hidden lg:block relative" ref={(el) => (dropdownRefs.current[booking.id] = el)}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenDropdownId(openDropdownId === booking.id ? null : booking.id);
+                        }}
+                        className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                      >
+                        Actions
+                        <svg className={`w-3 h-3 transition-transform ${openDropdownId === booking.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {openDropdownId === booking.id && (
+                        <div 
+                          className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-50"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="py-1">
+                            {onMakeQuotation && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMakeQuotation(booking.id);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                              >
+                                <span className="text-rose-600">📄</span>
+                                Quotation
+                              </button>
+                            )}
+                            {onReschedule && booking.status !== 'cancelled' && !booking.invoice && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onReschedule(booking.id);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                              >
+                                <span>🔄</span>
+                                Reschedule
+                              </button>
+                            )}
+                            {onCancel && booking.status !== 'cancelled' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Are you sure you want to cancel this booking?')) {
+                                    onCancel(booking.id);
+                                  }
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <span>❌</span>
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })
@@ -324,8 +516,8 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full min-w-[800px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -353,13 +545,19 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
                 <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Status
                 </th>
+                <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">
-                    No bookings found for the selected {filterPeriod}.
+                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">
+                    {filterPeriod === 'all' 
+                      ? 'No bookings found.'
+                      : `No bookings found for the selected ${filterPeriod}.`
+                    }
                   </td>
                 </tr>
               ) : (
@@ -426,6 +624,110 @@ export function BookingsView({ bookings, slots, selectedDate }: BookingsViewProp
                         >
                           {statusLabels[booking.status] || booking.status}
                         </span>
+                      </td>
+                      <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
+                            <>
+                              <button
+                                onClick={() => onUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
+                                className="rounded-full border-2 border-yellow-300 bg-white px-3 py-1.5 text-xs font-semibold text-yellow-700 hover:bg-yellow-50 transition-colors"
+                              >
+                                Partial
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const total = booking.invoice?.total || 0;
+                                  const deposit = booking.depositAmount || 0;
+                                  const balance = total - deposit;
+                                  const paidAmount = booking.paidAmount || 0;
+                                  const remainingBalance = balance - paidAmount;
+                                  
+                                  const amountPaidStr = prompt(
+                                    `Enter amount paid (₱):\n\nBalance: ₱${remainingBalance.toLocaleString('en-PH')}\nDeposit: ₱${deposit.toLocaleString('en-PH')}\nTotal: ₱${total.toLocaleString('en-PH')}`
+                                  );
+                                  if (!amountPaidStr || isNaN(Number(amountPaidStr))) return;
+                                  
+                                  const amountPaid = Number(amountPaidStr);
+                                  const totalPaid = (booking.paidAmount || 0) + amountPaid;
+                                  const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
+                                  
+                                  await onUpdatePayment(booking.id, 'paid', totalPaid, tipAmount);
+                                }}
+                                className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
+                              >
+                                Paid
+                              </button>
+                            </>
+                          )}
+                          {/* Desktop: Actions Dropdown */}
+                          {(onMakeQuotation || onReschedule || onCancel) && (
+                            <div className="relative" ref={(el) => (dropdownRefs.current[`desktop-${booking.id}`] = el)}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownId(openDropdownId === `desktop-${booking.id}` ? null : `desktop-${booking.id}`);
+                                }}
+                                className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                              >
+                                Actions
+                                <svg className={`w-3 h-3 transition-transform ${openDropdownId === `desktop-${booking.id}` ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              {openDropdownId === `desktop-${booking.id}` && (
+                                <div 
+                                  className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="py-1">
+                                    {onMakeQuotation && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onMakeQuotation(booking.id);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                      >
+                                        <span className="text-rose-600">📄</span>
+                                        Quotation
+                                      </button>
+                                    )}
+                                    {onReschedule && booking.status !== 'cancelled' && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onReschedule(booking.id);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                      >
+                                        <span>🔄</span>
+                                        Reschedule
+                                      </button>
+                                    )}
+                                    {onCancel && booking.status !== 'cancelled' && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm('Are you sure you want to cancel this booking?')) {
+                                            onCancel(booking.id);
+                                          }
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
+                                      >
+                                        <span>❌</span>
+                                        Cancel
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

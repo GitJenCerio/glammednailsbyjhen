@@ -64,7 +64,20 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm font-semibold truncate">{booking.bookingId}</p>
+                      <p className="text-xs sm:text-sm font-semibold truncate">
+                        {(() => {
+                          // Get customer name from form data
+                          if (booking.customerData) {
+                            const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
+                            const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
+                            if (name || surname) {
+                              return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
+                            }
+                          }
+                          return booking.bookingId;
+                        })()}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-slate-400 truncate">{booking.bookingId}</p>
                       {booking.slot && (
                         <p className="text-[10px] sm:text-xs text-slate-500 truncate">
                           {booking.slot.date} · {formatTime12Hour(booking.slot.time)}

@@ -7,7 +7,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import type { Slot, BlockedDate, ServiceType } from '@/lib/types';
-import { getNextSlotTime } from '@/lib/constants/slots';
+import { getNextSlotTime, SLOT_TIMES } from '@/lib/constants/slots';
 import { formatTime12Hour } from '@/lib/utils';
 
 const SERVICE_OPTIONS: Record<ServiceLocation, { value: ServiceType; label: string }[]> = {
@@ -33,6 +33,66 @@ function getRequiredSlotCount(serviceType: ServiceType): number {
     default:
       return 1;
   }
+}
+
+function canSlotAccommodateService(
+  slot: Slot,
+  serviceType: ServiceType,
+  allSlots: Slot[],
+  blockedDates: BlockedDate[] = []
+): boolean {
+  const requiredSlots = getRequiredSlotCount(serviceType);
+  if (requiredSlots === 1) return true;
+
+  // Get all slots for this date
+  const slotsForDate = allSlots.filter((s) => s.date === slot.date);
+
+  let referenceSlot = slot;
+  // Consecutive means: available slots with no booked slots in between
+  // We skip over slot times that don't exist in the schedule at all
+  for (let step = 1; step < requiredSlots; step += 1) {
+    let nextSlot: Slot | null = null;
+    let currentCheckTime = referenceSlot.time;
+    let foundBookedSlot = false;
+    
+    // Keep looking for the next available slot, checking for booked slots in between
+    while (!nextSlot) {
+      const nextTime = getNextSlotTime(currentCheckTime);
+      if (!nextTime) return false; // No more slot times
+      
+      // Check if a slot exists at this time
+      const slotAtTime = slotsForDate.find(
+        (candidate) => candidate.time === nextTime
+      );
+      
+      if (slotAtTime) {
+        // Slot exists - check if blocked
+        const isBlocked = blockedDates.some(
+          (block) => slotAtTime.date >= block.startDate && slotAtTime.date <= block.endDate
+        );
+        if (isBlocked) return false;
+        
+        // If it's booked (not available), there's a gap
+        if (slotAtTime.status !== 'available') {
+          foundBookedSlot = true;
+          // Continue checking - maybe there are more available slots after this booked one
+        } else {
+          // Found an available slot
+          nextSlot = slotAtTime;
+          // If we found a booked slot before this, that's a gap
+          if (foundBookedSlot) return false;
+          break;
+        }
+      }
+      // Slot doesn't exist at this time - skip it (not a gap, just not created)
+      
+      currentCheckTime = nextTime;
+    }
+    
+    if (!nextSlot) return false;
+    referenceSlot = nextSlot;
+  }
+  return true;
 }
 
 type ClientType = 'new' | 'repeat';
@@ -269,28 +329,82 @@ export default function BookingPage() {
     let referenceSlot = selectedSlot;
     let errorMessage: string | null = null;
 
+    // Get all slots for this date to help with debugging
+    const slotsForDate = slots.filter((s) => s.date === selectedSlot.date);
+
+    // Check for consecutive slots starting from the selected slot
+    // Consecutive means: available slots with no booked slots in between
+    // We skip over slot times that don't exist in the schedule at all
     for (let step = 1; step < requiredSlots; step += 1) {
-      const nextTime = getNextSlotTime(referenceSlot.time);
-      if (!nextTime) {
-        errorMessage = 'This service requires additional consecutive slots, but there are no more later slots available.';
+      // Find the next slot that exists in the schedule, checking all times in sequence
+      let nextSlotAny: Slot | null = null;
+      let currentCheckTime = referenceSlot.time;
+      let foundBookedSlot = false;
+      let bookedSlotTime: string | null = null;
+      
+      // Keep looking for the next available slot, checking for booked slots in between
+      while (!nextSlotAny) {
+        const nextTime = getNextSlotTime(currentCheckTime);
+        if (!nextTime) {
+          // No more slot times in the predefined sequence
+          break;
+        }
+        
+        // Check if a slot exists at this time
+        const slotAtTime = slotsForDate.find(
+          (candidate) => candidate.time === nextTime
+        );
+        
+        if (slotAtTime) {
+          // Slot exists at this time
+          // Check if slot is blocked by a blocked date
+          const isBlocked = blockedDates.some(
+            (block) => slotAtTime.date >= block.startDate && slotAtTime.date <= block.endDate
+          );
+          
+          if (isBlocked) {
+            errorMessage = `This service requires ${requiredSlots} consecutive slots, but the slot at ${formatTime12Hour(nextTime)} is blocked. Please select a different time or date.`;
+            break;
+          }
+          
+          // If it's booked (not available), there's a gap
+          if (slotAtTime.status !== 'available') {
+            foundBookedSlot = true;
+            bookedSlotTime = nextTime;
+            // Continue checking - maybe there are more available slots after this booked one
+          } else {
+            // Found an available slot
+            nextSlotAny = slotAtTime;
+            // If we found a booked slot before this, that's a problem
+            if (foundBookedSlot) {
+              errorMessage = `This service requires ${requiredSlots} consecutive slots, but there is a booked slot at ${formatTime12Hour(bookedSlotTime!)} between the slots. There is a gap in the consecutive slots. Please select a different time or date.`;
+              nextSlotAny = null; // Reset so we break out
+              break;
+            }
+            break;
+          }
+        }
+        // Slot doesn't exist at this time - skip it (not a gap, just not created)
+        
+        currentCheckTime = nextTime;
+      }
+
+      // If we couldn't find the next available slot
+      if (!nextSlotAny) {
+        if (foundBookedSlot && bookedSlotTime) {
+          // We already set the error message above
+          break;
+        }
+        const availableTimes = slotsForDate
+          .filter((s) => s.status === 'available')
+          .map((s) => formatTime12Hour(s.time))
+          .join(', ');
+        errorMessage = `This service requires ${requiredSlots} consecutive available slots starting from ${formatTime12Hour(selectedSlot.time)}, but there aren't enough slots available after this time. Available slots on this date: ${availableTimes || 'none'}. Please select a different time or date.`;
         break;
       }
 
-      const nextSlot =
-        slots.find((candidate) => candidate.date === selectedSlot.date && candidate.time === nextTime) ?? null;
-
-      if (!nextSlot) {
-        errorMessage = 'This service requires the next slot, but it is not available in the schedule. Please pick another time or date.';
-        break;
-      }
-
-      if (nextSlot.status !== 'available') {
-        errorMessage = 'This service requires consecutive slots, but one of them is already taken. Please select another time or date.';
-        break;
-      }
-
-      collected.push(nextSlot);
-      referenceSlot = nextSlot;
+      collected.push(nextSlotAny);
+      referenceSlot = nextSlotAny;
     }
 
     if (errorMessage) {
@@ -306,11 +420,33 @@ export default function BookingPage() {
     setServiceMessage(
       `${serviceLabel} will use ${formatTime12Hour(selectedSlot.time)}${lastSlot ? ` to ${formatTime12Hour(lastSlot.time)}` : ''}.`,
     );
-  }, [selectedSlot, selectedService, slots, serviceOptions]);
+  }, [selectedSlot, selectedService, slots, serviceOptions, blockedDates]);
 
   const availableSlotsForDate = useMemo(
-    () => slots.filter((slot) => slot.date === selectedDate && slot.status === 'available'),
-    [slots, selectedDate],
+    () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      return slots.filter(
+        (slot) =>
+          slot.date === selectedDate &&
+          slot.date >= today &&
+          slot.status === 'available' &&
+          !blockedDates.some(
+            (block) => slot.date >= block.startDate && slot.date <= block.endDate
+          )
+      );
+    },
+    [slots, selectedDate, blockedDates],
+  );
+
+  // Filter slots that can accommodate the selected service
+  const compatibleSlotsForDate = useMemo(
+    () => {
+      if (!selectedService || getRequiredSlotCount(selectedService) === 1) {
+        return availableSlotsForDate;
+      }
+      return availableSlotsForDate.filter((slot) => canSlotAccommodateService(slot, selectedService, slots, blockedDates));
+    },
+    [availableSlotsForDate, selectedService, slots, blockedDates],
   );
 
   const requiredSlots = getRequiredSlotCount(selectedService);
@@ -334,11 +470,41 @@ export default function BookingPage() {
 
   async function handleProceedToBooking() {
     if (!selectedSlot) return;
+    
+    // Refresh slot data before booking to ensure we have the latest status
+    await loadData();
+    
+    // Verify the selected slot still exists and is available after refresh
+    const refreshedSlot = slots.find((s) => s.id === selectedSlot.id);
+    if (!refreshedSlot) {
+      alert('This slot is no longer available. Please select another slot.');
+      setSelectedSlot(null);
+      setLinkedSlots([]);
+      return;
+    }
+    
+    if (refreshedSlot.status !== 'available') {
+      alert(`This slot is no longer available (status: ${refreshedSlot.status}). Please select another slot.`);
+      setSelectedSlot(null);
+      setLinkedSlots([]);
+      return;
+    }
+    
+    // Update selectedSlot to use refreshed data
+    setSelectedSlot(refreshedSlot);
+    
     const requiredSlots = getRequiredSlotCount(selectedService);
-    const linkedSlotIds = linkedSlots.map((slot) => slot.id);
+    const linkedSlotIds = linkedSlots.map((slot) => {
+      const refreshedLinkedSlot = slots.find((s) => s.id === slot.id);
+      if (!refreshedLinkedSlot || refreshedLinkedSlot.status !== 'available') {
+        return null;
+      }
+      return refreshedLinkedSlot.id;
+    }).filter((id): id is string => id !== null);
 
     if (requiredSlots > 1 && linkedSlotIds.length !== requiredSlots - 1) {
       setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
+      setLinkedSlots([]);
       return;
     }
 
@@ -347,7 +513,7 @@ export default function BookingPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          slotId: selectedSlot.id,
+          slotId: refreshedSlot.id,
           serviceType: selectedService,
           pairedSlotId: linkedSlotIds[0],
           linkedSlotIds,
@@ -357,7 +523,8 @@ export default function BookingPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Slot is no longer available.');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Slot is no longer available.');
       }
 
       const data = await response.json();
@@ -370,10 +537,13 @@ export default function BookingPage() {
       setServiceMessage(null);
       setSqueezeFeeAcknowledged(false);
       await loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating booking:', error);
-      alert('This slot is no longer available. Please pick another slot.');
+      alert(error.message || 'This slot is no longer available. Please pick another slot.');
       await loadData();
+      // Reset selection to allow user to pick a new slot
+      setSelectedSlot(null);
+      setLinkedSlots([]);
     }
   }
 
@@ -419,6 +589,11 @@ export default function BookingPage() {
                     <p className="text-xs sm:text-sm text-slate-600">
                       Tap a time to reserve it instantly.
                     </p>
+                    {selectedService && getRequiredSlotCount(selectedService) > 1 && (
+                      <p className="text-[10px] sm:text-xs text-amber-700 mt-1">
+                        ⚠️ For {getRequiredSlotCount(selectedService)}-slot services, select the <strong>first</strong> slot of the consecutive sequence (e.g., if you need 3 slots at 8:00 AM, 10:30 AM, 1:00 PM, select 8:00 AM).
+                      </p>
+                    )}
                   </header>
 
                   <div className="space-y-3">

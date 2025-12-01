@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
-import { listSlots, createSlot } from '@/lib/services/slotService';
+import { listSlots, createSlot, deleteExpiredSlots } from '@/lib/services/slotService';
 import { listBlockedDates } from '@/lib/services/blockService';
 import { releaseExpiredPendingBookings } from '@/lib/services/bookingService';
 
 export async function GET() {
-  await releaseExpiredPendingBookings(20);
+  await releaseExpiredPendingBookings(30);
+  // Try to delete expired slots, but don't fail if index is missing
+  try {
+    const deletedCount = await deleteExpiredSlots();
+    if (deletedCount > 0) {
+      console.log(`Deleted ${deletedCount} expired slot(s)`);
+    }
+  } catch (error) {
+    console.warn('Expired slot cleanup skipped:', error);
+  }
   const slots = await listSlots();
   return NextResponse.json({ slots });
 }

@@ -38,7 +38,7 @@ export async function createSlot(payload: SlotInput, blocks: BlockedDate[]): Pro
     updatedAt: now,
   };
   const ref = await slotCollection.add(data);
-  return { id: ref.id, ...(data as Slot) };
+  return { ...(data as Slot), id: ref.id };
 }
 
 export async function updateSlot(id: string, data: Partial<Slot>, blocks: BlockedDate[]): Promise<Slot> {
@@ -59,6 +59,29 @@ export async function updateSlot(id: string, data: Partial<Slot>, blocks: Blocke
 
 export async function deleteSlot(id: string) {
   await slotCollection.doc(id).delete();
+}
+
+export async function deleteExpiredSlots() {
+  try {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Fetch all expired slots first (simpler query that doesn't need composite index)
+    const expiredSnapshot = await slotCollection.where('date', '<', today).get();
+    
+    // Filter to only delete available slots (not booked/pending/confirmed)
+    const availableExpiredSlots = expiredSnapshot.docs.filter(
+      (doc) => doc.data().status === 'available'
+    );
+    
+    const deletePromises = availableExpiredSlots.map((doc) => doc.ref.delete());
+    await Promise.all(deletePromises);
+    
+    return availableExpiredSlots.length;
+  } catch (error) {
+    // If index doesn't exist yet, just log and continue
+    // The index will be created automatically when the user clicks the link in the error
+    console.warn('Could not delete expired slots (index may be missing):', error);
+    return 0;
+  }
 }
 
 function docToSlot(id: string, data: FirebaseFirestore.DocumentData): Slot {

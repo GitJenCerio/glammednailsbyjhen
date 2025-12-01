@@ -22,6 +22,7 @@ export function CalendarGrid({
   const start = startOfWeek(startOfMonth(referenceDate), { weekStartsOn: 0 });
   const end = endOfWeek(endOfMonth(referenceDate), { weekStartsOn: 0 });
   const days = eachDayOfInterval({ start, end });
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   const weeks = [];
   for (let i = 0; i < days.length; i += 7) {
@@ -97,14 +98,17 @@ export function CalendarGrid({
               const isCurrentMonth = isSameMonth(date, referenceDate);
               const isSelected = selectedDate === isoDate;
               const isToday = isSameDay(date, new Date());
+              const isPast = isoDate < today;
 
               return (
                 <button
                   key={isoDate}
                   type="button"
-                  onClick={() => onSelectDate(isoDate)}
+                  onClick={() => !isPast && onSelectDate(isoDate)}
+                  disabled={isPast}
                   className={[
-                    'flex flex-col gap-0.5 sm:gap-1 md:gap-1.5 rounded-xl sm:rounded-2xl border-2 p-1 sm:p-1.5 md:p-2.5 lg:p-3 text-left transition-all shadow-sm touch-manipulation active:scale-95 min-h-[3rem] sm:min-h-[3.5rem] md:min-h-[4rem]',
+                    'flex flex-col gap-0.5 sm:gap-1 md:gap-1.5 rounded-xl sm:rounded-2xl border-2 p-1 sm:p-1.5 md:p-2.5 lg:p-3 text-left transition-all shadow-sm min-h-[3rem] sm:min-h-[3.5rem] md:min-h-[4rem]',
+                    isPast ? 'opacity-40 cursor-not-allowed' : 'touch-manipulation active:scale-95',
                     isCurrentMonth ? 'border-slate-300' : 'border-slate-200 text-slate-400',
                     isBlocked ? 'bg-rose-200 border-rose-400 hover:bg-rose-300 hover:border-rose-500' : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400',
                     isSelected ? 'ring-2 ring-slate-900 ring-offset-1 sm:ring-offset-2 border-slate-900' : '',
