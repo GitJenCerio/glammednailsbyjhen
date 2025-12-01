@@ -341,7 +341,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
       <div className="space-y-2 sm:space-y-3">
         {/* Date range filters */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-auto">
+          <div className="flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white p-1 w-full sm:w-auto shadow-md">
             <button
               onClick={() => setFilterPeriod('all')}
               className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
@@ -394,7 +394,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
         {/* Status + Month filters */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           {/* Status filter: All / Upcoming / Done */}
-          <div className="flex gap-1.5 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-auto">
+          <div className="flex gap-1.5 rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white p-1 w-full sm:w-auto shadow-md">
             <button
               onClick={() => setStatusFilter('all')}
               className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold transition touch-manipulation ${
@@ -458,7 +458,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
       {/* Mobile Card View */}
       <div className="lg:hidden space-y-3">
         {filteredBookings.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-xs sm:text-sm text-slate-500">
+          <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-6 text-center text-xs sm:text-sm text-slate-500 shadow-sm">
             {filterPeriod === 'all' 
               ? 'No bookings found.'
               : `No bookings found for the selected ${filterPeriod}.`
@@ -470,7 +470,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
             const stageLabel = getBookingStageLabel(booking);
             const isDone = stageLabel === 'Done';
             return (
-              <div key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div key={booking.id} className="rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-lg hover:shadow-xl transition-all duration-200">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -705,10 +705,10 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-sm relative">
+      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white shadow-lg shadow-slate-200/50 relative">
         <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full min-w-[800px]">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-100 border-b-2 border-slate-300">
               <tr>
                 <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Booking ID
@@ -751,7 +751,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-300">
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td colSpan={13} className="px-6 py-12 text-center text-sm text-slate-500">
@@ -767,7 +767,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                   const stageLabel = getBookingStageLabel(booking);
                   const isDone = stageLabel === 'Done';
                   return (
-                    <tr key={booking.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={booking.id} className="hover:bg-slate-100 transition-colors border-b border-slate-200">
                       <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
                         <span className="text-xs xl:text-sm font-semibold text-slate-900">{booking.bookingId}</span>
                       </td>

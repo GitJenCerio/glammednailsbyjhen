@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 import html2canvas from 'html2canvas';
 import type { Booking } from '@/lib/types';
 import { format } from 'date-fns';
@@ -212,21 +211,21 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Left: Quote Builder */}
           <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h4 className="font-semibold mb-3">Add Services</h4>
+            <div className="rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-lg shadow-slate-200/50">
+              <h4 className="font-semibold mb-3 text-slate-900">Add Services</h4>
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search services..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm mb-3"
+                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm mb-3 focus:border-slate-900 focus:ring-0 shadow-sm"
               />
               {searchTerm && (
-                <div className="max-h-40 overflow-auto rounded-xl border border-slate-100">
+                <div className="max-h-40 overflow-auto rounded-xl border-2 border-slate-300 shadow-md">
                   {filteredSearchResults.map((row) => (
                     <div
                       key={row.name}
-                      className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
+                      className="flex items-center justify-between px-3 py-2 hover:bg-slate-100 cursor-pointer border-b border-slate-200 last:border-0 transition-colors"
                       onClick={() => {
                         addQuoteItemFromRow(row.name, row);
                         setSearchTerm('');
@@ -242,15 +241,15 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h4 className="font-semibold mb-3">Custom Item</h4>
+            <div className="rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-lg shadow-slate-200/50">
+              <h4 className="font-semibold mb-3 text-slate-900">Custom Item</h4>
               <div className="space-y-2">
                 <input
                   type="text"
                   value={customLabel}
                   onChange={(e) => setCustomLabel(e.target.value)}
                   placeholder="Service name"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <div className="flex gap-2">
                   <input
@@ -258,7 +257,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                     value={customPrice}
                     onChange={(e) => setCustomPrice(e.target.value)}
                     placeholder="Price"
-                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    className="flex-1 rounded-xl border-2 border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                   />
                   <input
                     type="number"
@@ -266,7 +265,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                     value={customQuantity}
                     onChange={(e) => setCustomQuantity(e.target.value)}
                     placeholder="Qty"
-                    className="w-20 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    className="w-20 rounded-xl border-2 border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                   />
                 </div>
                 <button
@@ -280,11 +279,11 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
             </div>
 
             {quoteItems.length > 0 && (
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <h4 className="font-semibold mb-3">Quote Items</h4>
-                <div className="space-y-2 max-h-60 overflow-auto">
+              <div className="rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-lg shadow-slate-200/50">
+                <h4 className="font-semibold mb-3 text-slate-900">Quote Items</h4>
+                <div className="space-y-3 max-h-60 overflow-auto">
                   {quoteItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-2 bg-slate-50 rounded">
+                    <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
                       <div className="flex-1">
                         <p className="text-sm font-medium">{item.description}</p>
                         <p className="text-xs text-slate-500">
@@ -345,24 +344,21 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
 
           {/* Right: Invoice Preview */}
           <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h4 className="font-semibold mb-3">Notes</h4>
+            <div className="rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-lg shadow-slate-200/50">
+              <h4 className="font-semibold mb-3 text-slate-900">Notes</h4>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes, payment terms, etc..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm h-24"
+                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-sm h-24 focus:border-slate-900 focus:ring-0 shadow-sm"
               />
             </div>
 
             <div
               ref={quoteCardRef}
-              className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-6 shadow-lg"
+              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-6 shadow-xl shadow-slate-300/50"
             >
               <header className="mb-4 text-center">
-                <div className="relative h-20 w-56 mx-auto mb-3">
-                  <Image src="/logo.png" alt="Logo" fill className="object-contain" style={{ objectFit: 'contain' }} />
-                </div>
                 <h4 className="text-xl font-semibold">Invoice</h4>
                 <p className="text-xs text-slate-500 mt-1">{format(new Date(), 'MMMM d, yyyy')}</p>
               </header>

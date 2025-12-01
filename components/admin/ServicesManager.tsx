@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
 import html2canvas from 'html2canvas';
 
 type QuoteItem = {
@@ -261,8 +260,10 @@ export function ServicesManager() {
         <button
           type="button"
           onClick={() => setSubTab('catalog')}
-          className={`rounded-full px-5 py-2 text-sm font-semibold ${
-            subTab === 'catalog' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
+          className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
+            subTab === 'catalog' 
+              ? 'bg-slate-900 text-white shadow-lg' 
+              : 'bg-white text-slate-600 border-2 border-slate-300 shadow-md hover:shadow-lg'
           }`}
         >
           Service catalog
@@ -270,8 +271,10 @@ export function ServicesManager() {
         <button
           type="button"
           onClick={() => setSubTab('quotes')}
-          className={`rounded-full px-5 py-2 text-sm font-semibold ${
-            subTab === 'quotes' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
+          className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
+            subTab === 'quotes' 
+              ? 'bg-slate-900 text-white shadow-lg' 
+              : 'bg-white text-slate-600 border-2 border-slate-300 shadow-md hover:shadow-lg'
           }`}
         >
           Nails inspo quotations
@@ -279,8 +282,10 @@ export function ServicesManager() {
         <button
           type="button"
           onClick={() => setSubTab('sheet')}
-          className={`rounded-full px-5 py-2 text-sm font-semibold ${
-            subTab === 'sheet' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
+          className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
+            subTab === 'sheet' 
+              ? 'bg-slate-900 text-white shadow-lg' 
+              : 'bg-white text-slate-600 border-2 border-slate-300 shadow-md hover:shadow-lg'
           }`}
         >
           Full price sheet (TSV)
@@ -289,7 +294,7 @@ export function ServicesManager() {
 
       {subTab === 'catalog' ? (
         <div className="space-y-8">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
             <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Hero services</p>
@@ -306,7 +311,7 @@ export function ServicesManager() {
               {serviceMenu.map((service) => (
                 <div
                   key={service.title}
-                  className="rounded-2xl border border-slate-100 p-5 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.4)]"
+                  className="rounded-2xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-all duration-200"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -330,7 +335,7 @@ export function ServicesManager() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
             <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Full catalog</p>
@@ -348,19 +353,19 @@ export function ServicesManager() {
             {sheetLoading ? (
               <div className="flex h-40 items-center justify-center text-sm text-slate-500">Loading TSV...</div>
             ) : sheetError ? (
-              <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">{sheetError}</div>
+              <div className="rounded-2xl border-2 border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-md">{sheetError}</div>
             ) : (
-              <div className="max-h-[500px] overflow-auto rounded-2xl border border-slate-100">
-                <table className="min-w-full divide-y divide-slate-100 text-sm">
-                  <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="max-h-[500px] overflow-auto rounded-2xl border-2 border-slate-300 shadow-md">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 border-b-2 border-slate-300">
                     <tr>
                       <th className="px-4 py-3">Name</th>
                       <th className="px-4 py-3">Unit price</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-200">
                     {priceSheet.map((row, index) => (
-                      <tr key={`${row.name}-${index}`} className="hover:bg-slate-50">
+                      <tr key={`${row.name}-${index}`} className="hover:bg-slate-100 transition-colors">
                         <td className="px-4 py-3 font-medium text-slate-900">{row.name}</td>
                         <td className="px-4 py-3 text-slate-600">{row.displayPrice || '—'}</td>
                       </tr>
@@ -381,7 +386,7 @@ export function ServicesManager() {
       ) : subTab === 'quotes' ? (
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-5">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+            <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50 space-y-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Quick add inspo items</h3>
                 <p className="text-sm text-slate-500">
@@ -398,18 +403,18 @@ export function ServicesManager() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Type service name, e.g. chrome, removal, charms"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 {searchTerm && (
-                  <div className="mt-3 rounded-2xl border border-slate-100 max-h-60 overflow-auto">
+                  <div className="mt-3 rounded-2xl border-2 border-slate-300 max-h-60 overflow-auto shadow-md">
                     {filteredSearchResults.length === 0 ? (
                       <p className="px-4 py-2 text-xs text-slate-500">No matches yet.</p>
                     ) : (
-                      <ul className="divide-y divide-slate-100 text-sm">
+                      <ul className="divide-y divide-slate-200 text-sm">
                         {filteredSearchResults.map((row) => (
                           <li
                             key={row.name}
-                            className="flex items-center justify-between px-4 py-2 hover:bg-slate-50 cursor-pointer"
+                            className="flex items-center justify-between px-4 py-2 hover:bg-slate-100 cursor-pointer transition-colors"
                             onClick={() => {
                               addQuoteItemFromRow(row.name, row);
                               setSearchTerm('');
@@ -435,8 +440,10 @@ export function ServicesManager() {
                     return (
                       <li
                         key={key}
-                        className={`rounded-2xl border border-slate-100 p-4 transition ${
-                          row?.unitPrice ? 'cursor-pointer hover:border-slate-400' : 'opacity-50 cursor-not-allowed'
+                        className={`rounded-2xl border-2 p-4 transition-all ${
+                          row?.unitPrice 
+                            ? 'border-slate-300 bg-white cursor-pointer hover:border-slate-400 hover:shadow-md shadow-sm' 
+                            : 'border-slate-200 opacity-50 cursor-not-allowed bg-slate-50'
                         }`}
                         onClick={() => addQuoteItemFromRow(row?.name ?? key, row)}
                       >
@@ -456,7 +463,7 @@ export function ServicesManager() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
               <h4 className="text-lg font-semibold text-slate-900 mb-3">Custom line item</h4>
               <div className="space-y-3">
                 <input
@@ -464,7 +471,7 @@ export function ServicesManager() {
                   value={customLabel}
                   onChange={(e) => setCustomLabel(e.target.value)}
                   placeholder="e.g. Character art on 2 nails"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <input
                   type="number"
@@ -472,7 +479,7 @@ export function ServicesManager() {
                   value={customPrice}
                   onChange={(e) => setCustomPrice(e.target.value)}
                   placeholder="Price (₱)"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <input
                   type="number"
@@ -480,7 +487,7 @@ export function ServicesManager() {
                   value={customQuantity}
                   onChange={(e) => setCustomQuantity(e.target.value)}
                   placeholder="Quantity"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <button
                   type="button"
@@ -494,7 +501,7 @@ export function ServicesManager() {
             </div>
           </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-7">
+            <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50 lg:col-span-7">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Quotation builder</p>
@@ -510,7 +517,7 @@ export function ServicesManager() {
             </div>
 
             {quoteItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+              <div className="rounded-2xl border-2 border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 shadow-sm">
                 Add presets or custom lines to build a quote for your client.
               </div>
             ) : (
@@ -518,7 +525,7 @@ export function ServicesManager() {
                 {quoteItems.map((item) => (
                   <li
                     key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-100 px-4 py-3"
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 shadow-md hover:shadow-lg transition-all"
                   >
                     <div className="max-w-full sm:max-w-[60%]">
                       <p className="font-medium text-slate-900 text-balance break-words">{item.description}</p>
@@ -585,9 +592,6 @@ export function ServicesManager() {
                 className="mx-auto w-full max-w-md rounded-[28px] border border-slate-100 bg-gradient-to-br from-white via-[#f7f7f7] to-white px-6 py-6 shadow-[0_20px_50px_-40px_rgba(15,23,42,0.6)]"
               >
                 <header className="mb-4 flex flex-col items-center gap-3 text-center">
-                  <div className="relative h-14 w-40">
-                    <Image src="/logo.png" alt="Glammed Nails by Jhen logo" fill className="object-contain" priority />
-                  </div>
                   <h4 className="text-2xl font-semibold text-slate-900">Client&apos;s Inspo Quotation</h4>
                   <p className="text-xs text-slate-500">{todayLabel}</p>
                 </header>
@@ -652,7 +656,7 @@ export function ServicesManager() {
           </div>
         </div>
       ) : (
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Google Sheet TSV</p>
@@ -673,17 +677,17 @@ export function ServicesManager() {
           ) : sheetError ? (
             <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">{sheetError}</div>
           ) : (
-            <div className="max-h-[600px] overflow-auto rounded-2xl border border-slate-100">
-              <table className="min-w-full divide-y divide-slate-100 text-sm">
-                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="max-h-[600px] overflow-auto rounded-2xl border-2 border-slate-300 shadow-md">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 border-b-2 border-slate-300">
                   <tr>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Unit price</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {priceSheet.map((row, index) => (
-                    <tr key={`${row.name}-${index}`} className="hover:bg-slate-50">
+                    <tr key={`${row.name}-${index}`} className="hover:bg-slate-100 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-900">{row.name}</td>
                       <td className="px-4 py-3 text-slate-600">{row.displayPrice || '—'}</td>
                     </tr>

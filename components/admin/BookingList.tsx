@@ -45,7 +45,7 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
   );
 
   return (
-    <div className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
+    <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
       <header className="mb-3 sm:mb-4">
         <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Bookings</p>
         <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">Status overview</h2>
@@ -88,10 +88,10 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
                   type="button"
                   onClick={() => onSelect(booking)}
                   className={[
-                    'w-full rounded-xl sm:rounded-2xl border bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-left transition-all duration-200 touch-manipulation',
+                    'w-full rounded-xl sm:rounded-2xl border-2 bg-white px-3 sm:px-4 py-3 sm:py-4 text-left transition-all duration-200 touch-manipulation',
                     selectedId === booking.id
-                      ? 'border-slate-900 shadow-lg shadow-slate-900/10 ring-2 ring-slate-900/5'
-                      : 'border-slate-200 shadow-sm hover:border-slate-300 hover:shadow-md hover:shadow-slate-900/5 active:scale-[0.98]',
+                      ? 'border-slate-900 shadow-xl shadow-slate-900/20 ring-2 ring-slate-900/10 bg-slate-50'
+                      : 'border-slate-300 shadow-md hover:border-slate-400 hover:shadow-lg hover:shadow-slate-300/50 active:scale-[0.98]',
                   ].join(' ')}
                 >
                   <div className="flex items-center justify-between gap-2">

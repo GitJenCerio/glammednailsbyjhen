@@ -503,7 +503,7 @@ export default function AdminDashboard() {
               onChangeMonth={setCurrentMonth}
             />
 
-            <section className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
+            <section className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
               <header className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Slots</p>
