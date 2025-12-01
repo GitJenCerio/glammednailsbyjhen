@@ -6,15 +6,7 @@
   "outputDirectory": ".next",
   "crons": [
     {
-      "path": "/api/google/sync",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/release-expired",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/cleanup-slots",
       "schedule": "0 0 * * *"
     }
   ]
