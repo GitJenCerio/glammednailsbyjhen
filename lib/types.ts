@@ -39,17 +39,31 @@ export interface BlockedDate {
   updatedAt: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Booking {
   id: string;
   slotId: string;
   pairedSlotId?: string | null;
   linkedSlotIds?: string[];
   bookingId: string;
+  customerId: string; // Required: every booking must have a customer
   status: BookingStatus;
   serviceType?: ServiceType;
   clientType?: 'new' | 'repeat';
   serviceLocation?: 'homebased_studio' | 'home_service';
-  customerData?: Record<string, string>;
+  // Assistant / commission (e.g. sister who helped with the booking)
+  assistantName?: string; // e.g. 'Sister'
+  assistantCommissionRate?: number; // e.g. 0.1 for 10%
+  customerData?: Record<string, string>; // Keep for backward compatibility and form data
   customerDataOrder?: string[]; // Preserves the exact order of fields from the form
   formResponseId?: string;
   dateChanged?: boolean;
@@ -70,6 +84,11 @@ export interface BookingWithSlot extends Booking {
   linkedSlots?: Slot[];
 }
 
+export interface BookingWithCustomer extends Booking {
+  customer?: Customer;
+}
+
 export type SlotInput = Omit<Slot, 'id' | 'createdAt' | 'updatedAt'>;
 export type BlockedDateInput = Omit<BlockedDate, 'id' | 'createdAt' | 'updatedAt'>;
+export type CustomerInput = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>;
 

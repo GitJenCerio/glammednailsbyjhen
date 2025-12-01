@@ -573,7 +573,7 @@ export default function BookingPage() {
               <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.2fr,1fr]">
                 <CalendarGrid
                   referenceDate={currentMonth}
-                  slots={slots}
+                  slots={slots.filter((slot) => slot.status === 'available')}
                   blockedDates={blockedDates}
                   selectedDate={selectedDate}
                   onSelectDate={setSelectedDate}

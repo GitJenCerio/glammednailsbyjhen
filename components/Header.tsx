@@ -119,8 +119,7 @@ export default function Header() {
 
         {/* Book Appointment Button - Far Right */}
         <Link
-          href="https://forms.gle/o6k3veo5HY2NkYAu9"
-          target="_blank"
+          href="/booking"
           className="hidden md:block px-6 py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-sm whitespace-nowrap"
         >
           Book Now
@@ -128,8 +127,7 @@ export default function Header() {
 
         {/* Mobile Book Button - Right */}
         <Link
-          href="https://forms.gle/o6k3veo5HY2NkYAu9"
-          target="_blank"
+          href="/booking"
           className="md:hidden px-6 py-1.5 mx-2 ml-16 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs"
         >
           Book

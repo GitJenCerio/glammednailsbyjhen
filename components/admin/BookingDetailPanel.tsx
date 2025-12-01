@@ -7,7 +7,7 @@ type BookingDetailPanelProps = {
   booking: Booking | null;
   slotLabel?: string;
   pairedSlotLabel?: string;
-  onConfirm: (bookingId: string, depositAmount?: number) => Promise<void>;
+  onConfirm: (bookingId: string, depositAmount?: number, withAssistantCommission?: boolean) => Promise<void>;
   onCancel?: (bookingId: string) => Promise<void>;
   onReschedule?: (bookingId: string) => Promise<void>;
   onMakeQuotation?: (bookingId: string) => void;
@@ -24,6 +24,7 @@ const serviceLabels: Record<string, string> = {
 export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConfirm, onCancel, onReschedule, onMakeQuotation }: BookingDetailPanelProps) {
   const [showDepositInput, setShowDepositInput] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
+  const [withAssistantCommission, setWithAssistantCommission] = useState(false);
 
   if (!booking) {
     return (
@@ -53,13 +54,13 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
     if (booking.status === 'pending_payment') {
       setShowDepositInput(true);
     } else {
-      onConfirm(booking.id);
+      onConfirm(booking.id, undefined, withAssistantCommission);
     }
   };
 
   const handleConfirmWithDeposit = async () => {
     const amount = depositAmount ? Number(depositAmount) : undefined;
-    await onConfirm(booking.id, amount);
+    await onConfirm(booking.id, amount, withAssistantCommission);
     setShowDepositInput(false);
     setDepositAmount('');
   };
@@ -73,6 +74,91 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
     }
     return booking.bookingId;
+  };
+
+  // Check if a value is a URL (including image URLs)
+  const isUrl = (value: string): boolean => {
+    if (!value || typeof value !== 'string') return false;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      // Check if it looks like a URL even without protocol
+      return /^(https?:\/\/|www\.)/i.test(value.trim());
+    }
+  };
+
+  // Check if a URL is an image
+  const isImageUrl = (url: string): boolean => {
+    const imageExtensions = /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?.*)?$/i;
+    return imageExtensions.test(url) || /drive\.google\.com|dropbox\.com|imgur\.com/i.test(url);
+  };
+
+  // Render value - make URLs clickable
+  const renderValue = (value: string) => {
+    if (!value) return value;
+    
+    // Check if the entire value is a URL
+    if (isUrl(value)) {
+      const url = value.startsWith('http') ? value : `https://${value}`;
+      const isImage = isImageUrl(url);
+      
+      return (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 underline break-all"
+        >
+          {isImage ? (
+            <span className="flex items-center gap-1">
+              <span>🖼️</span>
+              <span>View Image</span>
+            </span>
+          ) : (
+            value
+          )}
+        </a>
+      );
+    }
+    
+    // Check if value contains URLs (for cases where there's text + URL)
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    const parts = value.split(urlRegex);
+    
+    if (parts.length > 1) {
+      return (
+        <>
+          {parts.map((part, index) => {
+            if (isUrl(part)) {
+              const url = part.startsWith('http') ? part : `https://${part}`;
+              const isImage = isImageUrl(url);
+              return (
+                <a
+                  key={index}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 underline break-all"
+                >
+                  {isImage ? (
+                    <span className="flex items-center gap-1">
+                      <span>🖼️</span>
+                      <span>View Image</span>
+                    </span>
+                  ) : (
+                    part
+                  )}
+                </a>
+              );
+            }
+            return <span key={index}>{part}</span>;
+          })}
+        </>
+      );
+    }
+    
+    return value;
   };
 
   return (
@@ -114,25 +200,46 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
           </div>
         )}
 
-        <div className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm shadow-sm shadow-slate-900/5">
-          <p className="font-semibold">Status</p>
-          <p className="capitalize text-slate-600">{booking.status.replace('_', ' ')}</p>
-        </div>
+        <div className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm shadow-sm shadow-slate-900/5 space-y-2">
+          <div>
+            <p className="font-semibold">Status</p>
+            <p className="capitalize text-slate-600">{booking.status.replace('_', ' ')}</p>
+          </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm shadow-sm shadow-slate-900/5">
-          <p className="font-semibold mb-1.5 sm:mb-2">Customer responses</p>
-          {entries.length === 0 && <p className="text-slate-500">Waiting for form submission.</p>}
-          {entries.length > 0 && (
-            <dl className="space-y-1.5 sm:space-y-2">
-              {entries.map(([key, value]) => (
-                <div key={key} className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-3">
-                  <dt className="text-slate-500 break-words">{key}</dt>
-                  <dd className="font-medium break-words sm:text-right">{value}</dd>
-                </div>
-              ))}
-            </dl>
+          {/* Only show the \"Include 10% commission\" toggle before confirmation */}
+          {booking.status !== 'confirmed' && (
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <label className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={withAssistantCommission}
+                  onChange={(e) => setWithAssistantCommission(e.target.checked)}
+                  className="h-3 w-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span>Include 10% commission for sister</span>
+              </label>
+            </div>
           )}
         </div>
+
+        {/* In Calendar & Slots tab, hide the full form responses once booking is confirmed.
+            Admins can still view the complete form in the View Bookings tab via the eye icon. */}
+        {booking.status !== 'confirmed' && (
+          <div className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm shadow-sm shadow-slate-900/5">
+            <p className="font-semibold mb-1.5 sm:mb-2">Customer responses</p>
+            {entries.length === 0 && <p className="text-slate-500">Waiting for form submission.</p>}
+            {entries.length > 0 && (
+              <dl className="space-y-1.5 sm:space-y-2">
+                {entries.map(([key, value]) => (
+                  <div key={key} className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-3">
+                    <dt className="text-slate-500 break-words">{key}</dt>
+                    <dd className="font-medium break-words sm:text-right">{renderValue(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-4 sm:mt-6 space-y-2">

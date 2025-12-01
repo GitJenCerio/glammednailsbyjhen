@@ -8,6 +8,8 @@ type SlotCardProps = {
 };
 
 export function SlotCard({ slot, onEdit, onDelete }: SlotCardProps) {
+  const isConfirmed = slot.status === 'confirmed';
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm shadow-slate-900/5 hover:shadow-md hover:shadow-slate-900/10 transition-shadow duration-200">
       <div className="flex-1 min-w-0">
@@ -25,15 +27,25 @@ export function SlotCard({ slot, onEdit, onDelete }: SlotCardProps) {
       <div className="flex gap-2 flex-shrink-0">
         <button
           type="button"
-          onClick={() => onEdit(slot)}
-          className="rounded-full border border-slate-300 px-3 py-1.5 sm:py-1 text-xs font-semibold hover:border-slate-900 touch-manipulation active:scale-95"
+          onClick={() => !isConfirmed && onEdit(slot)}
+          disabled={isConfirmed}
+          className={`rounded-full border px-3 py-1.5 sm:py-1 text-xs font-semibold touch-manipulation active:scale-95 ${
+            isConfirmed
+              ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+              : 'border-slate-300 hover:border-slate-900'
+          }`}
         >
           Edit
         </button>
         <button
           type="button"
-          onClick={() => onDelete(slot)}
-          className="rounded-full border border-rose-300 px-3 py-1.5 sm:py-1 text-xs font-semibold text-rose-600 hover:border-rose-700 touch-manipulation active:scale-95"
+          onClick={() => !isConfirmed && onDelete(slot)}
+          disabled={isConfirmed}
+          className={`rounded-full border px-3 py-1.5 sm:py-1 text-xs font-semibold touch-manipulation active:scale-95 ${
+            isConfirmed
+              ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+              : 'border-rose-300 text-rose-600 hover:border-rose-700'
+          }`}
         >
           Delete
         </button>

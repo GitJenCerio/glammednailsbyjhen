@@ -6,6 +6,7 @@ import { listBlockedDates } from './blockService';
 import { slotIsBlocked } from '../scheduling';
 import { buildPrefilledGoogleFormUrl } from '../googleForms';
 import { getNextSlotTime } from '../constants/slots';
+import { findOrCreateCustomer } from './customerService';
 
 const bookingsCollection = adminDb.collection('bookings');
 const slotsCollection = adminDb.collection('slots');
@@ -164,9 +165,14 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 
     const bookingRef = bookingsCollection.doc();
     const clientType = options?.clientType;
+    
+    // Note: customerId will be set when form is submitted via syncBookingWithForm
+    // For now, we'll use a placeholder that will be updated
+    // This is acceptable because the booking is in 'pending_form' status
     const bookingData: any = {
       slotId,
       bookingId,
+      customerId: 'PENDING_FORM_SUBMISSION', // Will be updated when form is submitted
       serviceType,
       status: 'pending_form' as BookingStatus,
       createdAt: Timestamp.now().toDate().toISOString(),
@@ -381,7 +387,12 @@ export async function syncBookingWithForm(
     }
   }
 
+  // Find or create customer from form data
+  // This happens outside transaction to avoid conflicts
+  const customer = await findOrCreateCustomer(formData);
+  
   const updateData: any = {
+    customerId: customer.id, // Link booking to customer
     customerData: formData,
     status: 'pending_payment',
     formResponseId,
@@ -422,7 +433,7 @@ export async function syncBookingWithForm(
   });
 }
 
-export async function confirmBooking(bookingId: string, depositAmount?: number) {
+export async function confirmBooking(bookingId: string, depositAmount?: number, withAssistantCommission?: boolean) {
   await adminDb.runTransaction(async (transaction) => {
     // ALL READS MUST HAPPEN FIRST
     const bookingRef = bookingsCollection.doc(bookingId);
@@ -467,10 +478,19 @@ export async function confirmBooking(bookingId: string, depositAmount?: number) 
       updatedAt: Timestamp.now().toDate().toISOString(),
     };
     
+    // When confirming with a deposit, record it separately.
+    // We intentionally do NOT set paidAmount here.
+    // paidAmount is used for payments made AFTER the deposit (e.g. remaining balance).
     if (depositAmount !== undefined && depositAmount !== null && depositAmount > 0) {
       updateData.depositAmount = depositAmount;
       updateData.paymentStatus = 'partial';
-      updateData.paidAmount = depositAmount;
+    }
+
+    // If this booking should include assistant commission (e.g. sister helped),
+    // store the assistant name and a fixed 10% commission rate.
+    if (withAssistantCommission) {
+      updateData.assistantName = 'Sister';
+      updateData.assistantCommissionRate = 0.1; // 10%
     }
     
     transaction.update(bookingRef, updateData);
@@ -713,16 +733,26 @@ export async function releaseExpiredPendingBookings(maxAgeMinutes = 20) {
 }
 
 function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking {
+  // Backward compatibility: if customerId doesn't exist, use placeholder
+  // Migration script will handle creating customers for old bookings
+  let customerId = data.customerId;
+  if (!customerId) {
+    customerId = 'MIGRATION_NEEDED';
+  }
+  
   return {
     id,
     slotId: data.slotId,
     pairedSlotId: data.pairedSlotId ?? null,
     linkedSlotIds: data.linkedSlotIds ?? undefined,
     bookingId: data.bookingId,
+    customerId: customerId, // Required field
     status: data.status,
     serviceType: data.serviceType,
     clientType: data.clientType,
     serviceLocation: data.serviceLocation,
+    assistantName: data.assistantName ?? undefined,
+    assistantCommissionRate: data.assistantCommissionRate ?? undefined,
     customerData: data.customerData ?? undefined,
     customerDataOrder: data.customerDataOrder ?? undefined,
     formResponseId: data.formResponseId,

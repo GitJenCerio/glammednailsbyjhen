@@ -15,7 +15,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   if (body?.action === 'confirm') {
     const depositAmount = body.depositAmount !== undefined && body.depositAmount !== null ? Number(body.depositAmount) : undefined;
-    await confirmBooking(params.id, depositAmount);
+    const withAssistantCommission = Boolean(body.withAssistantCommission);
+    await confirmBooking(params.id, depositAmount, withAssistantCommission);
     return NextResponse.json({ success: true });
   }
 

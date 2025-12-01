@@ -2,13 +2,17 @@
 
 import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import type { Booking, BookingWithSlot, PaymentStatus } from '@/lib/types';
+import type { Booking, BookingWithSlot, PaymentStatus, Customer } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
+import { PaymentModal } from './modals/PaymentModal';
 
 type FinanceViewProps = {
   bookings: Booking[];
   slots: any[];
+  customers?: Customer[];
 };
+
+type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 
 const paymentStatusLabels: Record<PaymentStatus, string> = {
   unpaid: 'Unpaid',
@@ -24,9 +28,12 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
   refunded: 'bg-gray-100 text-gray-800 border-gray-200',
 };
 
-export function FinanceView({ bookings, slots }: FinanceViewProps) {
+export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProps) {
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'week' | 'month'>('all');
+  const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
@@ -43,10 +50,33 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
   }, [bookings, slots]);
 
   const getCustomerName = (booking: Booking) => {
-    if (!booking.customerData) return booking.bookingId;
-    const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
-    const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
-    return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
+    // 1) Always prefer the name the client typed in the form (per booking)
+    if (booking.customerData) {
+      const name =
+        booking.customerData['Name'] ||
+        booking.customerData['name'] ||
+        booking.customerData['Full Name'] ||
+        booking.customerData['fullName'] ||
+        '';
+      const surname =
+        booking.customerData['Surname'] ||
+        booking.customerData['surname'] ||
+        booking.customerData['Last Name'] ||
+        booking.customerData['lastName'] ||
+        '';
+
+      const fullName = `${name}${name && surname ? ' ' : ''}${surname}`.trim();
+      if (fullName) return fullName;
+    }
+
+    // 2) If no form data, fall back to Customer record (shared by email/phone)
+    if (booking.customerId && customers.length > 0) {
+      const customer = customers.find((c) => c.id === booking.customerId);
+      if (customer?.name) return customer.name;
+    }
+
+    // 3) Last fallback: bookingId
+    return booking.bookingId;
   };
 
   const filteredBookings = useMemo(() => {
@@ -74,6 +104,17 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
       });
     }
 
+    // Month filter (by invoice/updated date month)
+    if (monthFilter !== 'all') {
+      filtered = filtered.filter((booking) => {
+        const bookingDate = booking.invoice?.createdAt
+          ? new Date(booking.invoice.createdAt)
+          : new Date(booking.updatedAt);
+        const monthIndex = bookingDate.getMonth() + 1; // 1-12
+        return monthIndex === monthFilter;
+      });
+    }
+
     return filtered.sort((a, b) => {
       // Sort by invoice date if available, otherwise by booking updated date
       const dateA = a.invoice?.createdAt 
@@ -84,7 +125,7 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
         : new Date(b.updatedAt).getTime();
       return dateB - dateA;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter]);
 
   const totals = useMemo(() => {
     const unpaid = filteredBookings
@@ -99,7 +140,7 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
       .reduce((sum, b) => {
         const total = b.invoice?.total || 0;
         const deposit = b.depositAmount || 0;
-        const paid = b.paidAmount || deposit; // Use deposit as paid amount if no paidAmount set
+        const paid = b.paidAmount || 0; // paidAmount represents payments AFTER deposit
         // For bookings without invoice, only count the deposit as partial payment
         if (!b.invoice) {
           return sum + deposit;
@@ -113,17 +154,25 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
         const tip = b.tipAmount || 0;
         return sum + invoiceTotal + tip; // Include tips in paid revenue
       }, 0);
+    // Total Revenue = Total amount actually received (deposits + payments + tips)
     const total = filteredBookings.reduce((sum, b) => {
-      const invoiceTotal = b.invoice?.total || 0;
       const deposit = b.depositAmount || 0;
-      // For bookings without invoice, count deposit as revenue
-      if (!b.invoice && deposit > 0) {
-        return sum + deposit;
-      }
-      return sum + (invoiceTotal - deposit);
+      const paid = b.paidAmount || 0;
+      const tip = b.tipAmount || 0;
+      // Sum all amounts actually received
+      return sum + deposit + paid + tip;
     }, 0);
     const tips = filteredBookings.reduce((sum, b) => sum + (b.tipAmount || 0), 0);
-    return { unpaid, partial, paid, total, tips };
+
+    // Sister commission: 10% of invoice total for bookings marked with assistant commission
+    const sisterCommissionTotal = filteredBookings.reduce((sum, b) => {
+      if (b.assistantName === 'Sister' && b.assistantCommissionRate && b.invoice?.total) {
+        return sum + b.invoice.total * b.assistantCommissionRate;
+      }
+      return sum;
+    }, 0);
+
+    return { unpaid, partial, paid, total, tips, sisterCommissionTotal };
   }, [filteredBookings]);
 
   const handleUpdatePayment = async (bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number) => {
@@ -147,31 +196,36 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm flex flex-col justify-center">
           <p className="text-xs text-slate-500 mb-1">Total Revenue</p>
           <p className="text-2xl font-bold text-slate-900">₱{totals.total.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-4 shadow-sm">
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
           <p className="text-xs text-green-600 mb-1">Paid</p>
           <p className="text-2xl font-bold text-green-700">₱{totals.paid.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
+        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
           <p className="text-xs text-yellow-600 mb-1">Partial</p>
           <p className="text-2xl font-bold text-yellow-700">₱{totals.partial.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
           <p className="text-xs text-red-600 mb-1">Unpaid</p>
           <p className="text-2xl font-bold text-red-700">₱{totals.unpaid.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 shadow-sm">
+        <div className="rounded-2xl border border-purple-200 bg-purple-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
           <p className="text-xs text-purple-600 mb-1">Total Tips</p>
           <p className="text-2xl font-bold text-purple-700">₱{totals.tips.toLocaleString('en-PH')}</p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4 shadow-sm flex flex-col justify-center">
+          <p className="text-xs text-amber-600 mb-1">Sister Commission (10%)</p>
+          <p className="text-2xl font-bold text-amber-700">₱{totals.sisterCommissionTotal.toLocaleString('en-PH')}</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-start sm:items-center justify-between">
+        {/* Status filter */}
         <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
           <button
             onClick={() => setFilterStatus('all')}
@@ -206,6 +260,8 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
             Paid
           </button>
         </div>
+
+        {/* Period filter */}
         <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
           <button
             onClick={() => setFilterPeriod('all')}
@@ -231,6 +287,32 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
           >
             This Month
           </button>
+        </div>
+
+        {/* Month filter */}
+        <div className="flex items-center gap-2">
+          <label className="text-[11px] sm:text-xs text-slate-500">Month:</label>
+          <select
+            value={monthFilter}
+            onChange={(e) =>
+              setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter))
+            }
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+          >
+            <option value="all">All months</option>
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
         </div>
       </div>
 
@@ -355,9 +437,9 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
                     </span>
                   </div>
                 )}
-                {booking.paymentStatus === 'partial' && booking.paidAmount && (
+                {typeof booking.paidAmount === 'number' && booking.paidAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Paid (after DP):</span>
+                    <span className="text-slate-500">Amount Paid (after DP):</span>
                     <span className="font-medium text-slate-600">
                       ₱{booking.paidAmount.toLocaleString('en-PH')}
                     </span>
@@ -382,23 +464,9 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
                       Partial
                     </button>
                     <button
-                      onClick={async () => {
-                        const total = booking.invoice?.total || 0;
-                        const deposit = booking.depositAmount || 0;
-                        const balance = total - deposit;
-                        const paidAmount = booking.paidAmount || 0;
-                        const remainingBalance = balance - paidAmount;
-                        
-                        const amountPaidStr = prompt(
-                          `Enter amount paid (₱):\n\nBalance: ₱${remainingBalance.toLocaleString('en-PH')}\nDeposit: ₱${deposit.toLocaleString('en-PH')}\nTotal: ₱${total.toLocaleString('en-PH')}`
-                        );
-                        if (!amountPaidStr || isNaN(Number(amountPaidStr))) return;
-                        
-                        const amountPaid = Number(amountPaidStr);
-                        const totalPaid = (booking.paidAmount || 0) + amountPaid;
-                        const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
-                        
-                        await handleUpdatePayment(booking.id, 'paid', totalPaid, tipAmount);
+                      onClick={() => {
+                        setSelectedBookingForPayment(booking);
+                        setPaymentModalOpen(true);
                       }}
                       className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
                     >
@@ -442,7 +510,13 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
                   Deposit (DP)
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Amount Paid
+                </th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Balance
+                </th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Sister 10%
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Status
@@ -455,14 +529,14 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
             <tbody className="divide-y divide-slate-200">
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={10} className="px-6 py-12 text-center text-sm text-slate-500">
                     No invoices found.
                   </td>
                 </tr>
               ) : (
                 filteredBookings.map((booking) => (
                   <tr key={booking.id} className="hover:bg-slate-50">
-                    <td className="px-4 xl:px-6 py-3">
+                  <td className="px-4 xl:px-6 py-3">
                       <span className="text-xs xl:text-sm font-semibold text-slate-900">{booking.bookingId}</span>
                     </td>
                     <td className="px-4 xl:px-6 py-3">
@@ -536,6 +610,15 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
                       )}
                     </td>
                     <td className="px-4 xl:px-6 py-3">
+                      {typeof booking.paidAmount === 'number' && booking.paidAmount > 0 ? (
+                        <span className="text-xs xl:text-sm font-semibold text-slate-900">
+                          ₱{booking.paidAmount.toLocaleString('en-PH')}
+                        </span>
+                      ) : (
+                        <span className="text-xs xl:text-sm text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 xl:px-6 py-3">
                       {booking.invoice ? (
                         <>
                           <span className={`text-xs xl:text-sm font-bold ${(() => {
@@ -565,8 +648,22 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
                           )}
                         </>
                       ) : booking.depositAmount ? (
-                        <span className="text-xs xl:text-sm font-bold text-emerald-700">
-                          ₱{booking.depositAmount.toLocaleString('en-PH')} (DP only)
+                        <div className="space-y-0.5">
+                          <span className="text-xs xl:text-sm font-bold text-emerald-700">
+                            ₱0
+                          </span>
+                          <p className="text-[10px] xl:text-xs text-slate-500">
+                            DP only: ₱{booking.depositAmount.toLocaleString('en-PH')}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-xs xl:text-sm text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 xl:px-6 py-3">
+                      {booking.assistantName === 'Sister' && booking.assistantCommissionRate && booking.invoice?.total ? (
+                        <span className="text-xs xl:text-sm font-semibold text-amber-700">
+                          ₱{(booking.invoice.total * booking.assistantCommissionRate).toLocaleString('en-PH')}
                         </span>
                       ) : (
                         <span className="text-xs xl:text-sm text-slate-400">—</span>
@@ -592,23 +689,9 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
                               Partial
                             </button>
                             <button
-                              onClick={async () => {
-                                const total = booking.invoice?.total || 0;
-                                const deposit = booking.depositAmount || 0;
-                                const balance = total - deposit;
-                                const paidAmount = booking.paidAmount || 0;
-                                const remainingBalance = balance - paidAmount;
-                                
-                                const amountPaidStr = prompt(
-                                  `Enter amount paid (₱):\n\nBalance: ₱${remainingBalance.toLocaleString('en-PH')}\nDeposit: ₱${deposit.toLocaleString('en-PH')}\nTotal: ₱${total.toLocaleString('en-PH')}`
-                                );
-                                if (!amountPaidStr || isNaN(Number(amountPaidStr))) return;
-                                
-                                const amountPaid = Number(amountPaidStr);
-                                const totalPaid = (booking.paidAmount || 0) + amountPaid;
-                                const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
-                                
-                                await handleUpdatePayment(booking.id, 'paid', totalPaid, tipAmount);
+                              onClick={() => {
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
                               }}
                               className="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
                             >
@@ -633,6 +716,27 @@ export function FinanceView({ bookings, slots }: FinanceViewProps) {
           </table>
         </div>
       </div>
+
+      <PaymentModal
+        open={paymentModalOpen}
+        booking={selectedBookingForPayment}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          setSelectedBookingForPayment(null);
+        }}
+        onSubmit={async (amountPaid) => {
+          if (!selectedBookingForPayment) return;
+          
+          const total = selectedBookingForPayment.invoice?.total || 0;
+          const deposit = selectedBookingForPayment.depositAmount || 0;
+          const balance = total - deposit;
+          const totalPaid = (selectedBookingForPayment.paidAmount || 0) + amountPaid;
+          const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
+          const paymentStatus: PaymentStatus = totalPaid >= balance ? 'paid' : 'partial';
+          
+          await handleUpdatePayment(selectedBookingForPayment.id, paymentStatus, totalPaid, tipAmount);
+        }}
+      />
     </div>
   );
 }

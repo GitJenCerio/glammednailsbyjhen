@@ -1,10 +1,15 @@
 'use client';
 
 import { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import type { Booking, Slot, BookingWithSlot } from '@/lib/types';
+import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
+import { PaymentModal } from '@/components/admin/modals/PaymentModal';
 
 type FilterPeriod = 'day' | 'week' | 'month' | 'all';
+type StatusFilter = 'all' | 'upcoming' | 'done';
+type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 
 interface BookingsViewProps {
   bookings: Booking[];
@@ -39,9 +44,15 @@ const serviceLabels: Record<string, string> = {
 
 export function BookingsView({ bookings, slots, selectedDate, onCancel, onReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
   const [clientTypeMap, setClientTypeMap] = useState<Record<string, 'repeat' | 'new'>>({});
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [responseModalBooking, setResponseModalBooking] = useState<BookingWithSlot | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<BookingWithSlot | null>(null);
 
   // Combine bookings with slots
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
@@ -117,56 +128,120 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
     setClientTypeMap(typeMap);
   }, [bookingsWithSlots]);
 
-  // Filter bookings by period
+  // Finance helpers for desktop + mobile views
+  const getFinanceSummary = (booking: BookingWithSlot) => {
+    const total = booking.invoice?.total || 0;
+    const deposit = booking.depositAmount || 0;
+    const paid = booking.paidAmount || 0;
+
+    let balance = 0;
+    if (booking.invoice) {
+      const rawBalance = total - deposit - paid;
+      balance = Math.max(0, rawBalance);
+    } else if (deposit > 0) {
+      // If there's only a deposit and no invoice, treat balance as 0 for display
+      balance = 0;
+    }
+
+    return { total, deposit, paid, balance };
+  };
+
+  // Map booking/payment status into friendly stage labels for the bookings table
+  const getBookingStageLabel = (booking: BookingWithSlot): string => {
+    const hasInvoice = !!booking.invoice;
+    const { deposit, balance } = getFinanceSummary(booking);
+
+    // Before invoice exists
+    if (!hasInvoice) {
+      if (booking.status === 'pending_form') return 'Awaiting Form';
+      if (booking.status === 'pending_payment') return 'Awaiting DP';
+      if (booking.status === 'confirmed') return 'Confirmed';
+      return String(booking.status).replace('_', ' ');
+    }
+
+    // With invoice
+    if (booking.paymentStatus === 'paid' || balance === 0) {
+      return 'Done';
+    }
+
+    if (booking.paymentStatus === 'unpaid' && deposit === 0) {
+      return 'Awaiting DP';
+    }
+
+    // Invoice exists and there is still balance to pay
+    return 'Invoice generated';
+  };
+
+  // Filter bookings by period, status, and month
   const filteredBookings = useMemo(() => {
-    // If filter is 'all', show all bookings without date filtering
+    let result: BookingWithSlot[];
+
+    // Base date filtering (All / Day / Week / Month)
     if (filterPeriod === 'all') {
-      return bookingsWithSlots.filter((booking) => {
-        return booking.slot !== undefined; // Only filter out bookings without slots
-      }).sort((a, b) => {
-        // Sort by date and time (most recent first)
-        if (!a.slot || !b.slot) return 0;
-        const dateCompare = b.slot.date.localeCompare(a.slot.date); // Reverse for newest first
-        if (dateCompare !== 0) return dateCompare;
-        return b.slot.time.localeCompare(a.slot.time); // Reverse for newest first
+      result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+    } else {
+      const baseDate = parseISO(selectedDate);
+      let start: Date;
+      let end: Date;
+
+      switch (filterPeriod) {
+        case 'day':
+          start = startOfDay(baseDate);
+          end = endOfDay(baseDate);
+          break;
+        case 'week':
+          start = startOfWeek(baseDate, { weekStartsOn: 1 }); // Monday
+          end = endOfWeek(baseDate, { weekStartsOn: 1 });
+          break;
+        case 'month':
+          start = startOfMonth(baseDate);
+          end = endOfMonth(baseDate);
+          break;
+        default:
+          return bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+      }
+
+      result = bookingsWithSlots.filter((booking) => {
+        if (!booking.slot) return false;
+        const bookingDate = parseISO(booking.slot.date);
+        return isWithinInterval(bookingDate, { start, end });
       });
     }
 
-    // Otherwise, filter by the selected period
-    const baseDate = parseISO(selectedDate);
-    let start: Date;
-    let end: Date;
-
-    switch (filterPeriod) {
-      case 'day':
-        start = startOfDay(baseDate);
-        end = endOfDay(baseDate);
-        break;
-      case 'week':
-        start = startOfWeek(baseDate, { weekStartsOn: 1 }); // Monday
-        end = endOfWeek(baseDate, { weekStartsOn: 1 });
-        break;
-      case 'month':
-        start = startOfMonth(baseDate);
-        end = endOfMonth(baseDate);
-        break;
-      default:
-        // Should not reach here, but handle gracefully
-        return bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+    // Month filter (January, February, etc.)
+    if (monthFilter !== 'all') {
+      result = result.filter((booking) => {
+        if (!booking.slot) return false;
+        const monthIndex = parseISO(booking.slot.date).getMonth() + 1; // 1-12
+        return monthIndex === monthFilter;
+      });
     }
 
-    return bookingsWithSlots.filter((booking) => {
-      if (!booking.slot) return false;
-      const bookingDate = parseISO(booking.slot.date);
-      return isWithinInterval(bookingDate, { start, end });
-    }).sort((a, b) => {
-      // Sort by date and time
+    // Status filter (Upcoming vs Done)
+    if (statusFilter !== 'all') {
+      result = result.filter((booking) => {
+        const stage = getBookingStageLabel(booking);
+        if (statusFilter === 'done') {
+          return stage === 'Done';
+        }
+        // 'upcoming' = anything not done
+        return stage !== 'Done';
+      });
+    }
+
+    // Sort by date and time (most recent first for 'all', otherwise ascending)
+    return result.sort((a, b) => {
       if (!a.slot || !b.slot) return 0;
-      const dateCompare = a.slot.date.localeCompare(b.slot.date);
+      const dateCompare =
+        filterPeriod === 'all'
+          ? b.slot.date.localeCompare(a.slot.date)
+          : a.slot.date.localeCompare(b.slot.date);
       if (dateCompare !== 0) return dateCompare;
-      return a.slot.time.localeCompare(b.slot.time);
+      return filterPeriod === 'all'
+        ? b.slot.time.localeCompare(a.slot.time)
+        : a.slot.time.localeCompare(b.slot.time);
     });
-  }, [bookingsWithSlots, selectedDate, filterPeriod]);
+  }, [bookingsWithSlots, selectedDate, filterPeriod, statusFilter, monthFilter]);
 
   const getCustomerName = (booking: BookingWithSlot): string => {
     if (!booking.customerData) return booking.bookingId;
@@ -228,18 +303,24 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (openDropdownId) {
-        // Check both mobile and desktop dropdown refs
+        // Check if click is outside all dropdown containers
         const allRefs = Object.values(dropdownRefs.current);
-        const clickedOutside = allRefs.every(
-          (ref) => ref && !ref.contains(event.target as Node)
+        const clickedInside = allRefs.some(
+          (ref) => ref && ref.contains(event.target as Node)
         );
-        if (clickedOutside) {
+        // Also check if clicking on the dropdown menu itself
+        const target = event.target as HTMLElement;
+        const isDropdownMenu = target.closest('.dropdown-menu');
+        if (!clickedInside && !isDropdownMenu) {
           setOpenDropdownId(null);
+          setDropdownPosition(null);
         }
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (openDropdownId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
   }, [openDropdownId]);
 
   const getTimeRange = (booking: BookingWithSlot): string => {
@@ -257,54 +338,120 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Filter Controls */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-        <div className="flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-auto">
-          <button
-            onClick={() => setFilterPeriod('all')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-              filterPeriod === 'all'
-                ? 'bg-black text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilterPeriod('day')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-              filterPeriod === 'day'
-                ? 'bg-black text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Day
-          </button>
-          <button
-            onClick={() => setFilterPeriod('week')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-              filterPeriod === 'week'
-                ? 'bg-black text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Week
-          </button>
-          <button
-            onClick={() => setFilterPeriod('month')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-              filterPeriod === 'month'
-                ? 'bg-black text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Month
-          </button>
+      <div className="space-y-2 sm:space-y-3">
+        {/* Date range filters */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-auto">
+            <button
+              onClick={() => setFilterPeriod('all')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                filterPeriod === 'all'
+                  ? 'bg-black text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterPeriod('day')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                filterPeriod === 'day'
+                  ? 'bg-black text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Day
+            </button>
+            <button
+              onClick={() => setFilterPeriod('week')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                filterPeriod === 'week'
+                  ? 'bg-black text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Week
+            </button>
+            <button
+              onClick={() => setFilterPeriod('month')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                filterPeriod === 'month'
+                  ? 'bg-black text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Month
+            </button>
+          </div>
+          <div className="text-xs sm:text-sm text-slate-600">
+            {filterPeriod === 'all' 
+              ? `Showing all ${filteredBookings.length} booking${filteredBookings.length !== 1 ? 's' : ''}`
+              : `Showing ${filteredBookings.length} booking${filteredBookings.length !== 1 ? 's' : ''}`
+            }
+          </div>
         </div>
-        <div className="text-xs sm:text-sm text-slate-600">
-          {filterPeriod === 'all' 
-            ? `Showing all ${filteredBookings.length} booking${filteredBookings.length !== 1 ? 's' : ''}`
-            : `Showing ${filteredBookings.length} booking${filteredBookings.length !== 1 ? 's' : ''}`
-          }
+
+        {/* Status + Month filters */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          {/* Status filter: All / Upcoming / Done */}
+          <div className="flex gap-1.5 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-auto">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold transition touch-manipulation ${
+                statusFilter === 'all'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              All statuses
+            </button>
+            <button
+              onClick={() => setStatusFilter('upcoming')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold transition touch-manipulation ${
+                statusFilter === 'upcoming'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Upcoming
+            </button>
+            <button
+              onClick={() => setStatusFilter('done')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold transition touch-manipulation ${
+                statusFilter === 'done'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Done
+            </button>
+          </div>
+
+          {/* Month dropdown: All, Jan, Feb, ... */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] sm:text-xs text-slate-500">Month:</label>
+            <select
+              value={monthFilter}
+              onChange={(e) =>
+                setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter))
+              }
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+            >
+              <option value="all">All months</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -320,6 +467,8 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
         ) : (
           filteredBookings.map((booking) => {
             const clientType = booking.clientType || clientTypeMap[booking.id];
+            const stageLabel = getBookingStageLabel(booking);
+            const isDone = stageLabel === 'Done';
             return (
               <div key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between mb-3">
@@ -343,7 +492,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                       statusColors[booking.status] || 'bg-gray-100 text-gray-800 border-gray-200'
                     }`}
                   >
-                    {statusLabels[booking.status] || booking.status}
+                    {stageLabel}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs sm:text-sm">
@@ -359,6 +508,32 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                     <span className="text-slate-500">Contact:</span>
                     <span className="font-medium text-slate-600 break-all">{getCustomerPhone(booking)}</span>
                   </div>
+                  {booking.invoice && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Total:</span>
+                        <span className="font-semibold text-slate-900">
+                          ₱{getFinanceSummary(booking).total.toLocaleString('en-PH')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Deposit:</span>
+                        <span className="font-medium text-emerald-700">
+                          ₱{getFinanceSummary(booking).deposit.toLocaleString('en-PH')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Balance:</span>
+                        <span
+                          className={`font-semibold ${
+                            getFinanceSummary(booking).balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                          }`}
+                        >
+                          ₱{getFinanceSummary(booking).balance.toLocaleString('en-PH')}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500">Client Type:</span>
                     {clientType ? (
@@ -377,7 +552,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center">
-                  {onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
+                  {!isDone && onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
                     <>
                       <button
                         onClick={() => onUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
@@ -386,23 +561,9 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                         Partial
                       </button>
                       <button
-                        onClick={async () => {
-                          const total = booking.invoice?.total || 0;
-                          const deposit = booking.depositAmount || 0;
-                          const balance = total - deposit;
-                          const paidAmount = booking.paidAmount || 0;
-                          const remainingBalance = balance - paidAmount;
-                          
-                          const amountPaidStr = prompt(
-                            `Enter amount paid (₱):\n\nBalance: ₱${remainingBalance.toLocaleString('en-PH')}\nDeposit: ₱${deposit.toLocaleString('en-PH')}\nTotal: ₱${total.toLocaleString('en-PH')}`
-                          );
-                          if (!amountPaidStr || isNaN(Number(amountPaidStr))) return;
-                          
-                          const amountPaid = Number(amountPaidStr);
-                          const totalPaid = (booking.paidAmount || 0) + amountPaid;
-                          const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
-                          
-                          await onUpdatePayment(booking.id, 'paid', totalPaid, tipAmount);
+                        onClick={() => {
+                          setSelectedBookingForPayment(booking);
+                          setPaymentModalOpen(true);
                         }}
                         className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
                       >
@@ -412,7 +573,16 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                   )}
                   {/* Mobile: Show buttons directly, Desktop: Use dropdown */}
                   <div className="lg:hidden flex flex-wrap gap-2">
-                    {onMakeQuotation && (
+                    {booking.customerData && Object.keys(booking.customerData).length > 0 && (
+                      <button
+                        onClick={() => setResponseModalBooking(booking)}
+                        className="inline-flex items-center gap-1 rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
+                      >
+                        <span>👁️</span>
+                        <span>View</span>
+                      </button>
+                    )}
+                    {!isDone && onMakeQuotation && (
                       <button
                         onClick={() => onMakeQuotation(booking.id)}
                         className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700"
@@ -420,7 +590,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                         Quote
                       </button>
                     )}
-                    {onReschedule && booking.status !== 'cancelled' && !booking.invoice && (
+                    {!isDone && onReschedule && !booking.invoice && (
                       <button
                         onClick={() => onReschedule(booking.id)}
                         className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
@@ -428,7 +598,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                         Resched
                       </button>
                     )}
-                    {onCancel && booking.status !== 'cancelled' && (
+                    {!isDone && onCancel && (
                       <button
                         onClick={() => {
                           if (confirm('Are you sure you want to cancel this booking?')) {
@@ -443,7 +613,12 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                   </div>
                   {/* Desktop: Actions Dropdown */}
                   {(onMakeQuotation || onReschedule || onCancel) && (
-                    <div className="hidden lg:block relative" ref={(el) => (dropdownRefs.current[booking.id] = el)}>
+                    <div
+                      className="hidden lg:block relative"
+                      ref={(el: HTMLDivElement | null) => {
+                        dropdownRefs.current[booking.id] = el;
+                      }}
+                    >
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -462,6 +637,20 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="py-1">
+                            {booking.customerData && Object.keys(booking.customerData).length > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setResponseModalBooking(booking);
+                                  setOpenDropdownId(null);
+                                  setDropdownPosition(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                              >
+                                <span>👁️</span>
+                                View Response
+                              </button>
+                            )}
                             {onMakeQuotation && (
                               <button
                                 onClick={(e) => {
@@ -475,7 +664,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                 Quotation
                               </button>
                             )}
-                            {onReschedule && booking.status !== 'cancelled' && !booking.invoice && (
+                            {!isDone && onReschedule && !booking.invoice && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -488,7 +677,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                 Reschedule
                               </button>
                             )}
-                            {onCancel && booking.status !== 'cancelled' && (
+                            {!isDone && onCancel && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -516,7 +705,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-sm relative">
         <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full min-w-[800px]">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -542,6 +731,18 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                 <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Client Type
                 </th>
+                <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Form
+                </th>
+                <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Total
+                </th>
+                <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Deposit
+                </th>
+                <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Balance
+                </th>
                 <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Status
                 </th>
@@ -553,7 +754,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
             <tbody className="divide-y divide-slate-200">
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={13} className="px-6 py-12 text-center text-sm text-slate-500">
                     {filterPeriod === 'all' 
                       ? 'No bookings found.'
                       : `No bookings found for the selected ${filterPeriod}.`
@@ -563,6 +764,8 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
               ) : (
                 filteredBookings.map((booking) => {
                   const clientType = booking.clientType || clientTypeMap[booking.id];
+                  const stageLabel = getBookingStageLabel(booking);
+                  const isDone = stageLabel === 'Done';
                   return (
                     <tr key={booking.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
@@ -616,18 +819,66 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                           <span className="text-xs xl:text-sm text-slate-400">N/A</span>
                         )}
                       </td>
+                      {/* Form quick view icon */}
+                      <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
+                        {booking.customerData && Object.keys(booking.customerData).length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setResponseModalBooking(booking)}
+                            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+                            title="View form response"
+                          >
+                            👁️
+                          </button>
+                        ) : (
+                          <span className="text-[10px] xl:text-xs text-slate-400">No form</span>
+                        )}
+                      </td>
+
+                      {/* Finance columns */}
+                      <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
+                        {booking.invoice ? (
+                          <span className="text-xs xl:text-sm font-semibold text-slate-900">
+                            ₱{getFinanceSummary(booking).total.toLocaleString('en-PH')}
+                          </span>
+                        ) : (
+                          <span className="text-xs xl:text-sm text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
+                        {booking.depositAmount ? (
+                          <span className="text-xs xl:text-sm font-semibold text-emerald-700">
+                            ₱{(booking.depositAmount || 0).toLocaleString('en-PH')}
+                          </span>
+                        ) : (
+                          <span className="text-xs xl:text-sm text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
+                        {booking.invoice || booking.depositAmount ? (
+                          <span
+                            className={`text-xs xl:text-sm font-semibold ${
+                              getFinanceSummary(booking).balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                            }`}
+                          >
+                            ₱{getFinanceSummary(booking).balance.toLocaleString('en-PH')}
+                          </span>
+                        ) : (
+                          <span className="text-xs xl:text-sm text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                             statusColors[booking.status] || 'bg-gray-100 text-gray-800 border-gray-200'
                           }`}
                         >
-                          {statusLabels[booking.status] || booking.status}
+                          {stageLabel}
                         </span>
                       </td>
                       <td className="px-4 xl:px-6 py-3 xl:py-4 whitespace-nowrap">
                         <div className="flex flex-wrap gap-2 items-center">
-                          {onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
+                          {!isDone && onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
                             <>
                               <button
                                 onClick={() => onUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
@@ -636,23 +887,9 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                 Partial
                               </button>
                               <button
-                                onClick={async () => {
-                                  const total = booking.invoice?.total || 0;
-                                  const deposit = booking.depositAmount || 0;
-                                  const balance = total - deposit;
-                                  const paidAmount = booking.paidAmount || 0;
-                                  const remainingBalance = balance - paidAmount;
-                                  
-                                  const amountPaidStr = prompt(
-                                    `Enter amount paid (₱):\n\nBalance: ₱${remainingBalance.toLocaleString('en-PH')}\nDeposit: ₱${deposit.toLocaleString('en-PH')}\nTotal: ₱${total.toLocaleString('en-PH')}`
-                                  );
-                                  if (!amountPaidStr || isNaN(Number(amountPaidStr))) return;
-                                  
-                                  const amountPaid = Number(amountPaidStr);
-                                  const totalPaid = (booking.paidAmount || 0) + amountPaid;
-                                  const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
-                                  
-                                  await onUpdatePayment(booking.id, 'paid', totalPaid, tipAmount);
+                                onClick={() => {
+                                  setSelectedBookingForPayment(booking);
+                                  setPaymentModalOpen(true);
                                 }}
                                 className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
                               >
@@ -662,11 +899,29 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                           )}
                           {/* Desktop: Actions Dropdown */}
                           {(onMakeQuotation || onReschedule || onCancel) && (
-                            <div className="relative" ref={(el) => (dropdownRefs.current[`desktop-${booking.id}`] = el)}>
+                            <div
+                              className="relative"
+                              ref={(el: HTMLDivElement | null) => {
+                                dropdownRefs.current[`desktop-${booking.id}`] = el;
+                              }}
+                            >
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setOpenDropdownId(openDropdownId === `desktop-${booking.id}` ? null : `desktop-${booking.id}`);
+                                  e.preventDefault();
+                                  const button = e.currentTarget;
+                                  const rect = button.getBoundingClientRect();
+                                  if (openDropdownId === `desktop-${booking.id}`) {
+                                    setOpenDropdownId(null);
+                                    setDropdownPosition(null);
+                                  } else {
+                                    setOpenDropdownId(`desktop-${booking.id}`);
+                                    setDropdownPosition({
+                                      top: rect.bottom + 4,
+                                      right: window.innerWidth - rect.right,
+                                    });
+                                  }
                                 }}
                                 className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
                               >
@@ -675,18 +930,28 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
                               </button>
-                              {openDropdownId === `desktop-${booking.id}` && (
+                              {openDropdownId === `desktop-${booking.id}` && dropdownPosition && typeof window !== 'undefined' && createPortal(
                                 <div 
-                                  className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
-                                  onClick={(e) => e.stopPropagation()}
+                                  className="dropdown-menu fixed w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                                  style={{
+                                    top: `${dropdownPosition.top}px`,
+                                    right: `${dropdownPosition.right}px`,
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
                                 >
                                   <div className="py-1">
-                                    {onMakeQuotation && (
+                                    {onMakeQuotation && !isDone && (
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
+                                          // If an invoice already exists, this acts as RE-QUOTE
                                           onMakeQuotation(booking.id);
                                           setOpenDropdownId(null);
+                                          setDropdownPosition(null);
                                         }}
                                         className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
                                       >
@@ -694,12 +959,14 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                         Quotation
                                       </button>
                                     )}
-                                    {onReschedule && booking.status !== 'cancelled' && (
+                                    {/* Once an invoice exists or booking is done, hide Reschedule and Cancel in desktop dropdown */}
+                                    {onReschedule && !isDone && !booking.invoice && (
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           onReschedule(booking.id);
                                           setOpenDropdownId(null);
+                                          setDropdownPosition(null);
                                         }}
                                         className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
                                       >
@@ -707,7 +974,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                         Reschedule
                                       </button>
                                     )}
-                                    {onCancel && booking.status !== 'cancelled' && (
+                                    {onCancel && !isDone && !booking.invoice && (
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -715,6 +982,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                             onCancel(booking.id);
                                           }
                                           setOpenDropdownId(null);
+                                          setDropdownPosition(null);
                                         }}
                                         className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
                                       >
@@ -723,7 +991,8 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                                       </button>
                                     )}
                                   </div>
-                                </div>
+                                </div>,
+                                document.body
                               )}
                             </div>
                           )}
@@ -737,6 +1006,42 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
           </table>
         </div>
       </div>
+
+      {/* Form Response Modal */}
+      <FormResponseModal
+        open={!!responseModalBooking}
+        booking={responseModalBooking ?? null}
+        onClose={() => setResponseModalBooking(null)}
+      />
+
+      {/* Payment Modal for bookings view */}
+      {onUpdatePayment && (
+        <PaymentModal
+          open={paymentModalOpen}
+          booking={selectedBookingForPayment}
+          onClose={() => {
+            setPaymentModalOpen(false);
+            setSelectedBookingForPayment(null);
+          }}
+          onSubmit={async (amountPaid) => {
+            if (!selectedBookingForPayment) return;
+
+            const total = selectedBookingForPayment.invoice?.total || 0;
+            const deposit = selectedBookingForPayment.depositAmount || 0;
+            const balance = total - deposit;
+            const totalPaid = (selectedBookingForPayment.paidAmount || 0) + amountPaid;
+            const tipAmount = totalPaid > balance ? totalPaid - balance : 0;
+            const paymentStatus = totalPaid >= balance ? 'paid' : 'partial';
+
+            await onUpdatePayment(
+              selectedBookingForPayment.id,
+              paymentStatus,
+              totalPaid,
+              tipAmount,
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

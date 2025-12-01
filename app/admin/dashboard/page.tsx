@@ -15,6 +15,9 @@ import { ServicesManager } from '@/components/admin/ServicesManager';
 import { QuotationModal } from '@/components/admin/modals/QuotationModal';
 import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
 import { FinanceView } from '@/components/admin/FinanceView';
+import { CustomerList } from '@/components/admin/CustomerList';
+import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
+import type { Customer } from '@/lib/types';
 
 const navItems = [
   { id: 'overview', label: 'Overview' },
@@ -45,6 +48,146 @@ export default function AdminDashboard() {
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerBookings, setCustomerBookings] = useState<Booking[]>([]);
+  const [customerLifetimeValue, setCustomerLifetimeValue] = useState(0);
+  const pendingBookingsCount = useMemo(
+    () => bookings.filter((booking) => 
+      booking.status === 'pending_payment' && 
+      booking.customerData && 
+      Object.keys(booking.customerData).length > 0
+    ).length,
+    [bookings],
+  );
+
+  const customerStats = useMemo(() => {
+    const totalCustomers = customers.length;
+
+    // Count bookings per customer
+    const bookingCounts: Record<string, number> = {};
+    let cancelledBookings = 0;
+
+    bookings.forEach((booking) => {
+      if (booking.customerId) {
+        bookingCounts[booking.customerId] = (bookingCounts[booking.customerId] || 0) + 1;
+      }
+      // We don't currently have a dedicated 'cancelled' status in BookingStatus,
+      // so keep this metric at 0 for now to avoid type issues.
+    });
+
+    let newClients = 0;
+    let repeatClients = 0;
+
+    customers.forEach((customer) => {
+      const count = bookingCounts[customer.id] || 0;
+      if (count <= 1) {
+        newClients += 1;
+      } else {
+        repeatClients += 1;
+      }
+    });
+
+    const totalCustomerBookings = Object.values(bookingCounts).reduce((sum, value) => sum + value, 0);
+
+    return {
+      totalCustomers,
+      newClients,
+      repeatClients,
+      totalCustomerBookings,
+      cancelledBookings,
+    };
+  }, [customers, bookings]);
+
+  const overviewStats = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth(); // 0-11
+    const lastMonthIndex = (currentMonthIndex + 11) % 12;
+    const lastMonthYear = currentMonthIndex === 0 ? currentYear - 1 : currentYear;
+
+    let bookingsThisMonth = 0;
+    let bookingsLastMonth = 0;
+    let revenueThisMonth = 0;
+    let revenueLastMonth = 0;
+
+    const serviceCounts: Record<string, number> = {};
+    let homeServiceCount = 0;
+    let homebasedCount = 0;
+
+    const monthly = Array.from({ length: 12 }, (_, idx) => ({
+      monthIndex: idx,
+      bookings: 0,
+      revenue: 0,
+    }));
+
+    bookings.forEach((booking) => {
+      const dateStr = booking.invoice?.createdAt ?? booking.createdAt;
+      if (!dateStr) return;
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return;
+
+      const year = d.getFullYear();
+      const monthIndex = d.getMonth(); // 0-11
+
+      const revenue =
+        (booking.depositAmount || 0) + (booking.paidAmount || 0) + (booking.tipAmount || 0);
+
+      // Monthly aggregates
+      monthly[monthIndex].bookings += 1;
+      monthly[monthIndex].revenue += revenue;
+
+      // This month vs last month
+      if (year === currentYear && monthIndex === currentMonthIndex) {
+        bookingsThisMonth += 1;
+        revenueThisMonth += revenue;
+      }
+      if (year === lastMonthYear && monthIndex === lastMonthIndex) {
+        bookingsLastMonth += 1;
+        revenueLastMonth += revenue;
+      }
+
+      // Services
+      if (booking.serviceType) {
+        serviceCounts[booking.serviceType] = (serviceCounts[booking.serviceType] || 0) + 1;
+      }
+
+      // Location breakdown
+      if (booking.serviceLocation === 'home_service') {
+        homeServiceCount += 1;
+      } else if (booking.serviceLocation === 'homebased_studio') {
+        homebasedCount += 1;
+      }
+    });
+
+    const topServices = Object.entries(serviceCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([service, count]) => ({ service, count }));
+
+    const maxMonthlyBookings = monthly.reduce(
+      (max, m) => (m.bookings > max ? m.bookings : max),
+      0,
+    );
+    const maxMonthlyRevenue = monthly.reduce(
+      (max, m) => (m.revenue > max ? m.revenue : max),
+      0,
+    );
+
+    return {
+      bookingsThisMonth,
+      bookingsLastMonth,
+      revenueThisMonth,
+      revenueLastMonth,
+      topServices,
+      homeServiceCount,
+      homebasedCount,
+      monthly,
+      maxMonthlyBookings,
+      maxMonthlyRevenue,
+    };
+  }, [bookings]);
 
   useEffect(() => {
     loadData();
@@ -52,14 +195,16 @@ export default function AdminDashboard() {
 
   async function loadData() {
     try {
-      const [slotsRes, blocksRes, bookingsRes] = await Promise.all([
+      const [slotsRes, blocksRes, bookingsRes, customersRes] = await Promise.all([
         fetch('/api/slots').then((res) => res.json()),
         fetch('/api/blocks').then((res) => res.json()),
         fetch('/api/bookings').then((res) => res.json()),
+        fetch('/api/customers').then((res) => res.json()).catch(() => ({ customers: [] })),
       ]);
       setSlots(slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
       setBookings(bookingsRes.bookings);
+      setCustomers(customersRes.customers || []);
     } catch (error) {
       console.error('Failed to load admin data', error);
       setToast('Unable to load data. Check your backend configuration.');
@@ -67,6 +212,29 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   }
+
+  async function loadCustomerDetails(customerId: string) {
+    try {
+      const res = await fetch(`/api/customers/${customerId}`);
+      const data = await res.json();
+      setSelectedCustomer(data.customer);
+      setCustomerBookings(data.bookings || []);
+      setCustomerLifetimeValue(data.lifetimeValue || 0);
+    } catch (error) {
+      console.error('Failed to load customer details', error);
+      setToast('Unable to load customer details.');
+    }
+  }
+
+  useEffect(() => {
+    if (selectedCustomerId) {
+      loadCustomerDetails(selectedCustomerId);
+    } else {
+      setSelectedCustomer(null);
+      setCustomerBookings([]);
+      setCustomerLifetimeValue(0);
+    }
+  }, [selectedCustomerId]);
 
   const selectedSlots = useMemo(() => slots.filter((slot) => slot.date === selectedDate), [slots, selectedDate]);
 
@@ -121,13 +289,14 @@ export default function AdminDashboard() {
     setToast('Dates blocked.');
   }
 
-  async function handleConfirmBooking(id: string, depositAmount?: number) {
+  async function handleConfirmBooking(id: string, depositAmount?: number, withAssistantCommission?: boolean) {
     await fetch(`/api/bookings/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         action: 'confirm',
         depositAmount: depositAmount !== undefined ? depositAmount : null,
+        withAssistantCommission: withAssistantCommission ?? false,
       }),
     });
     await loadData();
@@ -294,7 +463,9 @@ export default function AdminDashboard() {
               <header className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Slots</p>
-                  <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">{format(new Date(selectedDate), 'EEEE, MMM d')}</h2>
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">
+                    {format(new Date(selectedDate), 'EEEE, MMM d')}
+                  </h2>
                 </div>
                 <button
                   type="button"
@@ -324,25 +495,6 @@ export default function AdminDashboard() {
                     }}
                     onDelete={handleDeleteSlot}
                   />
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
-              <header className="mb-3 sm:mb-4">
-                <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Blocked dates</p>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">Overrides</h2>
-              </header>
-              <div className="space-y-3">
-                {blockedDates.length === 0 && <p className="text-sm text-slate-500">No blocked dates.</p>}
-                {blockedDates.map((block) => (
-                  <div key={block.id} className="rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm shadow-rose-900/5">
-                    <p className="text-sm font-semibold text-rose-700">
-                      {block.startDate} → {block.endDate}
-                    </p>
-                    <p className="text-xs text-rose-500 capitalize">Scope: {block.scope}</p>
-                    {block.reason && <p className="text-xs text-rose-700">{block.reason}</p>}
-                  </div>
                 ))}
               </div>
             </section>
@@ -382,7 +534,7 @@ export default function AdminDashboard() {
   );
 
   const sectionDescription: Record<AdminSection, string> = {
-    overview: 'High-level metrics coming soon.',
+    overview: 'At-a-glance metrics for bookings, customers, and revenue.',
     bookings: 'Create slots, block dates, and track booking statuses.',
     finance: 'View invoices, track payments, and manage revenue.',
     customers: 'See relationship insights and client history.',
@@ -390,12 +542,12 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 pt-[56px] lg:pt-0">
       {/* Mobile Header */}
-      <div className="lg:hidden sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 inset-x-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Admin</p>
-          <p className="text-sm font-semibold text-slate-900">glammednails</p>
+          <p className="text-sm font-semibold text-slate-900">glammednailsbyjhen</p>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -414,7 +566,7 @@ export default function AdminDashboard() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-4">
+        <div className="lg:hidden fixed top-[56px] inset-x-0 z-30 bg-white border-b border-slate-200 px-4 py-4">
           <nav className="space-y-2">
             {navItems.map((item) => (
               <button
@@ -431,14 +583,14 @@ export default function AdminDashboard() {
                 ].join(' ')}
               >
                 {item.label}
-                {item.id === 'bookings' && (
+                {item.id === 'bookings' && pendingBookingsCount > 0 && (
                   <span
                     className={[
                       'rounded-full px-2 py-0.5 text-xs',
                       activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
                     ].join(' ')}
                   >
-                    {bookings.length}
+                    {pendingBookingsCount}
                   </span>
                 )}
               </button>
@@ -451,7 +603,7 @@ export default function AdminDashboard() {
         <aside className="hidden lg:flex w-72 flex-col border-r border-slate-200 bg-white px-6 py-8">
           <div className="mb-8">
             <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Admin</p>
-            <p className="mt-2 text-lg font-semibold text-slate-900">Glammed Nails</p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">glammednailsbyjhen</p>
           </div>
           <nav className="space-y-2">
             {navItems.map((item) => (
@@ -466,14 +618,14 @@ export default function AdminDashboard() {
                 ].join(' ')}
               >
                 {item.label}
-                {item.id === 'bookings' && (
+                {item.id === 'bookings' && pendingBookingsCount > 0 && (
                   <span
                     className={[
                       'rounded-full px-2 py-0.5 text-xs',
                       activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
                     ].join(' ')}
                   >
-                    {bookings.length}
+                    {pendingBookingsCount}
                   </span>
                 )}
               </button>
@@ -546,18 +698,326 @@ export default function AdminDashboard() {
           {activeSection === 'bookings' ? (
             renderBookingsSection()
           ) : activeSection === 'finance' ? (
-            <FinanceView bookings={bookings} slots={slots} />
+            <FinanceView bookings={bookings} slots={slots} customers={customers} />
+          ) : activeSection === 'customers' ? (
+            <div className="space-y-4 sm:space-y-6">
+              {/* Customers overview stats */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">Total Customers</p>
+                  <p className="text-xl sm:text-2xl font-bold text-slate-900">{customerStats.totalCustomers}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-emerald-600 mb-1">New Clients</p>
+                  <p className="text-xl sm:text-2xl font-bold text-emerald-800">{customerStats.newClients}</p>
+                </div>
+                <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-purple-600 mb-1">Repeat Clients</p>
+                  <p className="text-xl sm:text-2xl font-bold text-purple-800">{customerStats.repeatClients}</p>
+                </div>
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-rose-600 mb-1">Cancelled Bookings</p>
+                  <p className="text-xl sm:text-2xl font-bold text-rose-800">{customerStats.cancelledBookings}</p>
+                  <p className="mt-1 text-[11px] text-rose-700">
+                    From {customerStats.totalCustomerBookings} customer bookings
+                  </p>
+                </div>
+              </div>
+
+              {/* Customers list + detail */}
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr]">
+                <div className="space-y-4 sm:space-y-6">
+                  <CustomerList
+                    customers={customers}
+                    onSelect={(customer) => setSelectedCustomerId(customer.id)}
+                    selectedId={selectedCustomerId}
+                  />
+                </div>
+                <div className="space-y-4 sm:space-y-6">
+                  <CustomerDetailPanel
+                    customer={selectedCustomer}
+                    bookings={customerBookings}
+                    lifetimeValue={customerLifetimeValue}
+                    onUpdate={async (customerId, updates) => {
+                      const res = await fetch(`/api/customers/${customerId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updates),
+                      });
+                      if (res.ok) {
+                        await loadData();
+                        if (selectedCustomerId === customerId) {
+                          await loadCustomerDetails(customerId);
+                        }
+                        setToast('Customer updated.');
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           ) : activeSection === 'services' ? (
             <ServicesManager />
           ) : (
-            renderPlaceholder(
-              activeSection === 'overview'
-                ? 'Overview coming soon'
-                : activeSection === 'customers'
-                  ? 'Customer insights'
-                  : 'Service catalog',
-              sectionDescription[activeSection],
-            )
+            /* Overview tab */
+            <div className="space-y-4 sm:space-y-6">
+              {/* Top-level KPIs */}
+              <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
+                    Total Bookings
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold text-slate-900">{bookings.length}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-emerald-600 mb-1">
+                    Pending Form
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold text-emerald-800">
+                    {bookings.filter((b) => b.status === 'pending_form').length}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-amber-600 mb-1">
+                    Awaiting Payment
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold text-amber-800">
+                    {bookings.filter((b) => b.status === 'pending_payment').length}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-900 p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-300 mb-1">
+                    Confirmed
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    {bookings.filter((b) => b.status === 'confirmed').length}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bookings & Revenue this month vs last month */}
+              <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
+                    Bookings (this month)
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold text-slate-900">
+                    {overviewStats.bookingsThisMonth}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Last month: {overviewStats.bookingsLastMonth}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
+                    Revenue (this month)
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold text-slate-900">
+                    ₱{overviewStats.revenueThisMonth.toLocaleString('en-PH')}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Last month: ₱{overviewStats.revenueLastMonth.toLocaleString('en-PH')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Customers + Revenue snapshot */}
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
+                    Customers
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900 mb-1">
+                    {customerStats.totalCustomers}
+                  </p>
+                  <p className="text-xs text-slate-500 mb-4">
+                    {customerStats.newClients} new · {customerStats.repeatClients} repeat
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Bookings linked to customers</span>
+                      <span className="font-semibold text-slate-900">
+                        {customerStats.totalCustomerBookings}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Cancelled (tracked)</span>
+                      <span className="font-semibold text-rose-700">
+                        {customerStats.cancelledBookings}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-3">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
+                    Revenue snapshot
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900 mb-1">
+                    ₱
+                    {overviewStats.monthly
+                      .reduce((sum, m) => sum + m.revenue, 0)
+                      .toLocaleString('en-PH')}
+                  </p>
+                  <p className="text-xs text-slate-500">Total received (DP + payments + tips)</p>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Bookings with invoice</span>
+                      <span className="font-semibold text-slate-900">
+                        {bookings.filter((b) => b.invoice).length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Tips recorded</span>
+                      <span className="font-semibold text-purple-700">
+                        ₱
+                        {bookings
+                          .reduce((sum, b) => sum + (b.tipAmount || 0), 0)
+                          .toLocaleString('en-PH')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top services & location breakdown */}
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
+                    Top services
+                  </p>
+                  {overviewStats.topServices.length === 0 ? (
+                    <p className="text-xs text-slate-500">No services data yet.</p>
+                  ) : (
+                    <ul className="space-y-1.5 text-xs sm:text-sm">
+                      {overviewStats.topServices.map((service) => (
+                        <li
+                          key={service.service}
+                          className="flex items-center justify-between"
+                        >
+                          <span className="text-slate-600">{service.service}</span>
+                          <span className="font-semibold text-slate-900">{service.count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
+                    Location breakdown
+                  </p>
+                  <div className="space-y-2 text-xs sm:text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600">Homebased studio</span>
+                      <span className="font-semibold text-slate-900">
+                        {overviewStats.homebasedCount}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600">Home service</span>
+                      <span className="font-semibold text-slate-900">
+                        {overviewStats.homeServiceCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bookings by status mini bar chart */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-3">
+                  Bookings by status
+                </p>
+                {(() => {
+                  const pendingForm = bookings.filter((b) => b.status === 'pending_form').length;
+                  const pendingPayment = bookings.filter((b) => b.status === 'pending_payment').length;
+                  const confirmed = bookings.filter((b) => b.status === 'confirmed').length;
+                  const max = Math.max(pendingForm, pendingPayment, confirmed, 1);
+
+                  const rows = [
+                    { label: 'Awaiting Form', value: pendingForm, color: 'bg-yellow-400' },
+                    { label: 'Awaiting Payment', value: pendingPayment, color: 'bg-orange-400' },
+                    { label: 'Confirmed', value: confirmed, color: 'bg-emerald-500' },
+                  ];
+
+                  return (
+                    <div className="space-y-2">
+                      {rows.map((row) => (
+                        <div key={row.label} className="flex items-center gap-2 text-xs">
+                          <span className="w-28 text-slate-600">{row.label}</span>
+                          <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full ${row.color}`}
+                              style={{ width: `${(row.value / max) * 100 || 0}%` }}
+                            />
+                          </div>
+                          <span className="w-6 text-right font-semibold text-slate-900">
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Per-month bookings & revenue (current year) */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-3">
+                  Bookings & revenue by month
+                </p>
+                {(() => {
+                  const monthLabels = [
+                    'Jan',
+                    'Feb',
+                    'Mar',
+                    'Apr',
+                    'May',
+                    'Jun',
+                    'Jul',
+                    'Aug',
+                    'Sep',
+                    'Oct',
+                    'Nov',
+                    'Dec',
+                  ];
+                  const maxRevenue = overviewStats.maxMonthlyRevenue || 1;
+                  const maxBookings = overviewStats.maxMonthlyBookings || 1;
+
+                  return (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                      {overviewStats.monthly.map((m) => (
+                        <div key={m.monthIndex} className="flex flex-col items-center gap-1">
+                          <span className="text-[10px] text-slate-600">
+                            {monthLabels[m.monthIndex]}
+                          </span>
+                          <div className="w-7 sm:w-8 h-20 sm:h-24 rounded-full bg-slate-100 flex flex-col-reverse overflow-hidden">
+                            {/* Revenue bar */}
+                            <div
+                              className="w-full bg-emerald-500"
+                              style={{
+                                height: `${(m.revenue / maxRevenue) * 100 || 0}%`,
+                              }}
+                            />
+                            {/* Bookings bar overlay */}
+                            <div
+                              className="w-full bg-slate-500/60"
+                              style={{
+                                height: `${(m.bookings / maxBookings) * 100 || 0}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-500">
+                            {m.bookings} bookings
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           )}
         </main>
       </div>

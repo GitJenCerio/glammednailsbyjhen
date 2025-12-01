@@ -1,3 +1,6 @@
+ 'use client';
+
+import { useState } from 'react';
 import type { Booking, BookingStatus, Slot } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 
@@ -24,9 +27,18 @@ const serviceLabels: Record<string, string> = {
 };
 
 export function BookingList({ bookings, onSelect, selectedId }: BookingListProps) {
+  const [openSections, setOpenSections] = useState<Record<BookingStatus, boolean>>({
+    pending_form: true,
+    pending_payment: true,
+    confirmed: true,
+  });
+
   const grouped = bookings.reduce<Record<BookingStatus, BookingRow[]>>(
     (acc, booking) => {
-      acc[booking.status].push(booking);
+      // Safety check: ensure the status exists in the accumulator
+      if (booking.status && acc[booking.status]) {
+        acc[booking.status].push(booking);
+      }
       return acc;
     },
     { pending_form: [], pending_payment: [], confirmed: [] },
@@ -42,11 +54,31 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
       <div className="space-y-4 sm:space-y-6 md:space-y-8">
         {(Object.keys(grouped) as BookingStatus[]).map((status) => (
           <div key={status}>
-            <div className="mb-2 flex items-center justify-between text-xs sm:text-sm">
-              <span className="font-semibold capitalize">{statusLabels[status]}</span>
+            <button
+              type="button"
+              onClick={() =>
+                setOpenSections((prev) => ({
+                  ...prev,
+                  [status]: !prev[status],
+                }))
+              }
+              className="mb-2 flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-xs sm:text-sm hover:bg-slate-50"
+            >
+              <span className="font-semibold capitalize flex items-center gap-1">
+                <span
+                  className={`inline-block transition-transform ${
+                    openSections[status] ? 'rotate-90' : ''
+                  }`}
+                >
+                  ▶
+                </span>
+                {statusLabels[status]}
+              </span>
               <span className="text-slate-500">{grouped[status].length} bookings</span>
-            </div>
-            <div className="space-y-2">
+            </button>
+
+            {openSections[status] && (
+              <div className="space-y-2">
               {grouped[status].length === 0 && (
                 <div className="rounded-xl sm:rounded-2xl border border-dashed border-slate-200 p-3 sm:p-4 text-xs sm:text-sm text-slate-500">No bookings.</div>
               )}
@@ -108,6 +140,7 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
                 </button>
               ))}
             </div>
+            )}
           </div>
         ))}
       </div>
