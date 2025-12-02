@@ -26,8 +26,7 @@ export async function GET(request: Request) {
   try {
     // Task 1: Release expired pending bookings
     try {
-      const released = await releaseExpiredPendingBookings(30);
-      results.expiredBookings.released = released;
+      await releaseExpiredPendingBookings(30);
     } catch (error) {
       console.error('Error releasing expired bookings:', error);
     }
