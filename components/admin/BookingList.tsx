@@ -16,6 +16,7 @@ const statusLabels: Record<BookingStatus, string> = {
   pending_form: 'Awaiting Form',
   pending_payment: 'Awaiting Payment',
   confirmed: 'Confirmed',
+  cancelled: 'Cancelled',
 };
 
 const serviceLabels: Record<string, string> = {

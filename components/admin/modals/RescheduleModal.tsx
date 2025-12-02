@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { format, startOfMonth, isSameMonth, isSameDay } from 'date-fns';
 import type { Booking, Slot, BlockedDate } from '@/lib/types';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
@@ -58,7 +58,7 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
     return 1;
   };
 
-  const canSlotAccommodateService = (slot: Slot, requiredSlots: number): boolean => {
+  const canSlotAccommodateService = useCallback((slot: Slot, requiredSlots: number): boolean => {
     if (requiredSlots === 1) return true;
 
     const slotTimes = SLOT_TIMES;
@@ -96,7 +96,7 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
     }
 
     return foundSlots.length === requiredSlots;
-  };
+  }, [blockedDates, slots]);
 
   useEffect(() => {
     if (!selectedSlot || !booking) return;
@@ -134,7 +134,7 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
 
     setLinkedSlots(linked);
     setError(null);
-  }, [selectedSlot, booking, slots, blockedDates]);
+  }, [selectedSlot, booking, slots, blockedDates, canSlotAccommodateService]);
 
   const handleReschedule = async () => {
     if (!booking || !selectedSlot) return;

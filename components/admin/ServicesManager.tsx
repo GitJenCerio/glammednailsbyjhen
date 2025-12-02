@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import html2canvas from 'html2canvas';
 
 type QuoteItem = {
@@ -642,10 +643,13 @@ export function ServicesManager() {
                   <p className="text-sm font-semibold text-slate-900 mb-2">
                     Latest generated JPG (downloaded automatically)
                   </p>
-                  <img
+                  <Image
                     src={generatedPreview}
                     alt="Quotation preview"
+                    width={800}
+                    height={1000}
                     className="w-full rounded-2xl border border-slate-100"
+                    unoptimized
                   />
                   <p className="mt-2 text-xs text-slate-500">
                     Share this image via Messenger, Viber, email, or attach it to your booking confirmation.

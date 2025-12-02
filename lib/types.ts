@@ -1,5 +1,5 @@
 export type SlotStatus = 'available' | 'blocked' | 'pending' | 'confirmed';
-export type BookingStatus = 'pending_form' | 'pending_payment' | 'confirmed';
+export type BookingStatus = 'pending_form' | 'pending_payment' | 'confirmed' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'refunded';
 export type ServiceType = 'manicure' | 'pedicure' | 'mani_pedi' | 'home_service_2slots' | 'home_service_3slots';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import type { Booking, Slot, BookingWithSlot } from '@/lib/types';
@@ -32,6 +32,7 @@ const statusColors: Record<string, string> = {
   pending_form: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   pending_payment: 'bg-orange-100 text-orange-800 border-orange-200',
   confirmed: 'bg-green-100 text-green-800 border-green-200',
+  cancelled: 'bg-gray-100 text-gray-800 border-gray-200',
 };
 
 const serviceLabels: Record<string, string> = {
@@ -129,7 +130,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
   }, [bookingsWithSlots]);
 
   // Finance helpers for desktop + mobile views
-  const getFinanceSummary = (booking: BookingWithSlot) => {
+  const getFinanceSummary = useCallback((booking: BookingWithSlot) => {
     const total = booking.invoice?.total || 0;
     const deposit = booking.depositAmount || 0;
     const paid = booking.paidAmount || 0;
@@ -144,10 +145,10 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
     }
 
     return { total, deposit, paid, balance };
-  };
+  }, []);
 
   // Map booking/payment status into friendly stage labels for the bookings table
-  const getBookingStageLabel = (booking: BookingWithSlot): string => {
+  const getBookingStageLabel = useCallback((booking: BookingWithSlot): string => {
     const hasInvoice = !!booking.invoice;
     const { deposit, balance } = getFinanceSummary(booking);
 
@@ -170,7 +171,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
 
     // Invoice exists and there is still balance to pay
     return 'Invoice generated';
-  };
+  }, [getFinanceSummary]);
 
   // Filter bookings by period, status, and month
   const filteredBookings = useMemo(() => {
@@ -241,7 +242,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
         ? b.slot.time.localeCompare(a.slot.time)
         : a.slot.time.localeCompare(b.slot.time);
     });
-  }, [bookingsWithSlots, selectedDate, filterPeriod, statusFilter, monthFilter]);
+  }, [bookingsWithSlots, selectedDate, filterPeriod, statusFilter, monthFilter, getBookingStageLabel]);
 
   const getCustomerName = (booking: BookingWithSlot): string => {
     if (!booking.customerData) return booking.bookingId;

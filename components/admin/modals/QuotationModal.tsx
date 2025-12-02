@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import html2canvas from 'html2canvas';
 import type { Booking } from '@/lib/types';
 import { format } from 'date-fns';
@@ -409,11 +410,11 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                 <p className="text-sm font-semibold text-slate-600 mb-3 text-center">Payment QR Codes</p>
                 <div className="flex justify-center gap-6">
                   <div className="text-center">
-                    <img src="/images/QR-Gcash.jpg" alt="GCash QR Code" className="w-40 h-40 mx-auto border border-slate-200 rounded" />
+                    <Image src="/images/QR-Gcash.jpg" alt="GCash QR Code" width={160} height={160} className="w-40 h-40 mx-auto border border-slate-200 rounded" />
                     <p className="text-sm text-slate-600 mt-2 font-medium">GCash</p>
                   </div>
                   <div className="text-center">
-                    <img src="/images/QR-PNB.jpg" alt="PNB QR Code" className="w-40 h-40 mx-auto border border-slate-200 rounded" />
+                    <Image src="/images/QR-PNB.jpg" alt="PNB QR Code" width={160} height={160} className="w-40 h-40 mx-auto border border-slate-200 rounded" />
                     <p className="text-sm text-slate-600 mt-2 font-medium">PNB</p>
                   </div>
                 </div>
