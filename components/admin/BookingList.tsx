@@ -32,6 +32,7 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
     pending_form: true,
     pending_payment: true,
     confirmed: true,
+    cancelled: true,
   });
 
   const grouped = bookings.reduce<Record<BookingStatus, BookingRow[]>>(
@@ -42,7 +43,7 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
       }
       return acc;
     },
-    { pending_form: [], pending_payment: [], confirmed: [] },
+    { pending_form: [], pending_payment: [], confirmed: [], cancelled: [] },
   );
 
   return (
