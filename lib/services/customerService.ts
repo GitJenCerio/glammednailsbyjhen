@@ -125,7 +125,7 @@ export async function findOrCreateCustomer(customerData?: Record<string, string>
   }
 
   // Create new customer
-  const newCustomer: CustomerInput = {
+  const newCustomer = {
     name,
     email,
     phone,
