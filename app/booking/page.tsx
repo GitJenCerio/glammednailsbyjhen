@@ -245,7 +245,7 @@ function SlotModal({
         </div>
 
         <p className="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-600 leading-relaxed">
-          This slot is available. Click "Proceed to Booking Form" and you'll be redirected to our Google Form to finish your reservation.
+          This slot is available. Click &ldquo;Proceed to Booking Form&rdquo; and you&rsquo;ll be redirected to our Google Form to finish your reservation.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
