@@ -13,7 +13,7 @@ export async function createBlockedDate(payload: BlockedDateInput): Promise<Bloc
   const now = Timestamp.now().toDate().toISOString();
   const data = { ...payload, createdAt: now, updatedAt: now };
   const ref = await blockCollection.add(data);
-  return { id: ref.id, ...(data as BlockedDate) };
+  return { id: ref.id, ...data } as BlockedDate;
 }
 
 export async function updateBlockedDate(id: string, data: Partial<BlockedDate>): Promise<BlockedDate> {
