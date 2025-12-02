@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { listBookings } from '@/lib/services/bookingService';
 import { listSlots } from '@/lib/services/slotService';
-import { getCustomerById } from '@/lib/services/customerService';
-import { sendAppointmentReminderEmail } from '@/lib/email';
 import { addDays, format, parseISO } from 'date-fns';
 
 /**
- * Cron job to send appointment reminders the day before appointments
+ * Cron job to check appointments scheduled for tomorrow
+ * Email functionality is disabled
  * Runs daily at 9:00 AM
  */
 export async function GET(request: Request) {
@@ -30,8 +29,7 @@ export async function GET(request: Request) {
     const slots = await listSlots();
     const slotMap = new Map(slots.map(s => [s.id, s]));
 
-    let sent = 0;
-    let errors = 0;
+    let count = 0;
 
     // Find bookings scheduled for tomorrow
     for (const booking of confirmedBookings) {
@@ -43,30 +41,21 @@ export async function GET(request: Request) {
       const bookingDateStr = format(bookingDate, 'yyyy-MM-dd');
       
       if (bookingDateStr === tomorrowStr) {
-        try {
-          const customer = await getCustomerById(booking.customerId);
-          if (customer && customer.email) {
-            await sendAppointmentReminderEmail(booking, customer, slot.date, slot.time);
-            sent++;
-          }
-        } catch (error) {
-          console.error(`Failed to send reminder for booking ${booking.bookingId}:`, error);
-          errors++;
-        }
+        count++;
       }
     }
 
     return NextResponse.json({
       success: true,
       date: tomorrowStr,
-      sent,
-      errors,
+      message: 'Email functionality disabled',
+      appointmentsTomorrow: count,
       total: confirmedBookings.length,
     });
   } catch (error: any) {
-    console.error('Error sending appointment reminders:', error);
+    console.error('Error checking appointments:', error);
     return NextResponse.json({
-      error: error.message || 'Failed to send reminders',
+      error: error.message || 'Failed to check appointments',
     }, { status: 500 });
   }
 }

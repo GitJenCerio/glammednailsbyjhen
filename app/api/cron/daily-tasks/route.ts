@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { listBookings, releaseExpiredPendingBookings } from '@/lib/services/bookingService';
 import { listSlots } from '@/lib/services/slotService';
-import { getCustomerById } from '@/lib/services/customerService';
-import { sendAppointmentReminderEmail } from '@/lib/email';
 import { addDays, format, parseISO } from 'date-fns';
 
 /**
  * Combined daily cron job for Vercel Hobby tier (only 1 cron per day allowed)
  * Runs daily at 9:00 AM and handles:
  * 1. Release expired pending bookings
- * 2. Send appointment reminders for tomorrow's appointments
+ * 2. Check appointments scheduled for tomorrow (email functionality disabled)
  */
 export async function GET(request: Request) {
   // Verify this is a cron request (optional security check)
@@ -20,7 +18,7 @@ export async function GET(request: Request) {
 
   const results = {
     expiredBookings: { released: 0 },
-    reminders: { sent: 0, errors: 0 },
+    appointmentsTomorrow: { count: 0 },
   };
 
   try {
@@ -31,7 +29,7 @@ export async function GET(request: Request) {
       console.error('Error releasing expired bookings:', error);
     }
 
-    // Task 2: Send appointment reminders for tomorrow
+    // Task 2: Check appointments scheduled for tomorrow (email disabled)
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -56,26 +54,18 @@ export async function GET(request: Request) {
         const bookingDateStr = format(bookingDate, 'yyyy-MM-dd');
         
         if (bookingDateStr === tomorrowStr) {
-          try {
-            const customer = await getCustomerById(booking.customerId);
-            if (customer && customer.email) {
-              await sendAppointmentReminderEmail(booking, customer, slot.date, slot.time);
-              results.reminders.sent++;
-            }
-          } catch (error) {
-            console.error(`Failed to send reminder for booking ${booking.bookingId}:`, error);
-            results.reminders.errors++;
-          }
+          results.appointmentsTomorrow.count++;
         }
       }
     } catch (error) {
-      console.error('Error sending appointment reminders:', error);
+      console.error('Error checking appointments:', error);
     }
 
     return NextResponse.json({
       success: true,
       date: format(new Date(), 'yyyy-MM-dd'),
       results,
+      message: 'Email functionality disabled',
     });
   } catch (error: any) {
     console.error('Error in daily tasks cron:', error);
