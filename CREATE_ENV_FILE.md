@@ -69,6 +69,15 @@ GOOGLE_SHEETS_RANGE='Form Responses 1'!A:Z
 GOOGLE_SHEETS_BOOKING_ID_COLUMN=bookingId           # header name in sheet
 GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@project.iam.gserviceaccount.com
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# Email Notifications (Resend)
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx
+FROM_EMAIL=Glammed Nails <noreply@glammednailsbyjhen.com>
+REPLY_TO_EMAIL=glammednailsbyjhen@gmail.com
+
+# Payment QR Codes (upload images and add URLs)
+PNB_QR_CODE_URL=https://your-image-host.com/pnb-qr-code.png
+GCASH_QR_CODE_URL=https://your-image-host.com/gcash-qr-code.png
 ```
 
 ## Step 4: Save and Restart
@@ -86,6 +95,21 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END P
 - ✅ For Vercel deployment, add these variables in Vercel dashboard
 - ⚠️ Keep your Firebase credentials secret
 - ⚠️ Don't share your `.env.local` file
+
+## Step 5: Set Up Email Notifications (Optional but Recommended)
+
+1. Go to https://resend.com/
+2. Sign up for a free account (3,000 emails/month free)
+3. Verify your domain or use their test domain
+4. Go to API Keys section
+5. Create a new API key
+6. Copy the API key to your `.env.local`:
+   - `RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx`
+7. Set your email addresses:
+   - `FROM_EMAIL=Glammed Nails <noreply@yourdomain.com>` (or use Resend's test domain)
+   - `REPLY_TO_EMAIL=glammednailsbyjhen@gmail.com`
+
+**Note:** If you don't set up Resend, the booking system will still work, but customers won't receive email notifications.
 
 ## Vercel Deployment
 

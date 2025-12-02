@@ -6,8 +6,8 @@
   "outputDirectory": ".next",
   "crons": [
     {
-      "path": "/api/cron/release-expired",
-      "schedule": "0 0 * * *"
+      "path": "/api/cron/daily-tasks",
+      "schedule": "0 9 * * *"
     }
   ]
 }

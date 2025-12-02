@@ -6,7 +6,8 @@ import { listBlockedDates } from './blockService';
 import { slotIsBlocked } from '../scheduling';
 import { buildPrefilledGoogleFormUrl } from '../googleForms';
 import { getNextSlotTime } from '../constants/slots';
-import { findOrCreateCustomer } from './customerService';
+import { findOrCreateCustomer, getCustomerById } from './customerService';
+import { sendBookingConfirmationEmail, sendPaymentReminderEmail, sendBookingCancellationEmail, sendAwaitingDownpaymentEmail, sendInvoiceCreatedEmail, sendAppointmentReminderEmail } from '../email';
 
 const bookingsCollection = adminDb.collection('bookings');
 const slotsCollection = adminDb.collection('slots');
@@ -422,7 +423,7 @@ export async function syncBookingWithForm(
     console.warn(`Booking ${bookingId} - Date/Time changed:`, validationWarnings);
   }
 
-  return docToBooking(doc.id, { 
+  const updatedBooking = docToBooking(doc.id, { 
     ...doc.data(), 
     customerData: formData,
     customerDataOrder: fieldOrder && fieldOrder.length > 0 ? fieldOrder : undefined,
@@ -431,20 +432,44 @@ export async function syncBookingWithForm(
     timeChanged,
     validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined,
   });
+
+  // Send awaiting downpayment email
+  try {
+    const slot = await getSlotById(updatedBooking.slotId);
+    if (slot && customer.email) {
+      await sendAwaitingDownpaymentEmail(updatedBooking, customer, slot.date, slot.time);
+    }
+  } catch (error) {
+    // Don't fail the sync if email fails
+    console.error('Failed to send awaiting downpayment email:', error);
+  }
+
+  return updatedBooking;
+}
+
+async function getSlotById(slotId: string): Promise<Slot | null> {
+  const snapshot = await slotsCollection.doc(slotId).get();
+  if (!snapshot.exists) return null;
+  return docToSlot(snapshot.id, snapshot.data()!);
 }
 
 export async function confirmBooking(bookingId: string, depositAmount?: number, withAssistantCommission?: boolean) {
+  let booking: Booking | null = null;
+  let slot: Slot | null = null;
+  let customerId: string | null = null;
+
   await adminDb.runTransaction(async (transaction) => {
     // ALL READS MUST HAPPEN FIRST
     const bookingRef = bookingsCollection.doc(bookingId);
     const bookingSnap = await transaction.get(bookingRef);
     if (!bookingSnap.exists) throw new Error('Booking not found.');
-    const booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
+    booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
+    customerId = booking.customerId;
 
     const slotRef = slotsCollection.doc(booking.slotId);
     const slotSnap = await transaction.get(slotRef);
     if (!slotSnap.exists) throw new Error('Slot not found.');
-    const slot = docToSlot(slotSnap.id, slotSnap.data()!);
+    slot = docToSlot(slotSnap.id, slotSnap.data()!);
 
     // Get linked slot IDs first
     const linkedSlotIds = booking.linkedSlotIds?.length
@@ -511,9 +536,28 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
       }
     });
   });
+
+  // Send confirmation email after transaction completes
+  if (booking && slot && customerId) {
+    try {
+      const customer = await getCustomerById(customerId);
+      if (customer && customer.email) {
+        await sendBookingConfirmationEmail(booking, customer, slot.date, slot.time);
+      }
+    } catch (error) {
+      // Don't fail the booking confirmation if email fails
+      console.error('Failed to send confirmation email:', error);
+    }
+  }
 }
 
 export async function updateBookingStatus(bookingId: string, status: BookingStatus) {
+  // Get booking and related data before updating (for email notifications)
+  const bookingSnap = await bookingsCollection.doc(bookingId).get();
+  const booking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
+  const slot = booking ? await getSlotById(booking.slotId) : null;
+  const customer = booking ? await getCustomerById(booking.customerId) : null;
+
   await bookingsCollection.doc(bookingId).set(
     {
       status,
@@ -521,6 +565,16 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
     },
     { merge: true },
   );
+
+  // Send cancellation email if status is cancelled
+  if (status === 'cancelled' && booking && slot && customer && customer.email) {
+    try {
+      await sendBookingCancellationEmail(booking, customer, slot.date, slot.time);
+    } catch (error) {
+      // Don't fail the status update if email fails
+      console.error('Failed to send cancellation email:', error);
+    }
+  }
 }
 
 export async function saveInvoice(bookingId: string, invoice: Invoice) {
@@ -538,6 +592,9 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
     updatedAt: Timestamp.now().toDate().toISOString(),
   };
   
+  const wasPendingPayment = currentBooking?.status === 'pending_payment';
+  const isNowPendingPayment = currentBooking?.status !== 'confirmed';
+  
   // Only update status if booking is not already confirmed
   // If booking is confirmed (with or without deposit), keep it as confirmed
   if (currentBooking?.status !== 'confirmed') {
@@ -551,6 +608,40 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
   }
   
   await bookingRef.set(updateData, { merge: true });
+
+  // Send invoice created email (always send when invoice is created)
+  if (currentBooking) {
+    try {
+      const slot = await getSlotById(currentBooking.slotId);
+      const customer = await getCustomerById(currentBooking.customerId);
+      
+      if (slot && customer && customer.email) {
+        // Send invoice created email
+        await sendInvoiceCreatedEmail(
+          currentBooking,
+          customer,
+          slot.date,
+          slot.time,
+          invoice
+        );
+
+        // Also send payment reminder if status changed to pending_payment
+        if (!wasPendingPayment && isNowPendingPayment) {
+          await sendPaymentReminderEmail(
+            currentBooking,
+            customer,
+            slot.date,
+            slot.time,
+            currentBooking.depositAmount,
+            invoice.total
+          );
+        }
+      }
+    } catch (error) {
+      // Don't fail the invoice save if email fails
+      console.error('Failed to send invoice email:', error);
+    }
+  }
 }
 
 export async function updatePaymentStatus(bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number) {
