@@ -8,7 +8,7 @@ if (!process.env.RESEND_API_KEY) {
   console.warn('RESEND_API_KEY not set. Email notifications will be disabled.');
 }
 
-const FROM_EMAIL = process.env.FROM_EMAIL || 'Glammed Nails <noreply@glammednailsbyjhen.com>';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'glammednailsbyjhen <noreply@glammednailsbyjhen.com>';
 const REPLY_TO_EMAIL = process.env.REPLY_TO_EMAIL || 'glammednailsbyjhen@gmail.com';
 const PNB_QR_CODE_URL = process.env.PNB_QR_CODE_URL || '';
 const GCASH_QR_CODE_URL = process.env.GCASH_QR_CODE_URL || '';
@@ -100,7 +100,7 @@ export async function sendBookingConfirmationEmail(booking: Booking, customer: C
               <p>If you have any questions or need to make changes, please don't hesitate to contact us.</p>
               
               <div class="footer">
-                <p>Best regards,<br>Glammed Nails by Jhen</p>
+                <p>Best regards,<br>Jhen</p>
                 <p style="margin-top: 20px;">
                   <a href="mailto:${REPLY_TO_EMAIL}" style="color: #667eea;">${REPLY_TO_EMAIL}</a>
                 </p>
@@ -225,7 +225,7 @@ export async function sendPaymentReminderEmail(booking: Booking, customer: Custo
               <p>If you have any questions, please contact us.</p>
               
               <div class="footer">
-                <p>Best regards,<br>Glammed Nails by Jhen</p>
+                <p>Best regards,<br>Jhen</p>
                 <p style="margin-top: 20px;">
                   <a href="mailto:${REPLY_TO_EMAIL}" style="color: #f5576c;">${REPLY_TO_EMAIL}</a>
                 </p>
@@ -312,7 +312,7 @@ export async function sendBookingCancellationEmail(booking: Booking, customer: C
               <p>If you'd like to reschedule or have any questions, please don't hesitate to contact us.</p>
               
               <div class="footer">
-                <p>Best regards,<br>Glammed Nails by Jhen</p>
+                <p>Best regards,<br>Jhen</p>
                 <p style="margin-top: 20px;">
                   <a href="mailto:${REPLY_TO_EMAIL}" style="color: #6c757d;">${REPLY_TO_EMAIL}</a>
                 </p>
@@ -432,7 +432,7 @@ export async function sendAwaitingDownpaymentEmail(booking: Booking, customer: C
               <p>If you have any questions, please don't hesitate to contact us.</p>
               
               <div class="footer">
-                <p>Best regards,<br>Glammed Nails by Jhen</p>
+                <p>Best regards,<br>Jhen</p>
                 <p style="margin-top: 20px;">
                   <a href="mailto:${REPLY_TO_EMAIL}" style="color: #fb8c00;">${REPLY_TO_EMAIL}</a>
                 </p>
@@ -578,7 +578,7 @@ export async function sendInvoiceCreatedEmail(booking: Booking, customer: Custom
               <p>Please complete your payment to confirm your appointment. If you have any questions, please contact us.</p>
               
               <div class="footer">
-                <p>Best regards,<br>Glammed Nails by Jhen</p>
+                <p>Best regards,<br>Jhen</p>
                 <p style="margin-top: 20px;">
                   <a href="mailto:${REPLY_TO_EMAIL}" style="color: #1e88e5;">${REPLY_TO_EMAIL}</a>
                 </p>
@@ -676,7 +676,7 @@ export async function sendAppointmentReminderEmail(booking: Booking, customer: C
               <p>If you need to reschedule or have any questions, please contact us as soon as possible.</p>
               
               <div class="footer">
-                <p>Best regards,<br>Glammed Nails by Jhen</p>
+                <p>Best regards,<br>Jhen</p>
                 <p style="margin-top: 20px;">
                   <a href="mailto:${REPLY_TO_EMAIL}" style="color: #8e24aa;">${REPLY_TO_EMAIL}</a>
                 </p>
