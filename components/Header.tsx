@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
+import { IoMenu, IoClose } from 'react-icons/io5';
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,28 +47,21 @@ export default function Header() {
         {/* Mobile Menu Button - Left */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden flex flex-col gap-1.5 w-6 z-10 flex-shrink-0"
+          className="lg:hidden flex items-center justify-center w-8 h-8 z-50 flex-shrink-0 bg-transparent hover:bg-gray-100 rounded-lg transition-colors relative"
           aria-label="Toggle menu"
         >
-          <motion.span
-            animate={isOpen ? { rotate: 45, y: 8 } : {}}
-            className="w-full h-0.5 bg-black"
-          />
-          <motion.span
-            animate={isOpen ? { opacity: 0 } : { opacity: 1 }}
-            className="w-full h-0.5 bg-black"
-          />
-          <motion.span
-            animate={isOpen ? { rotate: -45, y: -8 } : {}}
-            className="w-full h-0.5 bg-black"
-          />
+          {isOpen ? (
+            <IoClose className="w-6 h-6 text-black" />
+          ) : (
+            <IoMenu className="w-6 h-6 text-black" />
+          )}
         </button>
 
         {/* Invisible placeholder to balance for justify-between on desktop */}
-        <div className="hidden md:block w-32 flex-shrink-0"></div>
+        <div className="hidden lg:block w-32 flex-shrink-0"></div>
 
         {/* Center Group: Logo + Navigation - Centered */}
-        <div className="hidden md:flex items-center gap-6 lg:gap-8 xl:gap-10 absolute left-1/2 -translate-x-1/2 max-w-[90vw]">
+        <div className="hidden lg:flex items-center gap-6 lg:gap-8 xl:gap-10 absolute left-1/2 -translate-x-1/2 max-w-[90vw]">
           <Link href="/" className="flex items-center flex-shrink-0">
             <Image 
               src="/logo.png" 
@@ -106,7 +100,7 @@ export default function Header() {
         </div>
 
         {/* Mobile Logo - Centered */}
-        <Link href="/" className="md:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[60vw] sm:max-w-[50vw]">
+        <Link href="/" className="lg:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[60vw] sm:max-w-[50vw]">
           <Image 
             src="/logo.png" 
             alt="glammednailsbyjhen logo" 
@@ -120,7 +114,7 @@ export default function Header() {
         {/* Book Appointment Button - Far Right */}
         <Link
           href="/booking"
-          className="hidden md:block px-4 lg:px-6 py-2 lg:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs lg:text-sm whitespace-nowrap flex-shrink-0"
+          className="hidden lg:block px-4 lg:px-6 py-2 lg:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs lg:text-sm whitespace-nowrap flex-shrink-0"
         >
           Book Now
         </Link>
@@ -128,7 +122,7 @@ export default function Header() {
         {/* Mobile Book Button - Right */}
         <Link
           href="/booking"
-          className="md:hidden px-4 sm:px-5 py-1.5 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs sm:text-sm flex-shrink-0 ml-2 sm:ml-4"
+          className="lg:hidden px-4 sm:px-5 py-1.5 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs sm:text-sm flex-shrink-0 ml-2 sm:ml-4"
         >
           Book
         </Link>
@@ -141,7 +135,7 @@ export default function Header() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden absolute left-2 sm:left-4 top-full mt-0 bg-white border-t rounded-xl shadow-2xl z-[100] max-w-[90vw] sm:max-w-xs w-[280px] sm:w-64"
+            className="lg:hidden absolute left-2 sm:left-4 top-full mt-0 bg-white border-t rounded-xl shadow-2xl z-[100] max-w-[90vw] sm:max-w-xs w-[280px] sm:w-64"
           >
             <div className="px-4 py-4 space-y-3">
               {navLinks.map((link) => (

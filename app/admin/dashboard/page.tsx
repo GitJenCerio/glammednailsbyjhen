@@ -8,6 +8,8 @@ import { auth } from '@/lib/firebase';
 import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
+import { IoStatsChart, IoCalendar, IoCash, IoPeople, IoSparkles, IoChevronBack, IoChevronForward, IoLogOutOutline, IoMenu, IoClose } from 'react-icons/io5';
+import Image from 'next/image';
 import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
@@ -24,11 +26,11 @@ import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
 import type { Customer } from '@/lib/types';
 
 const navItems = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'bookings', label: 'Bookings' },
-  { id: 'finance', label: 'Finance' },
-  { id: 'customers', label: 'Customers' },
-  { id: 'services', label: 'Services' },
+  { id: 'overview', label: 'Overview', icon: IoStatsChart },
+  { id: 'bookings', label: 'Bookings', icon: IoCalendar },
+  { id: 'finance', label: 'Finance', icon: IoCash },
+  { id: 'customers', label: 'Customers', icon: IoPeople },
+  { id: 'services', label: 'Services', icon: IoSparkles },
 ] as const;
 
 type AdminSection = (typeof navItems)[number]['id'];
@@ -61,6 +63,7 @@ export default function AdminDashboard() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerBookings, setCustomerBookings] = useState<Booking[]>([]);
   const [customerLifetimeValue, setCustomerLifetimeValue] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pendingBookingsCount = useMemo(
     () => bookings.filter((booking) => 
       booking.status === 'pending_payment' && 
@@ -423,17 +426,8 @@ export default function AdminDashboard() {
 
   const renderBookingsSection = () => (
     <>
-      {toast && (
-        <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl bg-emerald-50 px-3 sm:px-4 py-2 text-xs sm:text-sm text-emerald-700 flex items-center justify-between gap-2">
-          <span className="flex-1">{toast}</span>
-          <button className="text-xs uppercase font-semibold touch-manipulation" onClick={() => setToast(null)}>
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Sub-navigation for bookings view */}
-      <div className="mb-4 sm:mb-6 flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-fit">
+      {/* Sub-navigation for bookings view - at the very top */}
+      <div className="mb-3 sm:mb-4 flex gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-1 w-full sm:w-fit">
         <button
           onClick={() => setBookingsView('calendar')}
           className={`flex-1 sm:flex-none px-3 sm:px-6 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
@@ -457,6 +451,52 @@ export default function AdminDashboard() {
           <span className="sm:hidden">Bookings</span>
         </button>
       </div>
+
+      {/* Action buttons below subtab - only for calendar view */}
+      {bookingsView === 'calendar' && (
+        <div className="mb-4 sm:mb-6 flex flex-wrap gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+              const end = format(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0), 'yyyy-MM-dd');
+              setBlockDefaults({ start, end });
+              setBlockModalOpen(true);
+            }}
+            className="rounded-full border border-rose-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 touch-manipulation"
+          >
+            <span className="hidden sm:inline">Block entire month</span>
+            <span className="sm:hidden">Block month</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingSlot(null);
+              setSlotModalOpen(true);
+            }}
+            className="rounded-full bg-slate-900 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation"
+          >
+            New slot
+          </button>
+          <button
+            type="button"
+            onClick={handleSyncSheets}
+            className="rounded-full border border-slate-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
+          >
+            <span className="hidden sm:inline">Sync Google Sheet</span>
+            <span className="sm:hidden">Sync</span>
+          </button>
+        </div>
+      )}
+
+      {toast && (
+        <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl bg-emerald-50 px-3 sm:px-4 py-2 text-xs sm:text-sm text-emerald-700 flex items-center justify-between gap-2">
+          <span className="flex-1">{toast}</span>
+          <button className="text-xs uppercase font-semibold touch-manipulation" onClick={() => setToast(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -492,8 +532,9 @@ export default function AdminDashboard() {
           }}
         />
       ) : (
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr]">
-          <div className="space-y-4 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-6">
+          {/* Calendar and Slots side by side */}
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr] xl:grid-cols-[2.5fr,1fr]">
             <CalendarGrid
               referenceDate={currentMonth}
               slots={slots}
@@ -511,16 +552,26 @@ export default function AdminDashboard() {
                     {format(new Date(selectedDate), 'EEEE, MMM d')}
                   </h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSlot(null);
-                    setSlotModalOpen(true);
-                  }}
-                  className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
-                >
-                  Add slot
-                </button>
+                {selectedDate >= format(new Date(), 'yyyy-MM-dd') ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSlot(null);
+                      setSlotModalOpen(true);
+                    }}
+                    className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
+                  >
+                    Add slot
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-400 cursor-not-allowed opacity-50"
+                  >
+                    Past date
+                  </button>
+                )}
               </header>
 
               <div className="space-y-4">
@@ -529,22 +580,29 @@ export default function AdminDashboard() {
                     No slots yet. Create one to open this day for booking.
                   </div>
                 )}
-                {selectedSlots.map((slot) => (
-                  <SlotCard
-                    key={slot.id}
-                    slot={slot}
-                    onEdit={(value) => {
-                      setEditingSlot(value);
-                      setSlotModalOpen(true);
-                    }}
-                    onDelete={handleDeleteSlot}
-                  />
-                ))}
+                {selectedSlots.map((slot) => {
+                  const bookingForSlot = bookingsWithSlots.find((b) => b.slotId === slot.id && b.status === 'confirmed');
+                  const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
+                  return (
+                    <SlotCard
+                      key={slot.id}
+                      slot={slot}
+                      booking={bookingForSlot || null}
+                      customer={customerForBooking || null}
+                      onEdit={(value) => {
+                        setEditingSlot(value);
+                        setSlotModalOpen(true);
+                      }}
+                      onDelete={handleDeleteSlot}
+                    />
+                  );
+                })}
               </div>
             </section>
           </div>
 
-          <div className="space-y-4 sm:space-y-6">
+          {/* Bookings status overview below */}
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr,1fr]">
             <BookingList
               bookings={bookingsWithSlots}
               onSelect={(booking) => setSelectedBookingId(booking.id)}
@@ -598,13 +656,11 @@ export default function AdminDashboard() {
           className="p-2 rounded-lg hover:bg-slate-100"
           aria-label="Toggle menu"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {mobileMenuOpen ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            )}
-          </svg>
+          {mobileMenuOpen ? (
+            <IoClose className="w-6 h-6" />
+          ) : (
+            <IoMenu className="w-6 h-6" />
+          )}
         </button>
       </div>
 
@@ -630,7 +686,7 @@ export default function AdminDashboard() {
                 {item.id === 'bookings' && pendingBookingsCount > 0 && (
                   <span
                     className={[
-                      'rounded-full px-2 py-0.5 text-xs',
+                      'rounded-full px-1.5 md:px-2 py-0.5 text-[10px] md:text-xs',
                       activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
                     ].join(' ')}
                   >
@@ -643,9 +699,7 @@ export default function AdminDashboard() {
               onClick={handleLogout}
               className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition mt-4 border border-rose-200"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <IoLogOutOutline className="w-5 h-5" />
               Logout
             </button>
           </nav>
@@ -653,10 +707,47 @@ export default function AdminDashboard() {
       )}
 
       <div className="flex min-h-screen">
-        <aside className="hidden lg:flex w-72 flex-col border-r border-slate-200 bg-white px-6 py-8">
-          <div className="mb-8">
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Admin</p>
-            <p className="mt-2 text-lg font-semibold text-slate-900">glammednailsbyjhen</p>
+        <aside className={`hidden sm:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ${
+          sidebarCollapsed ? 'w-14 sm:w-16 px-1.5 sm:px-2 py-4 sm:py-6' : 'w-40 sm:w-48 md:w-52 lg:w-56 xl:w-72 px-2 sm:px-3 md:px-4 lg:px-6 py-4 sm:py-6 md:py-7 lg:py-8'
+        }`}>
+          <div className="mb-8 flex items-center justify-between gap-2">
+            {sidebarCollapsed ? (
+              <div className="flex flex-col items-center w-full">
+                <Image
+                  src="/logo.png"
+                  alt="glammednailsbyjhen logo"
+                  width={48}
+                  height={48}
+                  className="w-12 h-12 object-contain"
+                  priority
+                />
+              </div>
+            ) : (
+              <div className="flex-1">
+                <div className="mb-2">
+                  <Image
+                    src="/logo.png"
+                    alt="glammednailsbyjhen logo"
+                    width={180}
+                    height={60}
+                    className="h-12 md:h-14 lg:h-16 w-auto object-contain"
+                    priority
+                  />
+                </div>
+                <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] md:tracking-[0.4em] text-slate-400">Admin</p>
+              </div>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? (
+                <IoChevronForward className="w-4 h-4 text-slate-600" />
+              ) : (
+                <IoChevronBack className="w-4 h-4 text-slate-600" />
+              )}
+            </button>
           </div>
           <nav className="space-y-2 flex-1">
             {navItems.map((item) => (
@@ -664,22 +755,36 @@ export default function AdminDashboard() {
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
                 className={[
-                  'flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition',
+                  'flex w-full items-center justify-center md:justify-between rounded-xl md:rounded-2xl px-2 md:px-3 lg:px-4 py-2 md:py-2.5 lg:py-3 text-xs md:text-sm font-semibold transition relative',
                   activeSection === item.id
                     ? 'bg-slate-900 text-white shadow-lg'
                     : 'text-slate-500 hover:bg-slate-100',
                 ].join(' ')}
+                title={sidebarCollapsed ? item.label : undefined}
               >
-                {item.label}
-                {item.id === 'bookings' && pendingBookingsCount > 0 && (
-                  <span
-                    className={[
-                      'rounded-full px-2 py-0.5 text-xs',
-                      activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
-                    ].join(' ')}
-                  >
-                    {pendingBookingsCount}
-                  </span>
+                {sidebarCollapsed ? (
+                  <>
+                    {item.id === 'bookings' && pendingBookingsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[8px] flex items-center justify-center font-bold">
+                        {pendingBookingsCount}
+                      </span>
+                    )}
+                    {item.icon && <item.icon className="w-5 h-5" />}
+                  </>
+                ) : (
+                  <>
+                    <span>{item.label}</span>
+                    {item.id === 'bookings' && pendingBookingsCount > 0 && (
+                      <span
+                        className={[
+                          'rounded-full px-1.5 md:px-2 py-0.5 text-[10px] md:text-xs',
+                          activeSection === 'bookings' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600',
+                        ].join(' ')}
+                      >
+                        {pendingBookingsCount}
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             ))}
@@ -687,77 +792,27 @@ export default function AdminDashboard() {
           <div className="mt-auto pt-4 border-t border-slate-200">
             <button
               onClick={handleLogout}
-              className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition border border-rose-200"
+              className={`flex w-full items-center ${sidebarCollapsed ? 'justify-center' : 'gap-1.5 md:gap-2'} rounded-xl md:rounded-2xl px-2 md:px-3 lg:px-4 py-2 md:py-2.5 lg:py-3 text-xs md:text-sm font-semibold text-rose-600 hover:bg-rose-50 transition border border-rose-200`}
+              title={sidebarCollapsed ? 'Logout' : undefined}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Logout
+              <IoLogOutOutline className="w-4 md:w-5 h-4 md:h-5" />
+              {!sidebarCollapsed && <span>Logout</span>}
             </button>
           </div>
         </aside>
 
         <main className="flex-1 p-3 sm:p-4 md:p-6">
-          <header className="mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-slate-900">
-                {activeSection === 'bookings' ? 'Booking control center' : sectionDescription[activeSection]}
-              </h1>
-              {activeSection !== 'bookings' && (
+          {activeSection !== 'bookings' && (
+            <header className="mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-slate-900">
+                  {sectionDescription[activeSection]}
+                </h1>
                 <p className="text-xs sm:text-sm text-slate-500">Use the navigation to access the booking workflow.</p>
-              )}
-            </div>
-            {activeSection === 'bookings' && bookingsView === 'calendar' && (
-              <div className="flex flex-wrap gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBlockDefaults({
-                      start: selectedDate,
-                      end: selectedDate,
-                    });
-                    setBlockModalOpen(true);
-                  }}
-                  className="rounded-full border border-rose-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 touch-manipulation"
-                >
-                  <span className="hidden sm:inline">Block selected date</span>
-                  <span className="sm:hidden">Block date</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
-                    const end = format(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0), 'yyyy-MM-dd');
-                    setBlockDefaults({ start, end });
-                    setBlockModalOpen(true);
-                  }}
-                  className="rounded-full border border-rose-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 touch-manipulation"
-                >
-                  <span className="hidden sm:inline">Block entire month</span>
-                  <span className="sm:hidden">Block month</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSlot(null);
-                    setSlotModalOpen(true);
-                  }}
-                  className="rounded-full bg-slate-900 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation"
-                >
-                  New slot
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSyncSheets}
-                  className="rounded-full border border-slate-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
-                >
-                  <span className="hidden sm:inline">Sync Google Sheet</span>
-                  <span className="sm:hidden">Sync</span>
-                </button>
               </div>
-            )}
-          </header>
+            </header>
+          )}
 
           {activeSection === 'bookings' ? (
             renderBookingsSection()

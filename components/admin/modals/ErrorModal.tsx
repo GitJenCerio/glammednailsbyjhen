@@ -1,3 +1,5 @@
+import { IoAlertCircleOutline } from 'react-icons/io5';
+
 type ErrorModalProps = {
   open: boolean;
   title?: string;
@@ -13,19 +15,7 @@ export function ErrorModal({ open, title = 'Error', message, onClose }: ErrorMod
       <div className="w-full max-w-md rounded-2xl sm:rounded-3xl bg-white p-6 shadow-xl">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
-            <svg
-              className="w-6 h-6 text-rose-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <IoAlertCircleOutline className="w-6 h-6 text-rose-600" />
           </div>
           <div className="flex-1">
             <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-2">{title}</h3>

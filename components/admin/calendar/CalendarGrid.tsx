@@ -37,29 +37,26 @@ export function CalendarGrid({
     const pendingCount = daySlots.filter((slot) => slot.status === 'pending').length;
     const confirmedCount = daySlots.filter((slot) => slot.status === 'confirmed').length;
 
-    const badges: Array<{ label: string; labelMobile: string; color: string }> = [];
+    const badges: Array<{ label: string; color: string }> = [];
 
     if (isBlocked) {
-      badges.push({ label: 'B', labelMobile: 'B', color: 'bg-rose-300 text-rose-900' });
+      badges.push({ label: 'B', color: 'bg-rose-300 text-rose-900' });
     } else {
       if (confirmedCount > 0) {
         badges.push({ 
-          label: `${confirmedCount} Confirmed`, 
-          labelMobile: `${confirmedCount}C`,
+          label: `${confirmedCount}`,
           color: 'bg-slate-900 text-white' 
         });
       }
       if (availableCount > 0) {
         badges.push({ 
-          label: `${availableCount} Available`, 
-          labelMobile: `${availableCount}A`,
+          label: `${availableCount}`,
           color: 'bg-emerald-300 text-emerald-900' 
         });
       }
       if (pendingCount > 0) {
         badges.push({ 
-          label: `${pendingCount} Pending`, 
-          labelMobile: `${pendingCount}P`,
+          label: `${pendingCount}`,
           color: 'bg-amber-300 text-amber-900' 
         });
       }
@@ -118,7 +115,7 @@ export function CalendarGrid({
                   onClick={() => !isPast && onSelectDate(isoDate)}
                   disabled={isPast}
                   className={[
-                    'flex flex-col gap-0.5 sm:gap-1 md:gap-1.5 rounded-xl sm:rounded-2xl border-2 p-1 sm:p-1.5 md:p-2.5 lg:p-3 text-left transition-all shadow-sm min-h-[3rem] sm:min-h-[3.5rem] md:min-h-[4rem]',
+                    'flex flex-col gap-0.5 sm:gap-0.5 md:gap-1 rounded-lg sm:rounded-xl md:rounded-2xl border-2 p-0.5 sm:p-1 md:p-1.5 lg:p-2 xl:p-2.5 text-left transition-all shadow-sm min-h-[2.5rem] sm:min-h-[3rem] md:min-h-[3.5rem] lg:min-h-[4rem] xl:min-h-[4.5rem]',
                     isPast ? 'opacity-40 cursor-not-allowed' : 'touch-manipulation active:scale-95',
                     isCurrentMonth ? 'border-slate-300' : 'border-slate-200 text-slate-400',
                     isBlocked ? 'bg-rose-200 border-rose-400 hover:bg-rose-300 hover:border-rose-500' : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400',
@@ -128,20 +125,24 @@ export function CalendarGrid({
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  <span className={`text-xs sm:text-sm font-semibold leading-tight ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>
+                  <span className={`text-[10px] sm:text-xs md:text-sm font-semibold leading-tight ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}`}>
                     {format(date, 'd')}
                   </span>
                   {badges.length > 0 && (
-                    <div className="flex flex-col gap-0.5 sm:gap-1">
-                      {badges.map((badge, idx) => (
+                    <div className="flex flex-col gap-0.5 sm:gap-0.5 md:gap-0.5 lg:gap-1 flex-wrap">
+                      {badges.slice(0, 3).map((badge, idx) => (
                         <span
                           key={idx}
-                          className={`inline-flex items-center justify-center rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-[11px] font-semibold whitespace-nowrap ${badge.color}`}
+                          className={`inline-flex items-center justify-center rounded-full px-0.5 sm:px-1 md:px-1.5 lg:px-2 py-0.5 text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] xl:text-[11px] font-semibold whitespace-nowrap leading-tight ${badge.color}`}
                         >
-                          <span className="sm:hidden">{badge.labelMobile}</span>
-                          <span className="hidden sm:inline">{badge.label}</span>
+                          {badge.label}
                         </span>
                       ))}
+                      {badges.length > 3 && (
+                        <span className={`inline-flex items-center justify-center rounded-full px-0.5 sm:px-1 md:px-1.5 lg:px-2 py-0.5 text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] xl:text-[11px] font-semibold whitespace-nowrap leading-tight bg-slate-400 text-white`}>
+                          +{badges.length - 3}
+                        </span>
+                      )}
                     </div>
                   )}
                 </button>

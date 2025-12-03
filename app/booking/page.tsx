@@ -130,9 +130,10 @@ function SlotModal({
   squeezeFeeAcknowledged,
   onSqueezeFeeAcknowledgedChange,
   disableProceed,
+  isBooking,
   onClose,
   onProceed,
-}: SlotModalProps) {
+}: SlotModalProps & { isBooking?: boolean }) {
   if (!slot) return null;
 
   const requiredSlots = getRequiredSlotCount(serviceType);
@@ -200,19 +201,9 @@ function SlotModal({
               <option value="repeat">Repeat Client</option>
             </select>
           </div>
-          {requiresMultipleSlots && (
-            <div
-              className={`rounded-2xl border-2 px-4 py-3 text-sm ${
-                missingLinkedSlots
-                  ? 'border-rose-400 bg-rose-200 text-rose-800'
-                  : 'border-emerald-400 bg-emerald-200 text-emerald-800'
-              }`}
-            >
-              {serviceMessage ? (
-                <p>{serviceMessage}</p>
-              ) : missingLinkedSlots ? (
-                <p>This service requires consecutive slots. Please select a different time or date.</p>
-              ) : null}
+          {requiresMultipleSlots && missingLinkedSlots && (
+            <div className="rounded-2xl border-2 border-rose-400 bg-rose-200 px-4 py-3 text-sm text-rose-800">
+              <p>This service requires <strong>{requiredSlots} consecutive slots</strong>. Please select a different time or date where {requiredSlots} consecutive slots are available.</p>
             </div>
           )}
         </div>
@@ -260,7 +251,7 @@ function SlotModal({
             disabled={disableProceed}
             className="flex-1 px-4 py-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation text-sm sm:text-base"
           >
-            Proceed to Booking Form
+            {isBooking ? 'Reserving Slot...' : 'Proceed to Booking Form'}
           </button>
         </div>
       </motion.div>
@@ -273,6 +264,7 @@ export default function BookingPage() {
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isBooking, setIsBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
@@ -455,7 +447,8 @@ export default function BookingPage() {
   const disableProceed =
     !selectedSlot ||
     missingLinkedSlots ||
-    (hasSqueezeFee && !squeezeFeeAcknowledged);
+    (hasSqueezeFee && !squeezeFeeAcknowledged) ||
+    isBooking;
 
   const handleSelectSlot = (slot: Slot) => {
     if (slot.status !== 'available') return;
@@ -469,46 +462,50 @@ export default function BookingPage() {
   };
 
   async function handleProceedToBooking() {
-    if (!selectedSlot) return;
+    if (!selectedSlot || isBooking) return; // Prevent multiple simultaneous bookings
     
-    // Refresh slot data before booking to ensure we have the latest status
-    await loadData();
-    
-    // Verify the selected slot still exists and is available after refresh
-    const refreshedSlot = slots.find((s) => s.id === selectedSlot.id);
-    if (!refreshedSlot) {
-      alert('This slot is no longer available. Please select another slot.');
-      setSelectedSlot(null);
-      setLinkedSlots([]);
-      return;
-    }
-    
-    if (refreshedSlot.status !== 'available') {
-      alert(`This slot is no longer available (status: ${refreshedSlot.status}). Please select another slot.`);
-      setSelectedSlot(null);
-      setLinkedSlots([]);
-      return;
-    }
-    
-    // Update selectedSlot to use refreshed data
-    setSelectedSlot(refreshedSlot);
-    
-    const requiredSlots = getRequiredSlotCount(selectedService);
-    const linkedSlotIds = linkedSlots.map((slot) => {
-      const refreshedLinkedSlot = slots.find((s) => s.id === slot.id);
-      if (!refreshedLinkedSlot || refreshedLinkedSlot.status !== 'available') {
-        return null;
-      }
-      return refreshedLinkedSlot.id;
-    }).filter((id): id is string => id !== null);
-
-    if (requiredSlots > 1 && linkedSlotIds.length !== requiredSlots - 1) {
-      setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
-      setLinkedSlots([]);
-      return;
-    }
-
+    setIsBooking(true);
     try {
+      // Refresh slot data before booking to ensure we have the latest status
+      await loadData();
+      
+      // Verify the selected slot still exists and is available after refresh
+      const refreshedSlot = slots.find((s) => s.id === selectedSlot.id);
+      if (!refreshedSlot) {
+        alert('This slot is no longer available. Please select another slot.');
+        setSelectedSlot(null);
+        setLinkedSlots([]);
+        setIsBooking(false);
+        return;
+      }
+      
+      if (refreshedSlot.status !== 'available') {
+        alert(`This slot is no longer available (status: ${refreshedSlot.status}). Please select another slot.`);
+        setSelectedSlot(null);
+        setLinkedSlots([]);
+        setIsBooking(false);
+        return;
+      }
+      
+      // Update selectedSlot to use refreshed data
+      setSelectedSlot(refreshedSlot);
+      
+      const requiredSlots = getRequiredSlotCount(selectedService);
+      const linkedSlotIds = linkedSlots.map((slot) => {
+        const refreshedLinkedSlot = slots.find((s) => s.id === slot.id);
+        if (!refreshedLinkedSlot || refreshedLinkedSlot.status !== 'available') {
+          return null;
+        }
+        return refreshedLinkedSlot.id;
+      }).filter((id): id is string => id !== null);
+
+      if (requiredSlots > 1 && linkedSlotIds.length !== requiredSlots - 1) {
+        setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
+        setLinkedSlots([]);
+        setIsBooking(false);
+        return;
+      }
+
       const response = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -524,19 +521,18 @@ export default function BookingPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || 'Slot is no longer available.');
+        const errorMessage = errorData.error || 'Slot is no longer available.';
+        // Check if it's a race condition (slot already booked)
+        if (errorMessage.includes('no longer available') || errorMessage.includes('not available')) {
+          throw new Error('This slot was just booked by another customer. Please select a different time slot.');
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      // Redirect to Google Form - booking is successfully reserved
       window.location.href = data.googleFormUrl;
-      setSelectedSlot(null);
-      setSelectedService('manicure');
-      setClientType('new');
-      setServiceLocation('homebased_studio');
-      setLinkedSlots([]);
-      setServiceMessage(null);
-      setSqueezeFeeAcknowledged(false);
-      await loadData();
+      // Note: We don't reset state here since we're redirecting
     } catch (error: any) {
       console.error('Error creating booking:', error);
       alert(error.message || 'This slot is no longer available. Please pick another slot.');
@@ -544,6 +540,8 @@ export default function BookingPage() {
       // Reset selection to allow user to pick a new slot
       setSelectedSlot(null);
       setLinkedSlots([]);
+    } finally {
+      setIsBooking(false);
     }
   }
 
@@ -560,9 +558,27 @@ export default function BookingPage() {
           <h1 id="booking-heading" className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4 text-slate-900 scroll-mt-24 sm:scroll-mt-28">
             Book Your Appointment
           </h1>
-          <p className="text-center text-gray-600 mb-6 sm:mb-8 md:mb-12 max-w-2xl mx-auto px-4 text-sm sm:text-base">
+          <p className="text-center text-gray-600 mb-4 sm:mb-6 max-w-2xl mx-auto px-4 text-sm sm:text-base">
             Select an available time slot to proceed with your booking
           </p>
+
+          {/* Slot Requirements Notice */}
+          <div className="mb-6 sm:mb-8 md:mb-12 max-w-4xl mx-auto px-4">
+            <div className="rounded-xl sm:rounded-2xl border-2 border-blue-300 bg-blue-50 px-4 sm:px-5 py-3 sm:py-4">
+              <h3 className="text-sm sm:text-base font-semibold text-blue-900 mb-2 sm:mb-3 flex items-center gap-2">
+                <span>Slot Requirements by Service</span>
+              </h3>
+              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-blue-800">
+                <p><strong>2 consecutive slots required:</strong> Mani + Pedi, Home Service (2 pax)</p>
+                <p><strong>3 consecutive slots required:</strong> Home Service (3 pax)</p>
+                <div className="mt-2.5 pt-2.5 border-t border-blue-200">
+                  <p className="text-[11px] sm:text-xs font-medium italic text-blue-900">
+                    <strong>Important:</strong> For services requiring multiple slots, select the <strong>first</strong> slot of the consecutive sequence. The system will automatically book the required consecutive slots for you.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {loading ? (
             <div className="flex justify-center items-center h-96">
@@ -591,7 +607,7 @@ export default function BookingPage() {
                     </p>
                     {selectedService && getRequiredSlotCount(selectedService) > 1 && (
                       <p className="text-[10px] sm:text-xs text-amber-700 mt-1">
-                        ⚠️ For {getRequiredSlotCount(selectedService)}-slot services, select the <strong>first</strong> slot of the consecutive sequence (e.g., if you need 3 slots at 8:00 AM, 10:30 AM, 1:00 PM, select 8:00 AM).
+                        For {getRequiredSlotCount(selectedService)}-slot services, select the <strong>first</strong> slot of the consecutive sequence (e.g., if you need 3 slots at 8:00 AM, 10:30 AM, 1:00 PM, select 8:00 AM).
                       </p>
                     )}
                   </header>
@@ -651,6 +667,7 @@ export default function BookingPage() {
         squeezeFeeAcknowledged={squeezeFeeAcknowledged}
         onSqueezeFeeAcknowledgedChange={setSqueezeFeeAcknowledged}
         disableProceed={disableProceed}
+        isBooking={isBooking}
         onClose={() => {
           setSelectedSlot(null);
           setSelectedService('manicure');

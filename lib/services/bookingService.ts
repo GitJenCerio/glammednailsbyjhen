@@ -711,7 +711,7 @@ export async function rescheduleBooking(bookingId: string, newSlotId: string, li
   });
 }
 
-export async function releaseExpiredPendingBookings(maxAgeMinutes = 20) {
+export async function releaseExpiredPendingBookings(maxAgeMinutes = 30) {
   const cutoff = Date.now() - maxAgeMinutes * 60 * 1000;
   const snapshot = await bookingsCollection.where('status', '==', 'pending_form').get();
 

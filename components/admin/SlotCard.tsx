@@ -1,14 +1,40 @@
-import type { Slot } from '@/lib/types';
+import type { Slot, Booking } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
+import { IoCreateOutline, IoTrashOutline } from 'react-icons/io5';
 
 type SlotCardProps = {
   slot: Slot;
+  booking?: Booking | null;
+  customer?: { name: string } | null;
   onEdit: (slot: Slot) => void;
   onDelete: (slot: Slot) => void;
 };
 
-export function SlotCard({ slot, onEdit, onDelete }: SlotCardProps) {
+export function SlotCard({ slot, booking, customer, onEdit, onDelete }: SlotCardProps) {
   const isConfirmed = slot.status === 'confirmed';
+  
+  // Get customer full name - prioritize Customer object, then booking customerData
+  const customerName = customer?.name ||
+                       booking?.customerData?.['Full Name'] || 
+                       booking?.customerData?.['fullName'] || 
+                       booking?.customerData?.['Full name'] ||
+                       booking?.customerData?.['FULL NAME'] ||
+                       booking?.customerData?.['Name'] || 
+                       booking?.customerData?.['name'] ||
+                       booking?.customerData?.['NAME'] ||
+                       // Try combining first and last name if they exist separately
+                       (booking?.customerData?.['First Name'] && booking?.customerData?.['Last Name'] 
+                         ? `${booking.customerData['First Name']} ${booking.customerData['Last Name']}`.trim()
+                         : null) ||
+                       (booking?.customerData?.['firstName'] && booking?.customerData?.['lastName']
+                         ? `${booking.customerData['firstName']} ${booking.customerData['lastName']}`.trim()
+                         : null) ||
+                       null;
+  
+  // Get service location
+  const serviceLocation = booking?.serviceLocation === 'home_service' ? 'Home Service' : 
+                         booking?.serviceLocation === 'homebased_studio' ? 'Studio' : 
+                         null;
 
   const getStatusColor = () => {
     switch (slot.status) {
@@ -24,45 +50,56 @@ export function SlotCard({ slot, onEdit, onDelete }: SlotCardProps) {
   };
 
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2 rounded-xl sm:rounded-2xl border-2 ${getStatusColor()} p-4 sm:p-5 shadow-lg hover:shadow-xl transition-all duration-200`}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-2">
-          <p className="text-sm sm:text-base font-bold text-slate-900">{formatTime12Hour(slot.time)}</p>
-          {slot.slotType === 'with_squeeze_fee' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-purple-200 text-purple-900 border border-purple-300">
-              Squeeze-in Fee
+    <div className={`relative flex flex-col gap-3 rounded-xl sm:rounded-2xl border-2 ${getStatusColor()} p-4 sm:p-5 shadow-lg hover:shadow-xl transition-all duration-200`}>
+      {slot.slotType === 'with_squeeze_fee' && (
+        <div className="absolute top-2 right-2 inline-flex items-center justify-center px-1 py-0.5 rounded bg-purple-500 border border-purple-700">
+          <span className="text-[8px] sm:text-[9px] font-semibold text-white leading-none">SQ</span>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <p className="text-sm sm:text-base font-bold text-slate-900">{formatTime12Hour(slot.time)}</p>
+        {slot.status === 'confirmed' && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-slate-700 text-white border border-slate-800">
+            Confirmed
+          </span>
+        )}
+        {slot.status === 'available' && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-emerald-500 text-white border border-emerald-600">
+            Available
+          </span>
+        )}
+      </div>
+      {isConfirmed && customerName && (
+        <div className="flex items-center gap-2 text-xs sm:text-sm">
+          <p className="font-semibold text-slate-900">{customerName}</p>
+          {serviceLocation && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-200 text-blue-900 border border-blue-300">
+              {serviceLocation}
             </span>
           )}
         </div>
-        <p className="text-lg sm:text-xl font-extrabold capitalize mb-1">{slot.status}</p>
-        {slot.notes && <p className="text-xs sm:text-sm text-slate-600 break-words font-medium">{slot.notes}</p>}
-      </div>
-      <div className="flex gap-2 flex-shrink-0">
-        <button
-          type="button"
-          onClick={() => !isConfirmed && onEdit(slot)}
-          disabled={isConfirmed}
-          className={`rounded-full border-2 px-4 py-2 text-xs sm:text-sm font-semibold touch-manipulation active:scale-95 transition-all ${
-            isConfirmed
-              ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
-              : 'border-slate-400 bg-white text-slate-700 hover:border-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => !isConfirmed && onDelete(slot)}
-          disabled={isConfirmed}
-          className={`rounded-full border-2 px-4 py-2 text-xs sm:text-sm font-semibold touch-manipulation active:scale-95 transition-all ${
-            isConfirmed
-              ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
-              : 'border-rose-400 bg-white text-rose-700 hover:border-rose-700 hover:bg-rose-50'
-          }`}
-        >
-          Delete
-        </button>
-      </div>
+      )}
+      {slot.notes && <p className="text-xs sm:text-sm text-slate-600 break-words font-medium">{slot.notes}</p>}
+      {!isConfirmed && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onEdit(slot)}
+            className="flex-1 rounded-full border-2 px-1.5 py-1 flex items-center justify-center touch-manipulation active:scale-95 transition-all border-slate-400 bg-white text-slate-700 hover:border-slate-900 hover:bg-slate-50"
+            title="Edit"
+          >
+            <IoCreateOutline className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(slot)}
+            className="flex-1 rounded-full border-2 px-1.5 py-1 flex items-center justify-center touch-manipulation active:scale-95 transition-all border-rose-400 bg-white text-rose-700 hover:border-rose-700 hover:bg-rose-50"
+            title="Delete"
+          >
+            <IoTrashOutline className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
