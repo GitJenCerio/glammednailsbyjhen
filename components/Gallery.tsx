@@ -25,15 +25,15 @@ export default function Gallery() {
 
   return (
     <section id="gallery" className="section-padding bg-white">
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-4xl md:text-5xl font-acollia text-center mb-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-4">
           Gallery
         </h2>
-        <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-4 text-sm sm:text-base">
           Browse our latest work and get inspired
         </p>
 
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
+        <div className="columns-2 sm:columns-2 md:columns-3 lg:columns-4 gap-3 sm:gap-4">
           {galleryImages.map((item, index) => (
             <motion.div
               key={index}

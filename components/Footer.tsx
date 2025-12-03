@@ -5,20 +5,20 @@ import Image from 'next/image';
 export default function Footer() {
   return (
     <footer id="book" className="bg-gray-100 section-padding">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 sm:gap-10 md:gap-12 mb-6 sm:mb-8">
           {/* About Section */}
           <div>
-            <div className="mb-4">
+            <div className="mb-3 sm:mb-4">
               <Image
                 src="/logo.png"
                 alt="glammednailsbyjhen logo"
                 width={250}
                 height={80}
-                className="h-12 w-auto"
+                className="h-10 sm:h-12 md:h-14 w-auto"
               />
             </div>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base">
               Premium nail care services for the modern you.
             </p>
             <div className="flex gap-4">
@@ -49,8 +49,8 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-heading font-semibold text-lg mb-4">Quick Links</h4>
-            <ul className="space-y-2 text-gray-600">
+            <h4 className="font-heading font-semibold text-base sm:text-lg md:text-xl mb-3 sm:mb-4">Quick Links</h4>
+            <ul className="space-y-1.5 sm:space-y-2 text-gray-600 text-sm sm:text-base">
               <li>
                 <a href="#home" className="hover:text-black transition-colors">Home</a>
               </li>
@@ -74,16 +74,16 @@ export default function Footer() {
 
           {/* Contact Info */}
           <div>
-            <h4 className="font-heading font-semibold text-lg mb-4">Contact Us</h4>
-            <div className="text-gray-600 space-y-2">
+            <h4 className="font-heading font-semibold text-base sm:text-lg md:text-xl mb-3 sm:mb-4">Contact Us</h4>
+            <div className="text-gray-600 space-y-1.5 sm:space-y-2 text-sm sm:text-base">
               <p>Manila, Philippines</p>
-              <p className="mt-4">
-                <a href="tel:+1234567890" className="hover:text-black transition-colors">
+              <p className="mt-3 sm:mt-4">
+                <a href="tel:+639451781774" className="hover:text-black transition-colors">
                   +639451781774
                 </a>
               </p>
               <p>
-                <a href="mailto:info@glammednailsbyjhen.com" className="hover:text-black transition-colors">
+                <a href="mailto:glammednailsbyjhen@gmail.com" className="hover:text-black transition-colors break-words">
                   glammednailsbyjhen@gmail.com
                 </a>
               </p>
@@ -92,11 +92,11 @@ export default function Footer() {
         </div>
 
         {/* Copyright */}
-        <div className="border-t-2 border-black pt-8 text-center text-gray-600">
-          <span className="text-sm text-gray-600">© {new Date().getFullYear()} GlammedNailsByJhen</span>
-          <div className="flex space-x-4">
-            <a href="/privacy-policy" className="text-gray-500 hover:text-black text-sm">Privacy Policy</a>
-            <a href="/cookies-policy" className="text-gray-500 hover:text-black text-sm">Cookies Policy</a>
+        <div className="border-t-2 border-black pt-6 sm:pt-8 text-center text-gray-600">
+          <span className="text-xs sm:text-sm text-gray-600 block mb-2 sm:mb-3">© {new Date().getFullYear()} GlammedNailsByJhen</span>
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+            <a href="/privacy-policy" className="text-gray-500 hover:text-black text-xs sm:text-sm">Privacy Policy</a>
+            <a href="/cookies-policy" className="text-gray-500 hover:text-black text-xs sm:text-sm">Cookies Policy</a>
           </div>
         </div>
       </div>

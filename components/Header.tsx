@@ -42,11 +42,11 @@ export default function Header() {
       animate={{ y: 0 }}
       className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md"
     >
-      <nav className="px-6 md:px-16 lg:px-32 xl:px-64 flex items-center justify-between py-8 relative">
+      <nav className="px-4 sm:px-6 md:px-8 lg:px-16 xl:px-32 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px]">
         {/* Mobile Menu Button - Left */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden flex flex-col gap-1.5 w-6"
+          className="md:hidden flex flex-col gap-1.5 w-6 z-10 flex-shrink-0"
           aria-label="Toggle menu"
         >
           <motion.span
@@ -64,27 +64,27 @@ export default function Header() {
         </button>
 
         {/* Invisible placeholder to balance for justify-between on desktop */}
-        <div className="hidden md:block w-32"></div>
+        <div className="hidden md:block w-32 flex-shrink-0"></div>
 
         {/* Center Group: Logo + Navigation - Centered */}
-        <div className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
-          <Link href="/" className="flex items-center px-4">
+        <div className="hidden md:flex items-center gap-6 lg:gap-8 xl:gap-10 absolute left-1/2 -translate-x-1/2 max-w-[90vw]">
+          <Link href="/" className="flex items-center flex-shrink-0">
             <Image 
               src="/logo.png" 
               alt="glammednailsbyjhen logo" 
               width={200}
               height={64}
-              className="h-10 md:h-14 lg:h-16 w-auto"
+              className="h-10 md:h-12 lg:h-14 xl:h-16 w-auto max-w-[120px] md:max-w-[140px] lg:max-w-[160px] xl:max-w-none"
               priority
             />
           </Link>
-          <div className="flex items-center gap-8">
+          <div className="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8">
             {navLinks.map((link) => (
               link.isRoute ? (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer"
+                  className="text-xs lg:text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer whitespace-nowrap"
                 >
                   {link.label}
                 </Link>
@@ -96,7 +96,7 @@ export default function Header() {
                     e.preventDefault();
                     scrollToId(link.href);
                   }}
-                  className="text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer"
+                  className="text-xs lg:text-sm font-medium text-gray-600 hover:text-black transition-colors cursor-pointer whitespace-nowrap"
                 >
                   {link.label}
                 </a>
@@ -106,13 +106,13 @@ export default function Header() {
         </div>
 
         {/* Mobile Logo - Centered */}
-        <Link href="/" className="md:hidden absolute left-1/2 -translate-x-1/2 px-4 mb-2">
+        <Link href="/" className="md:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[60vw] sm:max-w-[50vw]">
           <Image 
             src="/logo.png" 
             alt="glammednailsbyjhen logo" 
             width={200}
             height={56}
-            className="h-14 w-auto"
+            className="h-10 sm:h-12 md:h-14 w-auto max-w-full"
             priority
           />
         </Link>
@@ -120,7 +120,7 @@ export default function Header() {
         {/* Book Appointment Button - Far Right */}
         <Link
           href="/booking"
-          className="hidden md:block px-6 py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-sm whitespace-nowrap"
+          className="hidden md:block px-4 lg:px-6 py-2 lg:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs lg:text-sm whitespace-nowrap flex-shrink-0"
         >
           Book Now
         </Link>
@@ -128,7 +128,7 @@ export default function Header() {
         {/* Mobile Book Button - Right */}
         <Link
           href="/booking"
-          className="md:hidden px-6 py-1.5 mx-2 ml-16 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs"
+          className="md:hidden px-4 sm:px-5 py-1.5 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs sm:text-sm flex-shrink-0 ml-2 sm:ml-4"
         >
           Book
         </Link>
@@ -141,7 +141,7 @@ export default function Header() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden absolute left-4 top-full mt-0 bg-white border-t rounded-xl shadow-2xl z-[100] max-w-xs w-64"
+            className="md:hidden absolute left-2 sm:left-4 top-full mt-0 bg-white border-t rounded-xl shadow-2xl z-[100] max-w-[90vw] sm:max-w-xs w-[280px] sm:w-64"
           >
             <div className="px-4 py-4 space-y-3">
               {navLinks.map((link) => (

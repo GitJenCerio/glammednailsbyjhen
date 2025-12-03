@@ -56,12 +56,12 @@ export default function Services() {
         className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-0"
       >
         <div id="services" style={{ scrollMarginTop: '180px', height: 0 }} />
-        <h2 className="text-5xl md:text-5xl text-center mb-5 font-acollia">Our Services</h2>
-        <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-center mb-4 sm:mb-5 font-acollia px-4">Our Services</h2>
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-4 text-sm sm:text-base">
           Professional nail care services tailored to your needs
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 px-4 sm:px-6">
           {services.map((service, index) => (
             <motion.div
               key={service.title}
@@ -72,7 +72,7 @@ export default function Services() {
               className="group cursor-pointer"
             >
               <div
-                className="relative h-80 md:h-96 mb-4 overflow-hidden rounded-2xl md:rounded-3xl"
+                className="relative h-64 sm:h-72 md:h-80 lg:h-96 mb-3 sm:mb-4 overflow-hidden rounded-xl sm:rounded-2xl md:rounded-3xl"
                 onClick={() => setSelectedImage(service.image)}
               >
                 <Image
@@ -80,12 +80,12 @@ export default function Services() {
                   alt={service.title}
                   fill
                   loading="lazy"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="object-cover group-hover:scale-110 transition-transform duration-300 rounded-2xl md:rounded-3xl"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-300 rounded-xl sm:rounded-2xl md:rounded-3xl"
                 />
               </div>
-              <h3 className="text-xl font-heading font-semibold mb-2">{service.title}</h3>
-              <p className="text-gray-600 text-sm text-justify">{service.description}</p>
+              <h3 className="text-lg sm:text-xl md:text-2xl font-heading font-semibold mb-2">{service.title}</h3>
+              <p className="text-gray-600 text-xs sm:text-sm md:text-base text-justify leading-relaxed">{service.description}</p>
             </motion.div>
           ))}
         </div>
