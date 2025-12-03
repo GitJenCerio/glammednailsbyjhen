@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { motion } from 'framer-motion';
 import Header from '@/components/Header';
@@ -265,6 +265,7 @@ export default function BookingPage() {
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [loading, setLoading] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
+  const slotsSectionRef = useRef<HTMLElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
@@ -441,6 +442,32 @@ export default function BookingPage() {
     [availableSlotsForDate, selectedService, slots, blockedDates],
   );
 
+  // Scroll to show both calendar and slots on mobile when date is selected
+  useEffect(() => {
+    if (selectedDate) {
+      // Only scroll on mobile/tablet (smaller screens)
+      const isMobile = window.innerWidth < 1024; // lg breakpoint
+      if (isMobile) {
+        // Small delay to ensure DOM is updated
+        setTimeout(() => {
+          const calendarElement = document.getElementById('booking-calendar');
+          if (calendarElement) {
+            // Scroll to calendar position but ensure slots are also visible
+            // Calculate position to show calendar with some space for slots below
+            const calendarTop = calendarElement.getBoundingClientRect().top + window.pageYOffset;
+            const headerOffset = 80; // Header height offset
+            const scrollPosition = Math.max(0, calendarTop - headerOffset);
+            
+            window.scrollTo({
+              top: scrollPosition,
+              behavior: 'smooth'
+            });
+          }
+        }, 100);
+      }
+    }
+  }, [selectedDate]);
+
   const requiredSlots = getRequiredSlotCount(selectedService);
   const hasSqueezeFee = selectedSlot?.slotType === 'with_squeeze_fee';
   const missingLinkedSlots = requiredSlots > 1 && linkedSlots.length !== requiredSlots - 1;
@@ -587,16 +614,21 @@ export default function BookingPage() {
           ) : (
             <>
               <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.2fr,1fr]">
-                <CalendarGrid
-                  referenceDate={currentMonth}
-                  slots={slots.filter((slot) => slot.status === 'available')}
-                  blockedDates={blockedDates}
-                  selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
-                  onChangeMonth={setCurrentMonth}
-                />
+                <div id="booking-calendar" className="scroll-mt-24">
+                  <CalendarGrid
+                    referenceDate={currentMonth}
+                    slots={slots.filter((slot) => slot.status === 'available')}
+                    blockedDates={blockedDates}
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    onChangeMonth={setCurrentMonth}
+                  />
+                </div>
 
-                <section className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-4 sm:p-6 shadow-md shadow-slate-900/10">
+                <section 
+                  ref={slotsSectionRef}
+                  className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-4 sm:p-6 shadow-md shadow-slate-900/10 scroll-mt-24"
+                >
                   <header className="mb-3 sm:mb-4">
                     <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Available slots</p>
                     <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900">
