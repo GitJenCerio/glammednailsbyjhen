@@ -15,7 +15,7 @@ interface FAQSection {
 
 const faqSections: FAQSection[] = [
   {
-    title: '📅 Appointments & Booking',
+    title: 'Appointments & Booking',
     items: [
       {
         question: 'Do you accept walk-ins?',
@@ -50,7 +50,7 @@ const faqSections: FAQSection[] = [
     ]
   },
   {
-    title: '💅 Russian Manicure & Services',
+    title: 'Russian Manicure & Services',
     items: [
       {
         question: 'Does the Russian Manicure hurt?',
@@ -71,7 +71,7 @@ const faqSections: FAQSection[] = [
     ]
   },
   {
-    title: '🏡 Studio Rules & Comfort',
+    title: 'Studio Rules & Comfort',
     items: [
       {
         question: 'Can I bring a companion?',
@@ -95,7 +95,7 @@ const faqSections: FAQSection[] = [
     ]
   },
   {
-    title: '💦 During Your Session',
+    title: 'During Your Session',
     items: [
       {
         question: 'What should I do during the procedure?',
@@ -120,7 +120,7 @@ const faqSections: FAQSection[] = [
     ]
   },
   {
-    title: '💰 Payments & Fees',
+    title: 'Payments & Fees',
     items: [
       {
         question: 'How much are your services?',
@@ -137,7 +137,7 @@ const faqSections: FAQSection[] = [
     ]
   },
   {
-    title: '💅 Aftercare & Nail Maintenance',
+    title: 'Aftercare & Nail Maintenance',
     items: [
       {
         question: 'How long will my nails last?',
@@ -159,7 +159,7 @@ const faqSections: FAQSection[] = [
     ]
   },
   {
-    title: '🏠 Studio Information & Amenities',
+    title: 'Studio Information & Amenities',
     items: [
       {
         question: 'Location',

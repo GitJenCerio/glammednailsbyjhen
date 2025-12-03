@@ -17,10 +17,11 @@ export default function Gallery() {
 
   // Deterministic, varied heights so adjacent items rarely match
   const getTileHeight = (index: number) => {
-    const baseHeights = [180, 210, 240, 270, 300, 330, 360, 390];
+    // Slightly shorter heights so tiles are not too tall on mobile
+    const baseHeights = [150, 180, 210, 240, 260, 280, 300, 320];
     const base = baseHeights[(index * 7 + 3) % baseHeights.length];
     const jitter = ((index * 13) % 40) - 20; // -20..19px
-    return Math.max(160, base + jitter);
+    return Math.max(140, base + jitter);
   };
 
   return (
