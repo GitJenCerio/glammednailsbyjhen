@@ -9,7 +9,6 @@ import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import type { Slot, BlockedDate, ServiceType } from '@/lib/types';
 import { getNextSlotTime, SLOT_TIMES } from '@/lib/constants/slots';
 import { formatTime12Hour } from '@/lib/utils';
-import { trackPageView, trackBookingStarted } from '@/lib/utils/analytics';
 
 const SERVICE_OPTIONS: Record<ServiceLocation, { value: ServiceType; label: string }[]> = {
   homebased_studio: [
@@ -285,7 +284,6 @@ export default function BookingPage() {
   }, [serviceLocation, serviceOptions, selectedService]);
 
   useEffect(() => {
-    trackPageView('/booking');
     loadData();
   }, []);
 
@@ -559,10 +557,6 @@ export default function BookingPage() {
       }
 
       const data = await response.json();
-      // Track that booking was started
-      if (data.bookingId) {
-        trackBookingStarted(data.bookingId);
-      }
       // Redirect to Google Form - booking is successfully reserved
       window.location.href = data.googleFormUrl;
       // Note: We don't reset state here since we're redirecting

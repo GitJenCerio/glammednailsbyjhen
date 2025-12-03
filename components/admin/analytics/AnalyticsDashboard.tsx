@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import type { Booking, Slot, Customer } from '@/lib/types';
 import type { TimeRange } from '@/lib/analytics';
@@ -25,7 +25,7 @@ import { DonutChartCard } from './DonutChartCard';
 import { LineChartCard } from './LineChartCard';
 import { BarChartCard } from './BarChartCard';
 import { ListCard } from './ListCard';
-import { IoCashOutline, IoCalendarOutline, IoPeopleOutline, IoCloseCircleOutline, IoEyeOutline, IoArrowForwardOutline } from 'react-icons/io5';
+import { IoCashOutline, IoCalendarOutline, IoPeopleOutline, IoCloseCircleOutline } from 'react-icons/io5';
 
 interface AnalyticsDashboardProps {
   bookings: Booking[];
@@ -35,18 +35,6 @@ interface AnalyticsDashboardProps {
 
 export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDashboardProps) {
   const [range, setRange] = useState<TimeRange>('today');
-  const [webAnalytics, setWebAnalytics] = useState<{
-    pageViews: number;
-    bookNowClicks: number;
-    conversionRate: number;
-    incompleteBookings: number;
-  }>({
-    pageViews: 0,
-    bookNowClicks: 0,
-    conversionRate: 0,
-    incompleteBookings: 0,
-  });
-  const [loadingAnalytics, setLoadingAnalytics] = useState(true);
 
   // Get all analytics data based on selected range
   const bookingsInRange = useMemo(() => getBookingsByRange(bookings, range), [bookings, range]);
@@ -61,42 +49,6 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
   const clientTypeBreakdown = useMemo(() => getClientTypeBreakdown(bookings, range), [bookings, range]);
   const clientSourceBreakdown = useMemo(() => getClientSourceBreakdown(bookings, range), [bookings, range]);
   const incompleteBookingsList = useMemo(() => getIncompleteBookings(bookings, range), [bookings, range]);
-  
-  // Fetch web analytics
-  useEffect(() => {
-    async function fetchWebAnalytics() {
-      setLoadingAnalytics(true);
-      try {
-        const statsRes = await fetch(`/api/analytics/stats?range=${range}`);
-        const statsData = await statsRes.json();
-        
-        const stats = statsData.stats || { pageViews: 0, bookNowClicks: 0, bookingStarts: 0, bookingCompletions: 0 };
-        
-        // Calculate conversion rate: completed bookings / book now clicks
-        // Completed bookings are confirmed or pending_payment (form submitted)
-        const completedBookings = bookingsInRange.filter(
-          (b) => b.status === 'confirmed' || b.status === 'pending_payment'
-        ).length;
-        
-        const conversionRate = stats.bookNowClicks > 0 
-          ? (completedBookings / stats.bookNowClicks) * 100 
-          : 0;
-        
-        setWebAnalytics({
-          pageViews: stats.pageViews || 0,
-          bookNowClicks: stats.bookNowClicks || 0,
-          conversionRate: Math.round(conversionRate * 10) / 10,
-          incompleteBookings: incompleteBookingsList.length,
-        });
-      } catch (error) {
-        console.error('Failed to fetch web analytics:', error);
-      } finally {
-        setLoadingAnalytics(false);
-      }
-    }
-    
-    fetchWebAnalytics();
-  }, [range, bookingsInRange, incompleteBookingsList.length]);
 
   const totalBookings = bookingsInRange.length;
   const totalRevenue = revenueData.total;
@@ -298,35 +250,18 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
         />
       </div>
 
-      {/* Web Analytics Row */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Page Views"
-          value={loadingAnalytics ? '...' : webAnalytics.pageViews}
-          color="slate"
-          icon={<IoEyeOutline className="w-5 h-5" />}
-        />
-        <MetricCard
-          title="Book Now Clicks"
-          value={loadingAnalytics ? '...' : webAnalytics.bookNowClicks}
-          color="blue"
-          icon={<IoArrowForwardOutline className="w-5 h-5" />}
-        />
-        <MetricCard
-          title="Conversion Rate"
-          value={loadingAnalytics ? '...' : `${webAnalytics.conversionRate}%`}
-          subtitle={webAnalytics.bookNowClicks > 0 ? `${webAnalytics.bookNowClicks} clicks` : 'No clicks'}
-          color="green"
-          icon={<IoCashOutline className="w-5 h-5" />}
-        />
-        <MetricCard
-          title="Incomplete Bookings"
-          value={incompleteBookingsList.length}
-          subtitle="Started but didn't finish"
-          color="orange"
-          icon={<IoCloseCircleOutline className="w-5 h-5" />}
-        />
-      </div>
+      {/* Incomplete Bookings */}
+      {incompleteBookingsList.length > 0 && (
+        <div className="grid gap-4">
+          <MetricCard
+            title="Incomplete Bookings"
+            value={incompleteBookingsList.length}
+            subtitle="Started but didn't finish"
+            color="orange"
+            icon={<IoCloseCircleOutline className="w-5 h-5" />}
+          />
+        </div>
+      )}
 
       {/* Location Breakdown Summary */}
       {locationBreakdown.studio + locationBreakdown.homeService > 0 && (

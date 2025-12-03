@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { trackBookNowClick } from '@/lib/utils/analytics';
 
 export default function Hero() {
   return (
@@ -62,7 +61,6 @@ export default function Hero() {
           >
             <a
               href="/booking"
-              onClick={() => trackBookNowClick('hero')}
               className="px-4 py-2 text-sm sm:px-6 sm:py-3 sm:text-base bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
             >
               Book Now
