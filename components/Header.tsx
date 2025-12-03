@@ -74,7 +74,7 @@ export default function Header() {
               alt="glammednailsbyjhen logo" 
               width={200}
               height={64}
-              className="h-10 md:h-16 w-auto"
+              className="h-10 md:h-14 lg:h-16 w-auto"
               priority
             />
           </Link>
@@ -172,8 +172,7 @@ export default function Header() {
                 )
               ))}
               <Link
-                href="https://forms.gle/o6k3veo5HY2NkYAu9"
-                target="_blank"
+                href="/booking"
                 onClick={() => setIsOpen(false)}
                 className="block w-full px-4 py-2 bg-black text-white font-medium text-center border-2 border-white rounded-lg shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-2"
               >
