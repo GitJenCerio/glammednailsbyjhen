@@ -23,6 +23,7 @@ import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
+import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
 import type { Customer } from '@/lib/types';
 
 const navItems = [
@@ -821,7 +822,7 @@ function AdminDashboardContent() {
   );
 
   const sectionDescription: Record<AdminSection, string> = {
-    overview: 'At-a-glance metrics for bookings, customers, and revenue.',
+    overview: 'Analytics dashboard with real-time insights and visualizations.',
     bookings: 'Create slots, block dates, and track booking statuses.',
     finance: 'View invoices, track payments, and manage revenue.',
     customers: 'See relationship insights and client history.',
@@ -987,7 +988,7 @@ function AdminDashboardContent() {
         </aside>
 
         <main className="flex-1 p-3 sm:p-4 md:p-6">
-          {activeSection !== 'bookings' && (
+          {activeSection !== 'bookings' && activeSection !== 'overview' && (
             <header className="mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
@@ -1063,239 +1064,8 @@ function AdminDashboardContent() {
           ) : activeSection === 'services' ? (
             <ServicesManager />
           ) : (
-            /* Overview tab */
-            <div className="space-y-4 sm:space-y-6">
-              {/* Top-level KPIs */}
-              <div className="grid gap-2 sm:gap-3 lg:gap-4 grid-cols-3">
-                <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2 sm:mb-3">
-                    Revenue (this month)
-                  </p>
-                  <p className="text-lg sm:text-3xl lg:text-5xl font-extrabold text-slate-900 mb-2 sm:mb-2 leading-tight">
-                    ₱{overviewStats.revenueThisMonth.toLocaleString('en-PH')}
-                  </p>
-                  <p className="text-[10px] sm:text-xs lg:text-sm text-slate-500 mt-2 sm:mt-2 pt-2 sm:pt-2 border-t border-slate-100">
-                    Last month: ₱{overviewStats.revenueLastMonth.toLocaleString('en-PH')}
-                  </p>
-                </div>
-                <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2 sm:mb-3">
-                    Bookings (this month)
-                  </p>
-                  <p className="text-lg sm:text-3xl lg:text-5xl font-extrabold text-slate-900 mb-2 sm:mb-2 leading-tight">
-                    {overviewStats.bookingsThisMonth}
-                  </p>
-                  <p className="text-[10px] sm:text-xs lg:text-sm text-slate-500 mt-2 sm:mt-2 pt-2 sm:pt-2 border-t border-slate-100">
-                    Last month: {overviewStats.bookingsLastMonth}
-                  </p>
-                </div>
-                <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2 sm:mb-3">
-                    Total Bookings
-                  </p>
-                  <p className="text-lg sm:text-3xl lg:text-5xl font-extrabold text-slate-900 leading-tight">
-                    {bookings.length}
-                  </p>
-                </div>
-              </div>
-
-              {/* Customers + Revenue snapshot */}
-              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
-                    Customers
-                  </p>
-                  <p className="text-2xl font-bold text-slate-900 mb-1">
-                    {customerStats.totalCustomers}
-                  </p>
-                  <p className="text-xs text-slate-500 mb-4">
-                    {customerStats.newClients} new · {customerStats.repeatClients} repeat
-                  </p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500">Bookings linked to customers</span>
-                      <span className="font-semibold text-slate-900">
-                        {customerStats.totalCustomerBookings}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500">Cancelled (tracked)</span>
-                      <span className="font-semibold text-rose-700">
-                        {customerStats.cancelledBookings}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow space-y-3">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-1">
-                    Revenue snapshot
-                  </p>
-                  <p className="text-2xl font-bold text-slate-900 mb-1">
-                    ₱
-                    {overviewStats.monthly
-                      .reduce((sum, m) => sum + m.revenue, 0)
-                      .toLocaleString('en-PH')}
-                  </p>
-                  <p className="text-xs text-slate-500">Total received (DP + payments + tips)</p>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Bookings with invoice</span>
-                      <span className="font-semibold text-slate-900">
-                        {bookings.filter((b) => b.invoice).length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Tips recorded</span>
-                      <span className="font-semibold text-purple-700">
-                        ₱
-                        {bookings
-                          .reduce((sum, b) => sum + (b.tipAmount || 0), 0)
-                          .toLocaleString('en-PH')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Top services & location breakdown */}
-              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
-                    Top services
-                  </p>
-                  {overviewStats.topServices.length === 0 ? (
-                    <p className="text-xs text-slate-500">No services data yet.</p>
-                  ) : (
-                    <ul className="space-y-1.5 text-xs sm:text-sm">
-                      {overviewStats.topServices.map((service) => (
-                        <li
-                          key={service.service}
-                          className="flex items-center justify-between"
-                        >
-                          <span className="text-slate-600">{service.service}</span>
-                          <span className="font-semibold text-slate-900">{service.count}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-2">
-                    Location breakdown
-                  </p>
-                  <div className="space-y-2 text-xs sm:text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-600">Homebased studio</span>
-                      <span className="font-semibold text-slate-900">
-                        {overviewStats.homebasedCount}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-600">Home service</span>
-                      <span className="font-semibold text-slate-900">
-                        {overviewStats.homeServiceCount}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bookings by status mini bar chart */}
-              <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-3">
-                  Bookings by status
-                </p>
-                {(() => {
-                  const pendingForm = bookings.filter((b) => b.status === 'pending_form').length;
-                  const pendingPayment = bookings.filter((b) => b.status === 'pending_payment').length;
-                  const confirmed = bookings.filter((b) => b.status === 'confirmed').length;
-                  const max = Math.max(pendingForm, pendingPayment, confirmed, 1);
-
-                  const rows = [
-                    { label: 'Awaiting Form', value: pendingForm, color: 'bg-yellow-400' },
-                    { label: 'Awaiting Payment', value: pendingPayment, color: 'bg-orange-400' },
-                    { label: 'Confirmed', value: confirmed, color: 'bg-emerald-500' },
-                  ];
-
-                  return (
-                    <div className="space-y-2">
-                      {rows.map((row) => (
-                        <div key={row.label} className="flex items-center gap-2 text-xs">
-                          <span className="w-28 text-slate-600">{row.label}</span>
-                          <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className={`h-full ${row.color}`}
-                              style={{ width: `${(row.value / max) * 100 || 0}%` }}
-                            />
-                          </div>
-                          <span className="w-6 text-right font-semibold text-slate-900">
-                            {row.value}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Per-month bookings & revenue (current year) */}
-              <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
-                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-slate-400 mb-3">
-                  Bookings & revenue by month
-                </p>
-                {(() => {
-                  const monthLabels = [
-                    'Jan',
-                    'Feb',
-                    'Mar',
-                    'Apr',
-                    'May',
-                    'Jun',
-                    'Jul',
-                    'Aug',
-                    'Sep',
-                    'Oct',
-                    'Nov',
-                    'Dec',
-                  ];
-                  const maxRevenue = overviewStats.maxMonthlyRevenue || 1;
-                  const maxBookings = overviewStats.maxMonthlyBookings || 1;
-
-                  return (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                      {overviewStats.monthly.map((m) => (
-                        <div key={m.monthIndex} className="flex flex-col items-center gap-1">
-                          <span className="text-[10px] text-slate-600">
-                            {monthLabels[m.monthIndex]}
-                          </span>
-                          <div className="w-7 sm:w-8 h-20 sm:h-24 rounded-full bg-slate-100 flex flex-col-reverse overflow-hidden">
-                            {/* Revenue bar */}
-                            <div
-                              className="w-full bg-emerald-500"
-                              style={{
-                                height: `${(m.revenue / maxRevenue) * 100 || 0}%`,
-                              }}
-                            />
-                            {/* Bookings bar overlay */}
-                            <div
-                              className="w-full bg-slate-500/60"
-                              style={{
-                                height: `${(m.bookings / maxBookings) * 100 || 0}%`,
-                              }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-500">
-                            {m.bookings} bookings
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
+            /* Overview tab - Analytics Dashboard */
+            <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />
           )}
         </main>
       </div>

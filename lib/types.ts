@@ -92,3 +92,17 @@ export type SlotInput = Omit<Slot, 'id' | 'createdAt' | 'updatedAt'>;
 export type BlockedDateInput = Omit<BlockedDate, 'id' | 'createdAt' | 'updatedAt'>;
 export type CustomerInput = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>;
 
+export type AnalyticsEventType = 'page_view' | 'book_now_click' | 'booking_started' | 'booking_completed';
+
+export interface AnalyticsEvent {
+  id: string;
+  type: AnalyticsEventType;
+  page?: string;
+  referrer?: string;
+  userAgent?: string;
+  timestamp: string;
+  sessionId?: string;
+  bookingId?: string;
+  createdAt: string;
+}
+

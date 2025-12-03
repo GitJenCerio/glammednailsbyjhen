@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { IoMenu, IoClose } from 'react-icons/io5';
+import { trackBookNowClick } from '@/lib/utils/analytics';
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -114,6 +115,7 @@ export default function Header() {
         {/* Book Appointment Button - Far Right */}
         <Link
           href="/booking"
+          onClick={() => trackBookNowClick('header')}
           className="hidden lg:block px-4 lg:px-6 py-2 lg:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs lg:text-sm whitespace-nowrap flex-shrink-0"
         >
           Book Now
@@ -122,6 +124,7 @@ export default function Header() {
         {/* Mobile Book Button - Right */}
         <Link
           href="/booking"
+          onClick={() => trackBookNowClick('header-mobile')}
           className="lg:hidden px-4 sm:px-5 py-1.5 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs sm:text-sm flex-shrink-0 ml-2 sm:ml-4"
         >
           Book
@@ -167,7 +170,10 @@ export default function Header() {
               ))}
               <Link
                 href="/booking"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false);
+                  trackBookNowClick('mobile-menu');
+                }}
                 className="block w-full px-4 py-2 bg-black text-white font-medium text-center border-2 border-white rounded-lg shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-2"
               >
                 Book Now

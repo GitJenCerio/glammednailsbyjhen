@@ -1,8 +1,9 @@
 'use client';
 
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import Header from '@/components/Header';
 import Hero from '@/components/Hero';
+import { trackPageView } from '@/lib/utils/analytics';
 
 // Lazy load below-the-fold components for faster initial load
 const Services = lazy(() => import('@/components/Services'));
@@ -22,6 +23,10 @@ const LoadingPlaceholder = () => (
 );
 
 export default function Home() {
+  useEffect(() => {
+    trackPageView('/');
+  }, []);
+
   return (
     <main className="min-h-screen">
       <Header />
