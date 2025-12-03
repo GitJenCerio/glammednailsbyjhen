@@ -830,7 +830,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                       </span>
                     </td>
                     <td className="px-4 xl:px-6 py-3">
-                      <div className="relative inline-block" ref={(el) => (dropdownRefs.current[booking.id] = el)}>
+                      <div className="relative inline-block" ref={(el) => { dropdownRefs.current[booking.id] = el; }}>
                         <button
                           onClick={() => setOpenDropdownId(openDropdownId === booking.id ? null : booking.id)}
                           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"

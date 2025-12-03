@@ -74,7 +74,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
     lastBookingIdRef.current = booking.id;
     // Clear items when booking changes (squeeze-in fee is handled separately, not as a quote item)
     setQuoteItems([]);
-  }, [booking?.id]); // Only run when booking ID changes
+  }, [booking]); // Run when booking changes
 
   useEffect(() => {
     if (!PRICE_SHEET_TSV_URL) return;
