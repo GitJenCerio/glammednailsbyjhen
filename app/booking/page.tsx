@@ -596,8 +596,8 @@ export default function BookingPage() {
                 <span>Slot Requirements by Service</span>
               </h3>
               <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-blue-800">
-                <p><strong>2 consecutive slots required:</strong> Mani + Pedi, Home Service (2 pax)</p>
-                <p><strong>3 consecutive slots required:</strong> Home Service (3 pax)</p>
+                <p><strong>Mani + Pedi, Home Service (2 pax):</strong> 2 consecutive slots required</p>
+                <p><strong>Home Service (3 pax):</strong> 3 consecutive slots required</p>
                 <div className="mt-2.5 pt-2.5 border-t border-blue-200">
                   <p className="text-[11px] sm:text-xs font-medium italic text-blue-900">
                     <strong>Important:</strong> For services requiring multiple slots, select the <strong>first</strong> slot of the consecutive sequence. The system will automatically book the required consecutive slots for you.
