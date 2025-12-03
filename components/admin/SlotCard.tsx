@@ -81,22 +81,22 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete }: SlotCard
       )}
       {slot.notes && <p className="text-xs sm:text-sm text-slate-600 break-words font-medium">{slot.notes}</p>}
       {!isConfirmed && (
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => onEdit(slot)}
-            className="flex-1 rounded-full border-2 px-1.5 py-1 flex items-center justify-center touch-manipulation active:scale-95 transition-all border-slate-400 bg-white text-slate-700 hover:border-slate-900 hover:bg-slate-50"
+            className="rounded-full border-2 border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 touch-manipulation active:scale-[0.98] hover:bg-blue-100 transition-all"
             title="Edit"
           >
-            <IoCreateOutline className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <IoCreateOutline className="w-3 h-3" />
           </button>
           <button
             type="button"
             onClick={() => onDelete(slot)}
-            className="flex-1 rounded-full border-2 px-1.5 py-1 flex items-center justify-center touch-manipulation active:scale-95 transition-all border-rose-400 bg-white text-rose-700 hover:border-rose-700 hover:bg-rose-50"
+            className="rounded-full border-2 border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-100 transition-all"
             title="Delete"
           >
-            <IoTrashOutline className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <IoTrashOutline className="w-3 h-3" />
           </button>
         </div>
       )}

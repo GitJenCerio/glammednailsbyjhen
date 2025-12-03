@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import html2canvas from 'html2canvas';
-import type { Booking } from '@/lib/types';
+import type { Booking, BookingWithSlot } from '@/lib/types';
 import { format } from 'date-fns';
 
 type QuoteItem = {
@@ -16,6 +16,9 @@ type QuoteItem = {
 
 const generateId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+// Squeeze-in fee amount (can be configured)
+const SQUEEZE_IN_FEE = 500; // Default squeeze-in fee amount
+
 type PriceSheetRow = {
   name: string;
   displayPrice: string;
@@ -26,7 +29,7 @@ const PRICE_SHEET_TSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vSf9_fW2behj5fsi9CuLwzfikCow5WKEaXYDpKkjzZMW6gFtUzC9Ei6UWwixB0FY0mwDE83X7lugGX3/pub?output=tsv';
 
 type QuotationModalProps = {
-  booking: Booking | null;
+  booking: Booking | BookingWithSlot | null;
   slotLabel?: string;
   onClose: () => void;
   onSendInvoice?: (bookingId: string, invoiceData: { items: QuoteItem[]; total: number; notes: string }) => Promise<void>;
@@ -45,6 +48,33 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
   const [generatingImage, setGeneratingImage] = useState(false);
 
   const quoteCardRef = useRef<HTMLDivElement>(null);
+  const lastBookingIdRef = useRef<string | null>(null);
+
+  // Check if booking has a slot with squeeze-in fee
+  const hasSqueezeFee = useMemo(() => {
+    if (!booking) return false;
+    const bookingWithSlot = booking as BookingWithSlot;
+    return bookingWithSlot.slot?.slotType === 'with_squeeze_fee';
+  }, [booking]);
+
+  // Reset quote items when booking changes
+  useEffect(() => {
+    if (!booking) {
+      setQuoteItems([]);
+      setNotes('');
+      lastBookingIdRef.current = null;
+      return;
+    }
+
+    // Only process if this is a new booking (booking ID changed)
+    if (lastBookingIdRef.current === booking.id) {
+      return;
+    }
+
+    lastBookingIdRef.current = booking.id;
+    // Clear items when booking changes (squeeze-in fee is handled separately, not as a quote item)
+    setQuoteItems([]);
+  }, [booking?.id]); // Only run when booking ID changes
 
   useEffect(() => {
     if (!PRICE_SHEET_TSV_URL) return;
@@ -79,9 +109,14 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
       .finally(() => setSheetLoading(false));
   }, []);
 
-  const total = useMemo(
+  const servicesTotal = useMemo(
     () => quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     [quoteItems],
+  );
+
+  const total = useMemo(
+    () => servicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0),
+    [servicesTotal, hasSqueezeFee],
   );
 
   const depositAmount = booking?.depositAmount || 0;
@@ -138,7 +173,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
   };
 
   const handleGenerateInvoice = async () => {
-    if (!quoteItems.length || !quoteCardRef.current || !booking) return;
+    if ((!quoteItems.length && !hasSqueezeFee) || !quoteCardRef.current || !booking) return;
     setGeneratingImage(true);
     try {
       const canvas = await html2canvas(quoteCardRef.current, {
@@ -152,11 +187,12 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
       link.download = `invoice-${booking.bookingId}-${Date.now()}.jpg`;
       link.click();
 
-      // Save invoice to booking
+      // Save invoice to booking (squeeze-in fee is included in total, not as a separate item)
       const invoiceData = {
         items: quoteItems,
         total,
         notes,
+        squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined, // Store squeeze-in fee separately for reference
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -325,8 +361,16 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                   ))}
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-200 space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Services Subtotal: ₱{servicesTotal.toLocaleString('en-PH')}
+                  </p>
+                  {hasSqueezeFee && (
+                    <p className="text-sm font-semibold text-purple-700">
+                      Squeeze-in Fee: ₱{SQUEEZE_IN_FEE.toLocaleString('en-PH')}
+                    </p>
+                  )}
                   <p className="text-lg font-bold text-slate-900">
-                    Subtotal: ₱{total.toLocaleString('en-PH')}
+                    Total: ₱{total.toLocaleString('en-PH')}
                   </p>
                   {depositAmount > 0 && (
                     <>
@@ -389,7 +433,17 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
 
               <div className="border-t-2 border-slate-200 pt-3 mb-4 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold">Subtotal:</span>
+                  <span className="font-semibold">Services Subtotal:</span>
+                  <span className="text-lg font-semibold text-slate-900">₱{servicesTotal.toLocaleString('en-PH')}</span>
+                </div>
+                {hasSqueezeFee && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-purple-700">Squeeze-in Fee:</span>
+                    <span className="text-lg font-semibold text-purple-700">₱{SQUEEZE_IN_FEE.toLocaleString('en-PH')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                  <span className="font-semibold">Total:</span>
                   <span className="text-lg font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</span>
                 </div>
                 {depositAmount > 0 && (
@@ -430,7 +484,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
 
             <button
               onClick={handleGenerateInvoice}
-              disabled={!quoteItems.length || generatingImage}
+              disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
               className="w-full rounded-full bg-rose-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
             >
               {generatingImage ? 'Generating...' : 'Generate & Download Invoice'}

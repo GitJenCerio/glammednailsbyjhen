@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import type { Booking, BookingWithSlot, PaymentStatus, Customer } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { PaymentModal } from './modals/PaymentModal';
+import { IoEllipsisVertical } from 'react-icons/io5';
 
 type FinanceViewProps = {
   bookings: Booking[];
@@ -32,8 +33,14 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'week' | 'month'>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
+  const [dateRangeStart, setDateRangeStart] = useState<string>('');
+  const [dateRangeEnd, setDateRangeEnd] = useState<string>('');
+  const [useDateRange, setUseDateRange] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<Record<string, 'up' | 'down'>>({});
+  const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
@@ -115,6 +122,21 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
       });
     }
 
+    // Date range filter
+    if (useDateRange && dateRangeStart && dateRangeEnd) {
+      const startDate = new Date(dateRangeStart);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(dateRangeEnd);
+      endDate.setHours(23, 59, 59, 999);
+      
+      filtered = filtered.filter((booking) => {
+        const bookingDate = booking.invoice?.createdAt
+          ? new Date(booking.invoice.createdAt)
+          : new Date(booking.updatedAt);
+        return bookingDate >= startDate && bookingDate <= endDate;
+      });
+    }
+
     return filtered.sort((a, b) => {
       // Sort by invoice date if available, otherwise by booking updated date
       const dateA = a.invoice?.createdAt 
@@ -125,28 +147,49 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
         : new Date(b.updatedAt).getTime();
       return dateB - dateA;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, dateRangeStart, dateRangeEnd, useDateRange]);
 
   const totals = useMemo(() => {
+    // Unpaid: Count the remaining balance (total - deposit - paidAmount) for bookings with invoice
     const unpaid = filteredBookings
-      .filter((b) => b.paymentStatus === 'unpaid' || (!b.paymentStatus && !b.depositAmount))
+      .filter((b) => {
+        if (!b.invoice) return false; // Only count bookings with invoice
+        const total = b.invoice.total || 0;
+        const deposit = b.depositAmount || 0;
+        const paid = b.paidAmount || 0;
+        const balance = total - deposit - paid;
+        return balance > 0; // Only count if there's a remaining balance
+      })
       .reduce((sum, b) => {
         const total = b.invoice?.total || 0;
         const deposit = b.depositAmount || 0;
-        return sum + (total - deposit);
+        const paid = b.paidAmount || 0;
+        const balance = total - deposit - paid;
+        return sum + balance; // Count the remaining balance as unpaid
       }, 0);
+    
+    // Partial: Only count the deposit (DP) amount when there's a deposit but invoice isn't fully paid
     const partial = filteredBookings
-      .filter((b) => b.paymentStatus === 'partial' || (b.depositAmount && !b.invoice))
-      .reduce((sum, b) => {
-        const total = b.invoice?.total || 0;
+      .filter((b) => {
         const deposit = b.depositAmount || 0;
-        const paid = b.paidAmount || 0; // paidAmount represents payments AFTER deposit
-        // For bookings without invoice, only count the deposit as partial payment
+        if (deposit === 0) return false; // No deposit, not partial
+        
         if (!b.invoice) {
-          return sum + deposit;
+          // Booking with deposit but no invoice yet = partial (DP only)
+          return true;
         }
-        return sum + (total - deposit - paid);
+        
+        // Booking with invoice: check if there's still balance remaining
+        const total = b.invoice.total || 0;
+        const paid = b.paidAmount || 0;
+        const balance = total - deposit - paid;
+        return balance > 0; // Still has balance, so deposit counts as partial
+      })
+      .reduce((sum, b) => {
+        const deposit = b.depositAmount || 0;
+        return sum + deposit; // Only count the deposit amount as partial
       }, 0);
+    
     const paid = filteredBookings
       .filter((b) => b.paymentStatus === 'paid')
       .reduce((sum, b) => {
@@ -190,38 +233,73 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
       alert('Failed to update payment status');
       return;
     }
+    setOpenDropdownId(null);
     window.location.reload();
   };
+
+  // Close dropdown when clicking outside and calculate position
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdownId) {
+        const dropdown = dropdownRefs.current[openDropdownId];
+        if (dropdown && !dropdown.contains(event.target as Node)) {
+          setOpenDropdownId(null);
+        }
+      }
+    };
+
+    // Calculate dropdown position when it opens
+    if (openDropdownId) {
+      const dropdown = dropdownRefs.current[openDropdownId];
+      if (dropdown) {
+        const rect = dropdown.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const dropdownHeight = 120; // Approximate dropdown height
+        
+        // If not enough space below but enough space above, open upward
+        if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
+          setDropdownPosition(prev => ({ ...prev, [openDropdownId]: 'up' }));
+        } else {
+          setDropdownPosition(prev => ({ ...prev, [openDropdownId]: 'down' }));
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdownId]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
         {/* First row: Total Revenue, Total Tips, Sister Commission */}
-        <div className="rounded-2xl border-2 border-slate-300 bg-white px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow flex flex-col justify-center">
-          <p className="text-[10px] sm:text-xs text-slate-500 mb-2 sm:mb-2">Total Revenue</p>
-          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-slate-900 leading-tight">₱{totals.total.toLocaleString('en-PH')}</p>
+        <div className="rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow flex flex-col justify-center min-w-0">
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-slate-500 mb-1 sm:mb-2 truncate">Total Revenue</p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-slate-900 leading-tight break-words">₱{totals.total.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border-2 border-purple-300 bg-purple-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-purple-200/50 hover:shadow-xl hover:shadow-purple-300/50 transition-shadow flex flex-col justify-center">
-          <p className="text-[10px] sm:text-xs text-purple-600 mb-2 sm:mb-2">Total Tips</p>
-          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-purple-700 leading-tight">₱{totals.tips.toLocaleString('en-PH')}</p>
+        <div className="rounded-xl sm:rounded-2xl border-2 border-purple-300 bg-purple-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-purple-200/50 hover:shadow-xl hover:shadow-purple-300/50 transition-shadow flex flex-col justify-center min-w-0">
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-purple-600 mb-1 sm:mb-2 truncate">Total Tips</p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-purple-700 leading-tight break-words">₱{totals.tips.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-amber-200/50 hover:shadow-xl hover:shadow-amber-300/50 transition-shadow flex flex-col justify-center">
-          <p className="text-[10px] sm:text-xs text-amber-600 mb-2 sm:mb-2">Sister Commission (10%)</p>
-          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-amber-700 leading-tight">₱{totals.sisterCommissionTotal.toLocaleString('en-PH')}</p>
+        <div className="rounded-xl sm:rounded-2xl border-2 border-amber-300 bg-amber-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-amber-200/50 hover:shadow-xl hover:shadow-amber-300/50 transition-shadow flex flex-col justify-center min-w-0">
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-amber-600 mb-1 sm:mb-2 line-clamp-2">Sister Commission (10%)</p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-amber-700 leading-tight break-words">₱{totals.sisterCommissionTotal.toLocaleString('en-PH')}</p>
         </div>
         {/* Second row: Paid, Partial, Unpaid */}
-        <div className="rounded-2xl border-2 border-green-300 bg-green-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-green-200/50 hover:shadow-xl hover:shadow-green-300/50 transition-shadow flex flex-col justify-center">
-          <p className="text-[10px] sm:text-xs text-green-600 mb-2 sm:mb-2">Paid</p>
-          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-green-700 leading-tight">₱{totals.paid.toLocaleString('en-PH')}</p>
+        <div className="rounded-xl sm:rounded-2xl border-2 border-green-300 bg-green-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-green-200/50 hover:shadow-xl hover:shadow-green-300/50 transition-shadow flex flex-col justify-center min-w-0">
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-green-600 mb-1 sm:mb-2 truncate">Paid</p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-green-700 leading-tight break-words">₱{totals.paid.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-orange-200/50 hover:shadow-xl hover:shadow-orange-300/50 transition-shadow flex flex-col justify-center">
-          <p className="text-[10px] sm:text-xs text-orange-600 mb-2 sm:mb-2">Partial</p>
-          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-orange-700 leading-tight">₱{totals.partial.toLocaleString('en-PH')}</p>
+        <div className="rounded-xl sm:rounded-2xl border-2 border-orange-300 bg-orange-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-orange-200/50 hover:shadow-xl hover:shadow-orange-300/50 transition-shadow flex flex-col justify-center min-w-0">
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-orange-600 mb-1 sm:mb-2 truncate">Partial</p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-orange-700 leading-tight break-words">₱{totals.partial.toLocaleString('en-PH')}</p>
         </div>
-        <div className="rounded-2xl border-2 border-red-300 bg-red-50 px-2 py-4 sm:p-4 lg:p-5 shadow-lg shadow-red-200/50 hover:shadow-xl hover:shadow-red-300/50 transition-shadow flex flex-col justify-center">
-          <p className="text-[10px] sm:text-xs text-red-600 mb-2 sm:mb-2">Unpaid</p>
-          <p className="text-lg sm:text-2xl lg:text-4xl font-extrabold text-red-700 leading-tight">₱{totals.unpaid.toLocaleString('en-PH')}</p>
+        <div className="rounded-xl sm:rounded-2xl border-2 border-red-300 bg-red-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-red-200/50 hover:shadow-xl hover:shadow-red-300/50 transition-shadow flex flex-col justify-center min-w-0">
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-red-600 mb-1 sm:mb-2 truncate">Unpaid</p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-red-700 leading-tight break-words">₱{totals.unpaid.toLocaleString('en-PH')}</p>
         </div>
       </div>
 
@@ -266,7 +344,10 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
         {/* Period filter */}
         <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
           <button
-            onClick={() => setFilterPeriod('all')}
+            onClick={() => {
+              setFilterPeriod('all');
+              setUseDateRange(false); // Disable date range when using period filter
+            }}
             className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
               filterPeriod === 'all' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
@@ -274,7 +355,10 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
             All Time
           </button>
           <button
-            onClick={() => setFilterPeriod('week')}
+            onClick={() => {
+              setFilterPeriod('week');
+              setUseDateRange(false); // Disable date range when using period filter
+            }}
             className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
               filterPeriod === 'week' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
@@ -282,7 +366,10 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
             This Week
           </button>
           <button
-            onClick={() => setFilterPeriod('month')}
+            onClick={() => {
+              setFilterPeriod('month');
+              setUseDateRange(false); // Disable date range when using period filter
+            }}
             className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
               filterPeriod === 'month' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
@@ -291,32 +378,94 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
           </button>
         </div>
 
-        {/* Month filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] sm:text-xs text-slate-500">Month:</label>
-          <select
-            value={monthFilter}
-            onChange={(e) =>
-              setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter))
-            }
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-          >
-            <option value="all">All months</option>
-            <option value="1">January</option>
-            <option value="2">February</option>
-            <option value="3">March</option>
-            <option value="4">April</option>
-            <option value="5">May</option>
-            <option value="6">June</option>
-            <option value="7">July</option>
-            <option value="8">August</option>
-            <option value="9">September</option>
-            <option value="10">October</option>
-            <option value="11">November</option>
-            <option value="12">December</option>
-          </select>
-        </div>
-      </div>
+            {/* Month filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] sm:text-xs text-slate-500">Month:</label>
+              <select
+                value={monthFilter}
+                onChange={(e) => {
+                  setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter));
+                  setUseDateRange(false); // Disable date range when using month filter
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              >
+                <option value="all">All months</option>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Date Range Filter */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-3 sm:mt-0">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useDateRange"
+                checked={useDateRange}
+                onChange={(e) => {
+                  setUseDateRange(e.target.checked);
+                  if (!e.target.checked) {
+                    setDateRangeStart('');
+                    setDateRangeEnd('');
+                  } else {
+                    // Disable period and month filters when using date range
+                    setFilterPeriod('all');
+                    setMonthFilter('all');
+                  }
+                }}
+                className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-slate-900"
+              />
+              <label htmlFor="useDateRange" className="text-[11px] sm:text-xs text-slate-700 font-medium">
+                Custom Date Range
+              </label>
+            </div>
+            {useDateRange && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] sm:text-xs text-slate-500 whitespace-nowrap">From:</label>
+                  <input
+                    type="date"
+                    value={dateRangeStart}
+                    onChange={(e) => setDateRangeStart(e.target.value)}
+                    max={dateRangeEnd || undefined}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] sm:text-xs text-slate-500 whitespace-nowrap">To:</label>
+                  <input
+                    type="date"
+                    value={dateRangeEnd}
+                    onChange={(e) => setDateRangeEnd(e.target.value)}
+                    min={dateRangeStart || undefined}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+                {(dateRangeStart || dateRangeEnd) && (
+                  <button
+                    onClick={() => {
+                      setDateRangeStart('');
+                      setDateRangeEnd('');
+                    }}
+                    className="text-[11px] sm:text-xs text-slate-500 hover:text-slate-700 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
       {/* Mobile Card View */}
       <div className="lg:hidden space-y-3">
@@ -491,7 +640,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px]">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -528,7 +677,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-200 relative">
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-6 py-12 text-center text-sm text-slate-500">
@@ -681,33 +830,53 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                       </span>
                     </td>
                     <td className="px-4 xl:px-6 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {booking.paymentStatus !== 'paid' && (
-                          <>
-                            <button
-                              onClick={() => handleUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
-                              className="rounded-full border-2 border-orange-300 bg-white px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-50"
-                            >
-                              Partial
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedBookingForPayment(booking);
-                                setPaymentModalOpen(true);
-                              }}
-                              className="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
-                            >
-                              Paid
-                            </button>
-                          </>
-                        )}
-                        {booking.paymentStatus === 'paid' && (
-                          <button
-                            onClick={() => handleUpdatePayment(booking.id, 'refunded')}
-                            className="rounded-full border-2 border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                      <div className="relative inline-block" ref={(el) => (dropdownRefs.current[booking.id] = el)}>
+                        <button
+                          onClick={() => setOpenDropdownId(openDropdownId === booking.id ? null : booking.id)}
+                          className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                          aria-label="Actions"
+                        >
+                          <IoEllipsisVertical className="w-5 h-5 text-slate-600" />
+                        </button>
+                        {openDropdownId === booking.id && (
+                          <div 
+                            className="fixed w-40 rounded-xl border border-slate-200 bg-white shadow-lg z-[100] overflow-hidden"
+                            style={{
+                              right: typeof window !== 'undefined' ? `${Math.max(20, window.innerWidth - (dropdownRefs.current[booking.id]?.getBoundingClientRect().right || 0) + 20)}px` : '20px',
+                              top: dropdownPosition[booking.id] === 'up' 
+                                ? `${Math.max(20, (dropdownRefs.current[booking.id]?.getBoundingClientRect().top || 0) - 130)}px`
+                                : `${Math.min((typeof window !== 'undefined' ? window.innerHeight : 1000) - 150, (dropdownRefs.current[booking.id]?.getBoundingClientRect().bottom || 0) + 4)}px`,
+                            }}
                           >
-                            Refund
-                          </button>
+                            {booking.paymentStatus !== 'paid' && (
+                              <>
+                                <button
+                                  onClick={() => handleUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
+                                  className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-orange-700 hover:bg-orange-50 transition-colors"
+                                >
+                                  Mark as Partial
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedBookingForPayment(booking);
+                                    setPaymentModalOpen(true);
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
+                                >
+                                  Mark as Paid
+                                </button>
+                              </>
+                            )}
+                            {booking.paymentStatus === 'paid' && (
+                              <button
+                                onClick={() => handleUpdatePayment(booking.id, 'refunded')}
+                                className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
+                              >
+                                Refund
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>

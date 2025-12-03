@@ -457,8 +457,8 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
         </div>
       </div>
 
-      {/* Mobile Card View */}
-      <div className="lg:hidden space-y-3">
+      {/* Mobile & Tablet Card View */}
+      <div className="xl:hidden space-y-3 sm:space-y-4">
         {filteredBookings.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-6 text-center text-xs sm:text-sm text-slate-500 shadow-sm">
             {filterPeriod === 'all' 
@@ -472,43 +472,43 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
             const stageLabel = getBookingStageLabel(booking);
             const isDone = stageLabel === 'Done';
             return (
-              <div key={booking.id} className="rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-lg hover:shadow-xl transition-all duration-200">
-                <div className="flex items-start justify-between mb-3">
+              <div key={booking.id} className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-6 shadow-lg hover:shadow-xl transition-all duration-200">
+                <div className="flex items-start justify-between mb-3 sm:mb-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
+                    <div className="flex items-center gap-2 mb-1 sm:mb-1.5">
+                      <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-900 truncate">{booking.bookingId}</span>
                       {(booking.dateChanged || booking.timeChanged) && (
-                        <span className="text-xs" title={booking.validationWarnings?.join('; ') || 'Date or time was changed'}>
+                        <span className="text-xs sm:text-sm" title={booking.validationWarnings?.join('; ') || 'Date or time was changed'}>
                           ⚠️
                         </span>
                       )}
                     </div>
                     {booking.slot && (
-                      <div className="text-xs text-slate-600">
+                      <div className="text-xs sm:text-sm md:text-base text-slate-600">
                         {format(parseISO(booking.slot.date), 'MMM d, yyyy')} · {getTimeRange(booking)}
                       </div>
                     )}
                   </div>
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
+                    className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold border flex-shrink-0 ${
                       statusColors[booking.status] || 'bg-gray-100 text-gray-800 border-gray-200'
                     }`}
                   >
                     {stageLabel}
                   </span>
                 </div>
-                <div className="space-y-2 text-xs sm:text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Customer:</span>
+                <div className="space-y-2 sm:space-y-2.5 text-xs sm:text-sm md:text-base">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-slate-500 flex-shrink-0">Customer:</span>
                     <span className="font-medium text-slate-900 text-right break-words">{getCustomerName(booking)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Service:</span>
-                    <span className="font-medium text-slate-900">{booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-slate-500 flex-shrink-0">Service:</span>
+                    <span className="font-medium text-slate-900 text-right break-words">{booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Contact:</span>
-                    <span className="font-medium text-slate-600 break-all">{getCustomerPhone(booking)}</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-slate-500 flex-shrink-0">Contact:</span>
+                    <span className="font-medium text-slate-600 text-right break-all">{getCustomerPhone(booking)}</span>
                   </div>
                   {booking.invoice && (
                     <>
@@ -553,7 +553,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                     )}
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center">
+                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 flex flex-wrap gap-2 sm:gap-2.5 items-center">
                   {!isDone && onUpdatePayment && booking.invoice && booking.paymentStatus !== 'paid' && (
                     <>
                       <button
@@ -573,129 +573,167 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                       </button>
                     </>
                   )}
-                  {/* Mobile: Show buttons directly, Desktop: Use dropdown */}
-                  <div className="lg:hidden flex flex-wrap gap-2">
-                    {booking.customerData && Object.keys(booking.customerData).length > 0 && (
-                      <button
-                        onClick={() => setResponseModalBooking(booking)}
-                        className="inline-flex items-center gap-1 rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
-                      >
-                        <IoEyeOutline className="w-3.5 h-3.5" />
-                        <span>View</span>
-                      </button>
-                    )}
-                    {!isDone && onMakeQuotation && (
-                      <button
-                        onClick={() => onMakeQuotation(booking.id)}
-                        className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700"
-                      >
-                        Quote
-                      </button>
-                    )}
-                    {!isDone && onReschedule && !booking.invoice && (
-                      <button
-                        onClick={() => onReschedule(booking.id)}
-                        className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
-                      >
-                        Resched
-                      </button>
-                    )}
-                    {!isDone && onCancel && (
-                      <button
-                        onClick={() => {
-                          if (confirm('Are you sure you want to cancel this booking?')) {
-                            onCancel(booking.id);
-                          }
-                        }}
-                        className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-                  {/* Desktop: Actions Dropdown */}
-                  {(onMakeQuotation || onReschedule || onCancel) && (
-                    <div
-                      className="hidden lg:block relative"
-                      ref={(el: HTMLDivElement | null) => {
-                        dropdownRefs.current[booking.id] = el;
-                      }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenDropdownId(openDropdownId === booking.id ? null : booking.id);
-                        }}
-                        className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
-                      >
-                        Actions
-                        <IoChevronDown className={`w-3 h-3 transition-transform ${openDropdownId === booking.id ? 'rotate-180' : ''}`} />
-                      </button>
-                      {openDropdownId === booking.id && (
-                        <div 
-                          className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-50"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="py-1">
-                            {booking.customerData && Object.keys(booking.customerData).length > 0 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setResponseModalBooking(booking);
-                                  setOpenDropdownId(null);
-                                  setDropdownPosition(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                              >
-                                <IoEyeOutline className="w-4 h-4" />
-                                View Response
-                              </button>
-                            )}
-                            {onMakeQuotation && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onMakeQuotation(booking.id);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                              >
-                                <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
-                                Quotation
-                              </button>
-                            )}
-                            {!isDone && onReschedule && !booking.invoice && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onReschedule(booking.id);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                              >
-                                <IoCalendarOutline className="w-4 h-4" />
-                                Reschedule
-                              </button>
-                            )}
-                            {!isDone && onCancel && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm('Are you sure you want to cancel this booking?')) {
-                                    onCancel(booking.id);
-                                  }
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
-                              >
-                                <IoCloseCircleOutline className="w-4 h-4" />
-                                Cancel
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                  {/* Mobile & Tablet: Show buttons directly */}
+                  {!isDone && (
+                    <div className="xl:hidden flex flex-wrap gap-2">
+                      {booking.invoice ? (
+                        // If invoice exists, show only Requote button
+                        onMakeQuotation && (
+                          <button
+                            onClick={() => onMakeQuotation(booking.id)}
+                            className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700"
+                          >
+                            Requote
+                          </button>
+                        )
+                      ) : (
+                        // If no invoice, show all actions
+                        <>
+                          {booking.customerData && Object.keys(booking.customerData).length > 0 && (
+                            <button
+                              onClick={() => setResponseModalBooking(booking)}
+                              className="inline-flex items-center gap-1 rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
+                            >
+                              <IoEyeOutline className="w-3.5 h-3.5" />
+                              <span>View</span>
+                            </button>
+                          )}
+                          {onMakeQuotation && (
+                            <button
+                              onClick={() => onMakeQuotation(booking.id)}
+                              className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700"
+                            >
+                              Quote
+                            </button>
+                          )}
+                          {onReschedule && (
+                            <button
+                              onClick={() => onReschedule(booking.id)}
+                              className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
+                            >
+                              Resched
+                            </button>
+                          )}
+                          {onCancel && (
+                            <button
+                              onClick={() => {
+                                if (confirm('Are you sure you want to cancel this booking?')) {
+                                  onCancel(booking.id);
+                                }
+                              }}
+                              className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
+                  )}
+                  {/* Desktop: Actions - Requote button if invoice exists, dropdown if no invoice */}
+                  {!isDone && (
+                    <>
+                      {booking.invoice ? (
+                        // If invoice exists, show only Requote button (no dropdown)
+                        onMakeQuotation && (
+                          <button
+                            onClick={() => onMakeQuotation(booking.id)}
+                            className="hidden xl:inline-flex rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition-colors"
+                          >
+                            Requote
+                          </button>
+                        )
+                      ) : (
+                        // If no invoice, show dropdown with all actions
+                        (onMakeQuotation || onReschedule || onCancel || (booking.customerData && Object.keys(booking.customerData).length > 0)) && (
+                          <div
+                            className="hidden xl:block relative"
+                            ref={(el: HTMLDivElement | null) => {
+                              dropdownRefs.current[booking.id] = el;
+                            }}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenDropdownId(openDropdownId === booking.id ? null : booking.id);
+                              }}
+                              className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                            >
+                              Actions
+                              <IoChevronDown className={`w-3 h-3 transition-transform ${openDropdownId === booking.id ? 'rotate-180' : ''}`} />
+                            </button>
+                            {openDropdownId === booking.id && (
+                              <div 
+                                className="fixed w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-[100]"
+                                style={{
+                                  right: typeof window !== 'undefined' ? `${Math.max(20, window.innerWidth - (dropdownRefs.current[booking.id]?.getBoundingClientRect().right || 0) + 20)}px` : '20px',
+                                  top: `${(dropdownRefs.current[booking.id]?.getBoundingClientRect().bottom || 0) + 4}px`,
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="py-1">
+                                  {booking.customerData && Object.keys(booking.customerData).length > 0 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setResponseModalBooking(booking);
+                                        setOpenDropdownId(null);
+                                        setDropdownPosition(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                    >
+                                      <IoEyeOutline className="w-4 h-4" />
+                                      View Response
+                                    </button>
+                                  )}
+                                  {onMakeQuotation && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onMakeQuotation(booking.id);
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                    >
+                                      <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
+                                      Quotation
+                                    </button>
+                                  )}
+                                  {onReschedule && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onReschedule(booking.id);
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                    >
+                                      <IoCalendarOutline className="w-4 h-4" />
+                                      Reschedule
+                                    </button>
+                                  )}
+                                  {onCancel && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm('Are you sure you want to cancel this booking?')) {
+                                          onCancel(booking.id);
+                                        }
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
+                                    >
+                                      <IoCloseCircleOutline className="w-4 h-4" />
+                                      Cancel
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -705,7 +743,7 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white shadow-lg shadow-slate-200/50 relative">
+      <div className="hidden xl:block rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white shadow-lg shadow-slate-200/50 relative">
         <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full min-w-[800px]">
             <thead className="bg-slate-100 border-b-2 border-slate-300">
@@ -897,102 +935,132 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
                               </button>
                             </>
                           )}
-                          {/* Desktop: Actions Dropdown */}
-                          {(onMakeQuotation || onReschedule || onCancel) && (
-                            <div
-                              className="relative"
-                              ref={(el: HTMLDivElement | null) => {
-                                dropdownRefs.current[`desktop-${booking.id}`] = el;
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  const button = e.currentTarget;
-                                  const rect = button.getBoundingClientRect();
-                                  if (openDropdownId === `desktop-${booking.id}`) {
-                                    setOpenDropdownId(null);
-                                    setDropdownPosition(null);
-                                  } else {
-                                    setOpenDropdownId(`desktop-${booking.id}`);
-                                    setDropdownPosition({
-                                      top: rect.bottom + 4,
-                                      right: window.innerWidth - rect.right,
-                                    });
-                                  }
-                                }}
-                                className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
-                              >
-                                Actions
-                                <IoChevronDown className={`w-3 h-3 transition-transform ${openDropdownId === `desktop-${booking.id}` ? 'rotate-180' : ''}`} />
-                              </button>
-                              {openDropdownId === `desktop-${booking.id}` && dropdownPosition && typeof window !== 'undefined' && createPortal(
-                                <div 
-                                  className="dropdown-menu fixed w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
-                                  style={{
-                                    top: `${dropdownPosition.top}px`,
-                                    right: `${dropdownPosition.right}px`,
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                  }}
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                >
-                                  <div className="py-1">
-                                    {onMakeQuotation && !isDone && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          // If an invoice already exists, this acts as RE-QUOTE
-                                          onMakeQuotation(booking.id);
+                          {/* Desktop: Actions - Requote button if invoice exists, dropdown if no invoice */}
+                          {!isDone && (
+                            <>
+                              {booking.invoice ? (
+                                // If invoice exists, show only Requote button (no dropdown)
+                                onMakeQuotation && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onMakeQuotation(booking.id)}
+                                    className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition-colors"
+                                  >
+                                    Requote
+                                  </button>
+                                )
+                              ) : (
+                                // If no invoice, show dropdown with all actions
+                                (onMakeQuotation || onReschedule || onCancel || (booking.customerData && Object.keys(booking.customerData).length > 0)) && (
+                                  <div
+                                    className="relative"
+                                    ref={(el: HTMLDivElement | null) => {
+                                      dropdownRefs.current[`desktop-${booking.id}`] = el;
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        const button = e.currentTarget;
+                                        const rect = button.getBoundingClientRect();
+                                        if (openDropdownId === `desktop-${booking.id}`) {
                                           setOpenDropdownId(null);
                                           setDropdownPosition(null);
+                                        } else {
+                                          setOpenDropdownId(`desktop-${booking.id}`);
+                                          setDropdownPosition({
+                                            top: rect.bottom + 4,
+                                            right: window.innerWidth - rect.right,
+                                          });
+                                        }
+                                      }}
+                                      className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                                    >
+                                      Actions
+                                      <IoChevronDown className={`w-3 h-3 transition-transform ${openDropdownId === `desktop-${booking.id}` ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {openDropdownId === `desktop-${booking.id}` && dropdownPosition && typeof window !== 'undefined' && createPortal(
+                                      <div 
+                                        className="dropdown-menu fixed w-40 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                                        style={{
+                                          top: `${Math.min(window.innerHeight - 150, dropdownPosition.top)}px`,
+                                          right: `${Math.max(20, dropdownPosition.right)}px`,
                                         }}
-                                        className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                                      >
-                                        <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
-                                        Quotation
-                                      </button>
-                                    )}
-                                    {/* Once an invoice exists or booking is done, hide Reschedule and Cancel in desktop dropdown */}
-                                    {onReschedule && !isDone && !booking.invoice && (
-                                      <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          onReschedule(booking.id);
-                                          setOpenDropdownId(null);
-                                          setDropdownPosition(null);
+                                          e.preventDefault();
                                         }}
-                                        className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                        onMouseDown={(e) => e.stopPropagation()}
                                       >
-                                        <IoCalendarOutline className="w-4 h-4" />
-                                        Reschedule
-                                      </button>
-                                    )}
-                                    {onCancel && !isDone && !booking.invoice && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (confirm('Are you sure you want to cancel this booking?')) {
-                                            onCancel(booking.id);
-                                          }
-                                          setOpenDropdownId(null);
-                                          setDropdownPosition(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
-                                      >
-                                        <IoCloseCircleOutline className="w-4 h-4" />
-                                        Cancel
-                                      </button>
+                                        <div className="py-1">
+                                          {booking.customerData && Object.keys(booking.customerData).length > 0 && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setResponseModalBooking(booking);
+                                                setOpenDropdownId(null);
+                                                setDropdownPosition(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                            >
+                                              <IoEyeOutline className="w-4 h-4" />
+                                              View Response
+                                            </button>
+                                          )}
+                                          {onMakeQuotation && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onMakeQuotation(booking.id);
+                                                setOpenDropdownId(null);
+                                                setDropdownPosition(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                            >
+                                              <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
+                                              Quotation
+                                            </button>
+                                          )}
+                                          {onReschedule && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onReschedule(booking.id);
+                                                setOpenDropdownId(null);
+                                                setDropdownPosition(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                                            >
+                                              <IoCalendarOutline className="w-4 h-4" />
+                                              Reschedule
+                                            </button>
+                                          )}
+                                          {onCancel && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (confirm('Are you sure you want to cancel this booking?')) {
+                                                  onCancel(booking.id);
+                                                }
+                                                setOpenDropdownId(null);
+                                                setDropdownPosition(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
+                                            >
+                                              <IoCloseCircleOutline className="w-4 h-4" />
+                                              Cancel
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>,
+                                      document.body
                                     )}
                                   </div>
-                                </div>,
-                                document.body
+                                )
                               )}
-                            </div>
+                            </>
                           )}
                         </div>
                       </td>

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { format, startOfMonth } from 'date-fns';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, Suspense, useRef } from 'react';
+import { format, startOfMonth, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth as startOfMonthFn, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
@@ -35,8 +35,10 @@ const navItems = [
 
 type AdminSection = (typeof navItems)[number]['id'];
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isUpdatingFromUrl = useRef(false);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -52,8 +54,18 @@ export default function AdminDashboard() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<AdminSection>('bookings');
-  const [bookingsView, setBookingsView] = useState<'calendar' | 'list'>('calendar');
+  
+  // Get section from URL params, default to 'bookings'
+  const sectionFromUrl = searchParams.get('section') as AdminSection | null;
+  const viewFromUrl = searchParams.get('view') as 'calendar' | 'list' | null;
+  const [activeSection, setActiveSection] = useState<AdminSection>(
+    (sectionFromUrl && navItems.some(item => item.id === sectionFromUrl)) ? sectionFromUrl : 'bookings'
+  );
+  const [bookingsView, setBookingsView] = useState<'calendar' | 'list'>(
+    viewFromUrl === 'calendar' || viewFromUrl === 'list' ? viewFromUrl : 'calendar'
+  );
+  const [bookingFilterPeriod, setBookingFilterPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [filterPeriod, setFilterPeriod] = useState<'all' | 'day' | 'week' | 'month'>('all');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
@@ -208,6 +220,68 @@ export default function AdminDashboard() {
     loadData();
   }, []);
 
+  // Sync state with URL params - only when URL actually changes
+  useEffect(() => {
+    const section = searchParams.get('section') as AdminSection | null;
+    const view = searchParams.get('view') as 'calendar' | 'list' | null;
+    
+    // Update section from URL
+    const targetSection = (section && navItems.some(item => item.id === section)) ? section : 'bookings';
+    if (targetSection !== activeSection) {
+      isUpdatingFromUrl.current = true;
+      setActiveSection(targetSection);
+    }
+    
+    // Update view from URL (only relevant for bookings section)
+    if (targetSection === 'bookings') {
+      const targetView = (view === 'calendar' || view === 'list') ? view : 'calendar';
+      if (targetView !== bookingsView) {
+        isUpdatingFromUrl.current = true;
+        setBookingsView(targetView);
+      }
+    }
+  }, [searchParams.toString()]); // Use toString() to detect actual URL changes
+
+  // Update URL when activeSection changes (user action, not from URL sync)
+  useEffect(() => {
+    if (isUpdatingFromUrl.current) {
+      isUpdatingFromUrl.current = false;
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (activeSection !== 'bookings') {
+      params.set('section', activeSection);
+    }
+    // Preserve view param if on bookings section
+    if (activeSection === 'bookings' && bookingsView !== 'calendar') {
+      params.set('view', bookingsView);
+    }
+    
+    const newUrl = params.toString() ? `?${params.toString()}` : '';
+    router.replace(`/admin/dashboard${newUrl}`, { scroll: false });
+  }, [activeSection, router]);
+
+  // Update URL when bookingsView changes (user action, only for bookings section)
+  useEffect(() => {
+    if (isUpdatingFromUrl.current) {
+      isUpdatingFromUrl.current = false;
+      return;
+    }
+
+    if (activeSection !== 'bookings') {
+      return; // View changes only matter for bookings section
+    }
+
+    const params = new URLSearchParams();
+    if (bookingsView !== 'calendar') {
+      params.set('view', bookingsView);
+    }
+    
+    const newUrl = params.toString() ? `?${params.toString()}` : '';
+    router.replace(`/admin/dashboard${newUrl}`, { scroll: false });
+  }, [bookingsView, activeSection, router]);
+
   async function loadData() {
     try {
       const [slotsRes, blocksRes, bookingsRes, customersRes] = await Promise.all([
@@ -266,6 +340,68 @@ export default function AdminDashboard() {
     });
     return list;
   }, [bookings, slots]);
+
+  // Filter bookings by time period (today, week, month)
+  // Filter by appointment date (for calendar view)
+  const filteredBookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
+    if (bookingFilterPeriod === 'today') {
+      const today = startOfDay(new Date());
+      const todayEnd = endOfDay(new Date());
+      return bookingsWithSlots.filter((booking) => {
+        if (!booking.slot) return false;
+        const slotDate = parseISO(booking.slot.date);
+        return isWithinInterval(slotDate, { start: today, end: todayEnd });
+      });
+    } else if (bookingFilterPeriod === 'week') {
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
+      const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+      return bookingsWithSlots.filter((booking) => {
+        if (!booking.slot) return false;
+        const slotDate = parseISO(booking.slot.date);
+        return isWithinInterval(slotDate, { start: weekStart, end: weekEnd });
+      });
+    } else if (bookingFilterPeriod === 'month') {
+      const monthStart = startOfMonthFn(new Date());
+      const monthEnd = endOfMonth(new Date());
+      return bookingsWithSlots.filter((booking) => {
+        if (!booking.slot) return false;
+        const slotDate = parseISO(booking.slot.date);
+        return isWithinInterval(slotDate, { start: monthStart, end: monthEnd });
+      });
+    }
+    return bookingsWithSlots;
+  }, [bookingsWithSlots, bookingFilterPeriod]);
+
+  // Filter by booking creation date (for booking status overview)
+  const filteredBookingsForOverview = useMemo(() => {
+    let result = bookingsWithSlots;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (filterPeriod === 'day') {
+      const todayStart = startOfDay(today);
+      const todayEnd = endOfDay(today);
+      result = result.filter((b) => {
+        const bookingDate = new Date(b.createdAt);
+        return isWithinInterval(bookingDate, { start: todayStart, end: todayEnd });
+      });
+    } else if (filterPeriod === 'week') {
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+      result = result.filter((b) => {
+        const bookingDate = new Date(b.createdAt);
+        return isWithinInterval(bookingDate, { start: weekStart, end: weekEnd });
+      });
+    } else if (filterPeriod === 'month') {
+      const monthStart = startOfMonth(today);
+      const monthEnd = endOfMonth(today);
+      result = result.filter((b) => {
+        const bookingDate = new Date(b.createdAt);
+        return isWithinInterval(bookingDate, { start: monthStart, end: monthEnd });
+      });
+    }
+    return result;
+  }, [bookingsWithSlots, filterPeriod]);
 
   const selectedBooking =
     bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? bookingsWithSlots[0] ?? null;
@@ -474,7 +610,7 @@ export default function AdminDashboard() {
               setEditingSlot(null);
               setSlotModalOpen(true);
             }}
-            className="rounded-full bg-slate-900 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation"
+            className="rounded-full bg-green-300 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-green-800 hover:bg-green-400 touch-manipulation"
           >
             New slot
           </button>
@@ -559,7 +695,7 @@ export default function AdminDashboard() {
                       setEditingSlot(null);
                       setSlotModalOpen(true);
                     }}
-                    className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
+                    className="rounded-full bg-green-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-green-800 hover:bg-green-400 touch-manipulation"
                   >
                     Add slot
                   </button>
@@ -603,11 +739,60 @@ export default function AdminDashboard() {
 
           {/* Bookings status overview below */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr,1fr]">
-            <BookingList
-              bookings={bookingsWithSlots}
-              onSelect={(booking) => setSelectedBookingId(booking.id)}
-              selectedId={selectedBooking?.id ?? null}
-            />
+            <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
+              {/* Filter buttons - filter by booking creation date */}
+              <div className="mb-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFilterPeriod('all')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                    filterPeriod === 'all'
+                      ? 'bg-black text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPeriod('day')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                    filterPeriod === 'day'
+                      ? 'bg-black text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPeriod('week')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                    filterPeriod === 'week'
+                      ? 'bg-black text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPeriod('month')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                    filterPeriod === 'month'
+                      ? 'bg-black text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Month
+                </button>
+              </div>
+              <BookingList
+                bookings={filteredBookingsForOverview}
+                onSelect={(booking) => setSelectedBookingId(booking.id)}
+                selectedId={selectedBooking?.id ?? null}
+              />
+            </div>
             <BookingDetailPanel
               booking={selectedBooking ?? null}
               slotLabel={
@@ -1169,6 +1354,18 @@ export default function AdminDashboard() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-slate-900"></div>
+      </div>
+    }>
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
 

@@ -47,7 +47,7 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
   );
 
   return (
-    <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
+    <>
       <header className="mb-3 sm:mb-4">
         <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Bookings</p>
         <h2 className="text-lg sm:text-xl md:text-2xl font-semibold">Status overview</h2>
@@ -146,7 +146,7 @@ export function BookingList({ bookings, onSelect, selectedId }: BookingListProps
           </div>
         ))}
       </div>
-    </div>
+    </>
   );
 }
 
