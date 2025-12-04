@@ -180,44 +180,53 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
       </div>
 
       {/* Top Row */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Revenue Card */}
-        <GradientCard
-          title={range === 'today' ? 'Revenue Today' : range === 'week' ? 'Revenue This Week' : range === 'month' ? 'Revenue This Month' : 'Revenue This Year'}
-          value={`₱${totalRevenue.toLocaleString('en-PH')}`}
-          subtitle={`${totalBookings} booking${totalBookings !== 1 ? 's' : ''}`}
-          gradient="from-blue-500 via-purple-500 to-pink-500"
-          icon={<IoCashOutline className="w-12 h-12" />}
-          className="h-full min-h-[200px]"
-        />
+      <div className="grid gap-3 sm:gap-4 md:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Column 1: Revenue + Total Bookings stacked in one column */}
+        <div className="space-y-3 h-full">
+          <GradientCard
+            title={
+              range === 'today'
+                ? 'Revenue Today'
+                : range === 'week'
+                  ? 'Revenue This Week'
+                  : range === 'month'
+                    ? 'Revenue This Month'
+                    : 'Revenue This Year'
+            }
+            value={`₱${totalRevenue.toLocaleString('en-PH')}`}
+            subtitle={`${totalBookings} booking${totalBookings !== 1 ? 's' : ''}`}
+            gradient="from-blue-500 via-purple-500 to-pink-500"
+            icon={<IoCashOutline className="w-12 h-12" />}
+            className="min-h-[140px] sm:min-h-[160px] md:min-h-[140px]"
+          />
 
-        {/* Total Bookings Card */}
-        <GradientCard
-          title="Total Bookings"
-          value={totalBookings}
-          subtitle={`Revenue: ₱${totalRevenue.toLocaleString('en-PH')}`}
-          gradient="from-emerald-500 via-teal-500 to-cyan-500"
-          icon={<IoCalendarOutline className="w-12 h-12" />}
-          className="h-full min-h-[200px]"
-        />
+          <GradientCard
+            title="Total Bookings"
+            value={totalBookings}
+            subtitle={`Revenue: ₱${totalRevenue.toLocaleString('en-PH')}`}
+            gradient="from-emerald-500 via-teal-500 to-cyan-500"
+            icon={<IoCalendarOutline className="w-12 h-12" />}
+            className="min-h-[140px] sm:min-h-[160px] md:min-h-[140px]"
+          />
+        </div>
 
-        {/* Service Location Breakdown Donut Chart */}
+        {/* Column 2: Service Location Breakdown Donut Chart */}
         <DonutChartCard
           title="Service Location"
           data={locationChartData}
-          className="h-full min-h-[200px]"
+          className="h-full min-h-[160px] sm:min-h-[180px] md:min-h-[160px]"
         />
 
-        {/* Client Type Breakdown Donut Chart */}
+        {/* Column 3: Client Type Breakdown Donut Chart */}
         {clientTypeBreakdown.new + clientTypeBreakdown.repeat > 0 ? (
           <DonutChartCard
             title="Client Type"
             data={clientTypeChartData}
-            className="h-full min-h-[200px]"
+            className="h-full min-h-[160px] sm:min-h-[180px] md:min-h-[160px]"
           />
         ) : (
-          <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg flex items-center justify-center min-h-[200px]">
-            <p className="text-sm text-slate-400 text-center">No client type data</p>
+          <div className="rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4 md:p-3 shadow-lg flex items-center justify-center min-h-[160px] sm:min-h-[180px] md:min-h-[160px]">
+            <p className="text-xs sm:text-sm md:text-xs text-slate-400 text-center">No client type data</p>
           </div>
         )}
       </div>
