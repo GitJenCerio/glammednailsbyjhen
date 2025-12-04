@@ -179,6 +179,11 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
       const canvas = await html2canvas(quoteCardRef.current, {
         scale: 2,
         backgroundColor: '#fff7f9',
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        scrollX: 0,
+        scrollY: 0,
       });
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       
@@ -401,7 +406,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
 
             <div
               ref={quoteCardRef}
-              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-6 shadow-xl shadow-slate-300/50"
+              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-6 pb-8 shadow-xl shadow-slate-300/50"
             >
               <header className="mb-4 text-center">
                 <h4 className="text-xl font-semibold">Invoice</h4>
@@ -460,16 +465,28 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-4">
+              <div className="border-t border-slate-200 pt-4 pb-2">
                 <p className="text-sm font-semibold text-slate-600 mb-3 text-center">Payment QR Codes</p>
-                <div className="flex justify-center gap-6">
+                <div className="flex justify-center gap-4 sm:gap-6 flex-wrap">
                   <div className="text-center">
-                    <Image src="/images/QR-Gcash.jpg" alt="GCash QR Code" width={160} height={160} className="w-40 h-40 mx-auto border border-slate-200 rounded" />
-                    <p className="text-sm text-slate-600 mt-2 font-medium">GCash</p>
+                    <Image 
+                      src="/images/QR-Gcash.jpg" 
+                      alt="GCash QR Code" 
+                      width={160} 
+                      height={160} 
+                      className="w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 mx-auto border border-slate-200 rounded" 
+                    />
+                    <p className="text-xs sm:text-sm text-slate-600 mt-2 font-medium">GCash</p>
                   </div>
                   <div className="text-center">
-                    <Image src="/images/QR-PNB.jpg" alt="PNB QR Code" width={160} height={160} className="w-40 h-40 mx-auto border border-slate-200 rounded" />
-                    <p className="text-sm text-slate-600 mt-2 font-medium">PNB</p>
+                    <Image 
+                      src="/images/QR-PNB.jpg" 
+                      alt="PNB QR Code" 
+                      width={160} 
+                      height={160} 
+                      className="w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 mx-auto border border-slate-200 rounded" 
+                    />
+                    <p className="text-xs sm:text-sm text-slate-600 mt-2 font-medium">PNB</p>
                   </div>
                 </div>
               </div>
@@ -480,6 +497,9 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                   <p className="text-xs text-slate-700 whitespace-pre-line">{notes}</p>
                 </div>
               )}
+              
+              {/* Extra spacing to prevent QR code clipping */}
+              <div className="h-4" />
             </div>
 
             <button
