@@ -287,8 +287,19 @@ export default function BookingPage() {
     loadData();
   }, []);
 
-  async function loadData() {
-    setLoading(true);
+  // Auto-refresh slots every 30 seconds to show newly created slots
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData(false); // Don't show loading spinner on auto-refresh
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  async function loadData(showLoading = true) {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const response = await fetch('/api/availability');
@@ -299,7 +310,9 @@ export default function BookingPage() {
       console.error('Error loading availability', err);
       setError('Unable to load availability. Please try again.');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -630,7 +643,18 @@ export default function BookingPage() {
                   className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-4 sm:p-6 shadow-md shadow-slate-900/10 scroll-mt-24"
                 >
                   <header className="mb-3 sm:mb-4">
-                    <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Available slots</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Available slots</p>
+                      <button
+                        type="button"
+                        onClick={() => loadData(true)}
+                        disabled={loading}
+                        className="text-[10px] sm:text-xs text-slate-600 hover:text-slate-900 underline disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Refresh slots"
+                      >
+                        {loading ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                    </div>
                     <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900">
                       {format(new Date(selectedDate), 'EEEE, MMM d')}
                     </h2>
