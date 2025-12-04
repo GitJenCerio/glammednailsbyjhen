@@ -176,7 +176,33 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
     if ((!quoteItems.length && !hasSqueezeFee) || !quoteCardRef.current || !booking) return;
     setGeneratingImage(true);
     try {
-      const canvas = await html2canvas(quoteCardRef.current, {
+      const element = quoteCardRef.current;
+      
+      // Preload QR code images to ensure they're fully loaded
+      const qrImages = element.querySelectorAll('img');
+      await Promise.all(
+        Array.from(qrImages).map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            // Timeout after 3 seconds
+            setTimeout(() => resolve(img), 3000);
+          });
+        })
+      );
+      
+      // Ensure the element is fully visible before capture
+      element.scrollIntoView({ behavior: 'instant', block: 'center' });
+      
+      // Wait for scroll and any layout updates
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Get the full dimensions including any overflow
+      const fullWidth = Math.max(element.scrollWidth, element.offsetWidth, element.clientWidth);
+      const fullHeight = Math.max(element.scrollHeight, element.offsetHeight, element.clientHeight);
+      
+      const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: '#fff7f9',
         logging: false,
@@ -184,6 +210,25 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
         allowTaint: false,
         scrollX: 0,
         scrollY: 0,
+        width: fullWidth,
+        height: fullHeight,
+        onclone: (clonedDoc) => {
+          // Ensure cloned element and all parents have no overflow constraints
+          const clonedElement = clonedDoc.querySelector('[data-invoice-card]') as HTMLElement;
+          if (clonedElement) {
+            clonedElement.style.overflow = 'visible';
+            clonedElement.style.maxHeight = 'none';
+            clonedElement.style.height = 'auto';
+            // Also check parent elements
+            let parent = clonedElement.parentElement;
+            while (parent && parent !== clonedDoc.body) {
+              if (getComputedStyle(parent).overflow !== 'visible') {
+                parent.style.overflow = 'visible';
+              }
+              parent = parent.parentElement;
+            }
+          }
+        },
       });
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       
@@ -406,7 +451,9 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
 
             <div
               ref={quoteCardRef}
-              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-6 pb-8 shadow-xl shadow-slate-300/50"
+              data-invoice-card
+              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-6 pb-12 shadow-xl shadow-slate-300/50 overflow-visible"
+              style={{ minHeight: 'fit-content', boxSizing: 'border-box' }}
             >
               <header className="mb-4 text-center">
                 <h4 className="text-xl font-semibold">Invoice</h4>
@@ -465,7 +512,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-4 pb-2">
+              <div className="border-t border-slate-200 pt-4 pb-4">
                 <p className="text-sm font-semibold text-slate-600 mb-3 text-center">Payment QR Codes</p>
                 <div className="flex justify-center gap-4 sm:gap-6 flex-wrap">
                   <div className="text-center">
@@ -499,7 +546,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
               )}
               
               {/* Extra spacing to prevent QR code clipping */}
-              <div className="h-4" />
+              <div className="h-6" aria-hidden="true" />
             </div>
 
             <button
