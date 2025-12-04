@@ -28,43 +28,45 @@ export function LineChartCard({ title, data, className = '' }: LineChartCardProp
         {title}
       </h3>
       {chartData.length === 0 ? (
-        <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+        <div className="flex items-center justify-center h-48 sm:h-64 text-slate-400 text-sm">
           No data available
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis
-              dataKey="date"
-              stroke="#64748b"
-              style={{ fontSize: '12px' }}
-              tickLine={false}
-            />
-            <YAxis
-              stroke="#64748b"
-              style={{ fontSize: '12px' }}
-              tickLine={false}
-              tickFormatter={(value) => `₱${value}`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'white',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-              }}
-              formatter={(value: number) => [`₱${value.toLocaleString('en-PH')}`, 'Revenue']}
-            />
-            <Line
-              type="monotone"
-              dataKey="revenue"
-              stroke="#8b5cf6"
-              strokeWidth={3}
-              dot={{ fill: '#8b5cf6', r: 4 }}
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <div className="h-[200px] sm:h-[250px] md:h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="date"
+                stroke="#64748b"
+                style={{ fontSize: '12px' }}
+                tickLine={false}
+              />
+              <YAxis
+                stroke="#64748b"
+                style={{ fontSize: '12px' }}
+                tickLine={false}
+                tickFormatter={(value) => `₱${value}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                }}
+                formatter={(value: number) => [`₱${value.toLocaleString('en-PH')}`, 'Revenue']}
+              />
+              <Line
+                type="monotone"
+                dataKey="revenue"
+                stroke="#8b5cf6"
+                strokeWidth={3}
+                dot={{ fill: '#8b5cf6', r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

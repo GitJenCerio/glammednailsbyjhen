@@ -16,26 +16,27 @@ export function BarChartCard({ title, data, className = '' }: BarChartCardProps)
   }));
 
   return (
-    <div className={`rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg ${className}`}>
-      <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-600 mb-4">
+    <div className={`rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4 md:p-3 shadow-lg ${className}`}>
+      <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-600 mb-3 sm:mb-4">
         {title}
       </h3>
       {chartData.length === 0 ? (
-        <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+        <div className="flex items-center justify-center h-48 sm:h-64 text-slate-400 text-sm">
           No data available
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData} layout="vertical">
+        <div className="h-[200px] sm:h-[250px] md:h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} layout="vertical" margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis type="number" stroke="#64748b" style={{ fontSize: '12px' }} tickLine={false} />
             <YAxis
               type="category"
               dataKey="name"
               stroke="#64748b"
-              style={{ fontSize: '12px' }}
+              style={{ fontSize: '11px' }}
               tickLine={false}
-              width={120}
+              width={80}
             />
             <Tooltip
               contentStyle={{
@@ -50,7 +51,8 @@ export function BarChartCard({ title, data, className = '' }: BarChartCardProps)
             />
             <Bar dataKey="count" fill="#ec4899" radius={[0, 8, 8, 0]} />
           </BarChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

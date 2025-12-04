@@ -23,9 +23,6 @@ export function GradientCard({
     <div
       className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${gradient} p-4 sm:p-6 md:p-4 shadow-xl shadow-purple-500/25 ${className}`}
     >
-      {icon && <div className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-4 md:right-4 opacity-20 md:opacity-15">
-        <div className="w-8 h-8 sm:w-12 sm:h-12 md:w-8 md:h-8">{icon}</div>
-      </div>}
       <div className="relative">
         <p className="text-[10px] sm:text-xs md:text-[10px] font-semibold text-white/90 uppercase tracking-wider mb-1 sm:mb-2 md:mb-1">
           {title}

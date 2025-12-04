@@ -56,12 +56,12 @@ export default function Services() {
         className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-0"
       >
         <div id="services" style={{ scrollMarginTop: '180px', height: 0 }} />
-        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-center mb-4 sm:mb-5 font-acollia px-4">Our Services</h2>
-        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-4 text-sm sm:text-base">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-center mb-4 sm:mb-5 font-acollia px-2 sm:px-4">Our Services</h2>
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-2 sm:px-4 text-sm sm:text-base">
           Professional nail care services tailored to your needs
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 px-4 sm:px-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 px-2 sm:px-6">
           {services.map((service, index) => (
             <motion.div
               key={service.title}

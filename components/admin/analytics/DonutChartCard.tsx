@@ -24,9 +24,6 @@ export function DonutChartCard({ title, data, className = '' }: DonutChartCardPr
     return () => window.removeEventListener('resize', checkTablet);
   }, []);
 
-  const innerRadius = isTablet ? 30 : 40;
-  const outerRadius = isTablet ? 45 : 60;
-  
   return (
     <div className={`rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4 md:p-3 shadow-lg ${className}`}>
       <h3 className="text-[10px] sm:text-xs md:text-[10px] font-semibold uppercase tracking-wider text-slate-600 mb-2 sm:mb-3 md:mb-2">
@@ -38,15 +35,15 @@ export function DonutChartCard({ title, data, className = '' }: DonutChartCardPr
         </div>
       ) : (
         <div className="space-y-2 sm:space-y-3 md:space-y-2">
-          <div className="h-[140px] sm:h-[160px] md:h-[120px]">
+          <div className="h-[160px] sm:h-[180px] md:h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={data}
                   cx="50%"
                   cy="50%"
-                  innerRadius={innerRadius}
-                  outerRadius={outerRadius}
+                  innerRadius="35%"
+                  outerRadius="75%"
                   paddingAngle={2}
                   dataKey="value"
                 >

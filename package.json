@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "create-placeholders": "node scripts/create-placeholders.js"
+    "create-placeholders": "node scripts/create-placeholders.js",
+    "clean-database": "tsx scripts/clean-database.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
@@ -35,6 +36,7 @@
     "eslint-config-next": "^14.2.13",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.6",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "tsx": "^4.7.0"
   }
 }

@@ -576,7 +576,7 @@ export default function BookingPage() {
     <main className="min-h-screen bg-white">
       <Header />
       
-      <section className="mt-24 sm:mt-28 md:mt-32 lg:mt-36 pt-4 sm:pt-6 md:pt-8 px-4 sm:px-6 pb-8 sm:pb-12">
+      <section className="mt-16 sm:mt-28 md:mt-32 lg:mt-36 pt-4 sm:pt-6 md:pt-8 px-2 sm:px-6 pb-8 sm:pb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -585,21 +585,21 @@ export default function BookingPage() {
           <h1 id="booking-heading" className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4 text-slate-900 scroll-mt-24 sm:scroll-mt-28">
             Book Your Appointment
           </h1>
-          <p className="text-center text-gray-600 mb-4 sm:mb-6 max-w-2xl mx-auto px-4 text-sm sm:text-base">
+          <p className="text-center text-gray-600 mb-4 sm:mb-6 max-w-2xl mx-auto px-2 sm:px-4 text-xs sm:text-base">
             Select an available time slot to proceed with your booking
           </p>
 
           {/* Slot Requirements Notice */}
-          <div className="mb-6 sm:mb-8 md:mb-12 max-w-4xl mx-auto px-4">
+          <div className="mb-6 sm:mb-8 md:mb-12 max-w-4xl mx-auto px-2 sm:px-4">
             <div className="rounded-xl sm:rounded-2xl border-2 border-blue-300 bg-blue-50 px-4 sm:px-5 py-3 sm:py-4">
-              <h3 className="text-sm sm:text-base font-semibold text-blue-900 mb-2 sm:mb-3 flex items-center gap-2">
+              <h3 className="text-xs sm:text-base font-semibold text-blue-900 mb-2 sm:mb-3 flex items-center gap-2">
                 <span>Slot Requirements by Service</span>
               </h3>
-              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-blue-800">
+              <div className="space-y-1.5 sm:space-y-2 text-[10px] sm:text-sm text-blue-800">
                 <p><strong>Mani + Pedi, Home Service (2 pax):</strong> 2 consecutive slots required</p>
                 <p><strong>Home Service (3 pax):</strong> 3 consecutive slots required</p>
                 <div className="mt-2.5 pt-2.5 border-t border-blue-200">
-                  <p className="text-[11px] sm:text-xs font-medium italic text-blue-900">
+                  <p className="text-[9px] sm:text-xs font-medium italic text-blue-900">
                     <strong>Important:</strong> For services requiring multiple slots, select the <strong>first</strong> slot of the consecutive sequence. The system will automatically book the required consecutive slots for you.
                   </p>
                 </div>
@@ -673,7 +673,7 @@ export default function BookingPage() {
                 </section>
               </div>
 
-              <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-gray-600 px-4">
+              <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-gray-600 px-2 sm:px-4">
                 {error ? (
                   <p className="text-red-600">{error}</p>
                 ) : (

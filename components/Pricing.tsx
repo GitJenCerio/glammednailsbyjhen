@@ -132,13 +132,13 @@ export default function Pricing() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+        className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8"
       >
         <div id="pricing" style={{ scrollMarginTop: '180px', height: 0 }} />
-        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-4">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4">
           Pricing
         </h2>
-        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-4 text-sm sm:text-base">
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-2 sm:px-4 text-sm sm:text-base">
           Transparent pricing for all our services
         </p>
 
@@ -152,39 +152,39 @@ export default function Pricing() {
               transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3) }}
               className="bg-white p-4 sm:p-5 md:p-6 border-2 border-black hover:border-black/50 transition-all rounded-lg flex flex-col shadow-lg shadow-black/15"
             >
-              <h3 className="text-lg sm:text-xl md:text-2xl font-heading font-bold mb-2 sm:mb-3">{plan.name}</h3>
-              <div className="mb-3 sm:mb-4">
+              <h3 className="text-lg sm:text-xl md:text-2xl font-heading font-bold mb-1 sm:mb-1.5">{plan.name}</h3>
+              <div className="mb-1.5 sm:mb-2">
                 <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-black">{(plan as any).price}</div>
                 {(plan as any).addOnPrice && (
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 mt-1">
                     <div className="font-medium">Add-ons:</div>
                     {Array.isArray((plan as any).addOnPrice) ? (
-                      <ul className="mt-1 space-y-0.5">
+                      <ul className="mt-0.5 space-y-0">
                         {(plan as any).addOnPrice.map((item: string, idx: number) => (
                           <li key={idx}>{item}</li>
                         ))}
                       </ul>
                     ) : (
-                      <div className="mt-1">{(plan as any).addOnPrice}</div>
+                      <div className="mt-0.5">{(plan as any).addOnPrice}</div>
                     )}
                   </div>
                 )}
               </div>
-              <ul className="space-y-1 sm:space-y-1.5 mb-3 sm:mb-4">
+              <ul className="space-y-1 mb-1.5 sm:mb-2">
                 {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start">
-                    <span className="text-black mr-2 flex-shrink-0 mt-0.5">✓</span>
-                    <span className="text-gray-600 text-xs sm:text-sm md:text-base leading-relaxed">{feature}</span>
+                  <li key={idx} className="flex items-start min-h-[1.5rem]">
+                    <span className="text-black mr-1.5 sm:mr-2 flex-shrink-0 mt-0.5">✓</span>
+                    <span className="text-gray-600 text-xs sm:text-sm md:text-base leading-normal">{feature}</span>
                   </li>
                 ))}
               </ul>
               <div className="text-xs sm:text-sm mb-2 sm:mb-3">
-                <p className="mb-1 sm:mb-1.5 text-black text-center leading-relaxed">• All nail services come with 5 days warranty.</p>
-                <p className="text-red-600 font-bold text-center leading-relaxed">• P500 advance deposit upon booking is required to secure the slot; non-refundable, but deductible from the total payment.</p>
+                <p className="mb-0 text-black text-center leading-tight sm:leading-snug">• All nail services come with 5 days warranty.</p>
+                <p className="text-[10px] sm:text-xs text-red-600 text-center leading-tight sm:leading-snug">• P500 advance deposit upon booking is required to secure the slot; non-refundable, but deductible from the total payment.</p>
               </div>
               <a
                 href="/booking"
-                className="block w-full text-center px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto text-xs sm:text-sm md:text-base"
+                className="block w-full text-center px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto text-xs sm:text-sm md:text-base"
               >
                 Book Now
               </a>

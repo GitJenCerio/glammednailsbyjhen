@@ -4,9 +4,27 @@ import Image from 'next/image';
 import { IoLogoFacebook, IoLogoInstagram } from 'react-icons/io5';
 
 export default function Footer() {
+  const scrollToId = (hash: string) => {
+    if (!hash || !hash.startsWith('#')) return;
+    const id = hash.slice(1);
+    
+    // If we're not on the home page, navigate there first
+    if (window.location.pathname !== '/') {
+      window.location.href = `/${hash}`;
+      return;
+    }
+    
+    const el = document.getElementById(id);
+    if (!el) return;
+    // Header offset (tune if needed)
+    const HEADER_OFFSET = 80;
+    const y = el.getBoundingClientRect().top + window.pageYOffset - HEADER_OFFSET;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  };
+
   return (
     <footer id="book" className="bg-gray-100 section-padding">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 sm:gap-10 md:gap-12 mb-6 sm:mb-8">
           {/* About Section */}
           <div>
@@ -49,22 +67,76 @@ export default function Footer() {
             <h4 className="font-heading font-semibold text-base sm:text-lg md:text-xl mb-3 sm:mb-4">Quick Links</h4>
             <ul className="space-y-1.5 sm:space-y-2 text-gray-600 text-sm sm:text-base">
               <li>
-                <a href="#home" className="hover:text-black transition-colors">Home</a>
+                <a 
+                  href="#home" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId('#home');
+                  }}
+                  className="hover:text-black transition-colors cursor-pointer"
+                >
+                  Home
+                </a>
               </li>
               <li>
-                <a href="#services" className="hover:text-black transition-colors">Services</a>
+                <a 
+                  href="#services" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId('#services');
+                  }}
+                  className="hover:text-black transition-colors cursor-pointer"
+                >
+                  Services
+                </a>
               </li>
               <li>
-                <a href="#about" className="hover:text-black transition-colors">About</a>
+                <a 
+                  href="#about" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId('#about');
+                  }}
+                  className="hover:text-black transition-colors cursor-pointer"
+                >
+                  About
+                </a>
               </li>
               <li>
-                <a href="#gallery" className="hover:text-black transition-colors">Gallery</a>
+                <a 
+                  href="#gallery" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId('#gallery');
+                  }}
+                  className="hover:text-black transition-colors cursor-pointer"
+                >
+                  Gallery
+                </a>
               </li>
               <li>
-                <a href="#pricing" className="hover:text-black transition-colors">Pricing</a>
+                <a 
+                  href="#pricing" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId('#pricing');
+                  }}
+                  className="hover:text-black transition-colors cursor-pointer"
+                >
+                  Pricing
+                </a>
               </li>
               <li>
-                <a href="#faq" className="hover:text-black transition-colors">FAQ</a>
+                <a 
+                  href="#faq" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId('#faq');
+                  }}
+                  className="hover:text-black transition-colors cursor-pointer"
+                >
+                  FAQ
+                </a>
               </li>
             </ul>
           </div>

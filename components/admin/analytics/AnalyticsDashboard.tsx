@@ -67,15 +67,6 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
     },
   ].filter((item) => item.value > 0);
 
-  const studioPercentage =
-    locationBreakdown.studio + locationBreakdown.homeService > 0
-      ? ((locationBreakdown.studio / (locationBreakdown.studio + locationBreakdown.homeService)) * 100).toFixed(1)
-      : '0';
-  const homeServicePercentage =
-    locationBreakdown.studio + locationBreakdown.homeService > 0
-      ? ((locationBreakdown.homeService / (locationBreakdown.studio + locationBreakdown.homeService)) * 100).toFixed(1)
-      : '0';
-
   // Client type breakdown for donut chart
   const clientTypeChartData = [
     {
@@ -89,15 +80,6 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
       color: '#10b981',
     },
   ].filter((item) => item.value > 0);
-
-  const newClientPercentage =
-    clientTypeBreakdown.new + clientTypeBreakdown.repeat > 0
-      ? ((clientTypeBreakdown.new / (clientTypeBreakdown.new + clientTypeBreakdown.repeat)) * 100).toFixed(1)
-      : '0';
-  const repeatClientPercentage =
-    clientTypeBreakdown.new + clientTypeBreakdown.repeat > 0
-      ? ((clientTypeBreakdown.repeat / (clientTypeBreakdown.new + clientTypeBreakdown.repeat)) * 100).toFixed(1)
-      : '0';
 
   // Client source breakdown for donut chart
   const totalSources =
@@ -139,13 +121,13 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
   const upcomingBookingsList = upcomingBookings.map((booking) => {
     const slot = slots.find((s) => s.id === booking.slotId);
     const customer = customers.find((c) => c.id === booking.customerId);
+    const slotInfo = slot
+      ? `${format(parseISO(slot.date), 'MMM d')} ${slot.time}`
+      : 'No slot';
     return {
       id: booking.id,
-      title: customer?.name || booking.bookingId,
-      subtitle: slot
-        ? `${format(parseISO(slot.date), 'MMM d, yyyy')} · ${slot.time}`
-        : 'No slot found',
-      metadata: <span className="text-xs text-slate-500">{booking.bookingId}</span>,
+      title: `${customer?.name || booking.bookingId} · ${slotInfo}`,
+      metadata: <span className="text-[10px] text-slate-400">{booking.bookingId}</span>,
     };
   });
 
@@ -194,19 +176,17 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
                     : 'Revenue This Year'
             }
             value={`₱${totalRevenue.toLocaleString('en-PH')}`}
-            subtitle={`${totalBookings} booking${totalBookings !== 1 ? 's' : ''}`}
             gradient="from-blue-500 via-purple-500 to-pink-500"
             icon={<IoCashOutline className="w-12 h-12" />}
-            className="min-h-[140px] sm:min-h-[160px] md:min-h-[140px]"
+            className="min-h-[140px] sm:min-h-[160px] md:min-h-[140px] flex-1 md:flex-none"
           />
 
           <GradientCard
             title="Total Bookings"
             value={totalBookings}
-            subtitle={`Revenue: ₱${totalRevenue.toLocaleString('en-PH')}`}
             gradient="from-emerald-500 via-teal-500 to-cyan-500"
             icon={<IoCalendarOutline className="w-12 h-12" />}
-            className="min-h-[140px] sm:min-h-[160px] md:min-h-[140px]"
+            className="min-h-[140px] sm:min-h-[160px] md:min-h-[140px] flex-1 md:flex-none md:mt-0"
           />
         </div>
 
@@ -214,7 +194,7 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
         <DonutChartCard
           title="Service Location"
           data={locationChartData}
-          className="h-full min-h-[160px] sm:min-h-[180px] md:min-h-[160px]"
+          className="h-full min-h-[140px] sm:min-h-[180px] md:min-h-[160px]"
         />
 
         {/* Column 3: Client Type Breakdown Donut Chart */}
@@ -222,10 +202,10 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
           <DonutChartCard
             title="Client Type"
             data={clientTypeChartData}
-            className="h-full min-h-[160px] sm:min-h-[180px] md:min-h-[160px]"
+            className="h-full min-h-[140px] sm:min-h-[180px] md:min-h-[160px]"
           />
         ) : (
-          <div className="rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4 md:p-3 shadow-lg flex items-center justify-center min-h-[160px] sm:min-h-[180px] md:min-h-[160px]">
+          <div className="rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4 md:p-3 shadow-lg flex items-center justify-center min-h-[140px] sm:min-h-[180px] md:min-h-[160px]">
             <p className="text-xs sm:text-sm md:text-xs text-slate-400 text-center">No client type data</p>
           </div>
         )}
@@ -272,113 +252,46 @@ export function AnalyticsDashboard({ bookings, slots, customers }: AnalyticsDash
         </div>
       )}
 
-      {/* Location Breakdown Summary */}
-      {locationBreakdown.studio + locationBreakdown.homeService > 0 && (
-        <div className="grid grid-cols-2 gap-4">
-          <MetricCard
-            title="Studio"
-            value={`${studioPercentage}%`}
-            subtitle={`${locationBreakdown.studio} booking${locationBreakdown.studio !== 1 ? 's' : ''}`}
-            color="purple"
-          />
-          <MetricCard
-            title="Home Service"
-            value={`${homeServicePercentage}%`}
-            subtitle={`${locationBreakdown.homeService} booking${locationBreakdown.homeService !== 1 ? 's' : ''}`}
-            color="pink"
-          />
-        </div>
-      )}
-
-      {/* Client Source Breakdown */}
-      {totalSources > 0 && (
-        <div className="grid gap-4 lg:grid-cols-1">
-          <DonutChartCard title="Client Source / Referral" data={clientSourceChartData} />
-        </div>
-      )}
-
-      {/* Client Type Summary */}
-      {clientTypeBreakdown.new + clientTypeBreakdown.repeat > 0 && (
-        <div className="grid grid-cols-2 gap-4">
-          <MetricCard
-            title="New Clients"
-            value={`${newClientPercentage}%`}
-            subtitle={`${clientTypeBreakdown.new} booking${clientTypeBreakdown.new !== 1 ? 's' : ''}`}
-            color="blue"
-          />
-          <MetricCard
-            title="Repeat Clients"
-            value={`${repeatClientPercentage}%`}
-            subtitle={`${clientTypeBreakdown.repeat} booking${clientTypeBreakdown.repeat !== 1 ? 's' : ''}`}
-            color="green"
-          />
-        </div>
-      )}
-
-      {/* Client Source Summary */}
-      {totalSources > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {clientSourceBreakdown.facebook > 0 && (
-            <MetricCard
-              title="Facebook"
-              value={clientSourceBreakdown.facebook}
-              subtitle={`${totalSources > 0 ? ((clientSourceBreakdown.facebook / totalSources) * 100).toFixed(1) : '0'}%`}
-              color="blue"
-            />
-          )}
-          {clientSourceBreakdown.tiktok > 0 && (
-            <MetricCard
-              title="TikTok"
-              value={clientSourceBreakdown.tiktok}
-              subtitle={`${totalSources > 0 ? ((clientSourceBreakdown.tiktok / totalSources) * 100).toFixed(1) : '0'}%`}
-              color="slate"
-            />
-          )}
-          {clientSourceBreakdown.instagram > 0 && (
-            <MetricCard
-              title="Instagram"
-              value={clientSourceBreakdown.instagram}
-              subtitle={`${totalSources > 0 ? ((clientSourceBreakdown.instagram / totalSources) * 100).toFixed(1) : '0'}%`}
-              color="pink"
-            />
-          )}
-          {clientSourceBreakdown.referral > 0 && (
-            <MetricCard
-              title="Referred"
-              value={clientSourceBreakdown.referral}
-              subtitle={`${totalSources > 0 ? ((clientSourceBreakdown.referral / totalSources) * 100).toFixed(1) : '0'}%`}
-              color="purple"
-            />
-          )}
-          {clientSourceBreakdown.other > 0 && (
-            <MetricCard
-              title="Other"
-              value={clientSourceBreakdown.other}
-              subtitle={`${totalSources > 0 ? ((clientSourceBreakdown.other / totalSources) * 100).toFixed(1) : '0'}%`}
-              color="slate"
-            />
-          )}
-        </div>
-      )}
+      {/* Revenue Trend */}
+      <div className="grid gap-4 lg:grid-cols-1">
+        <LineChartCard title="Revenue Trend" data={revenueData.trend} />
+      </div>
 
       {/* Middle Row */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Revenue Trend Line Chart */}
-        <LineChartCard title="Revenue Trend" data={revenueData.trend} />
+        {/* Client Source Breakdown */}
+        {totalSources > 0 && (
+          <DonutChartCard title="Client Source" data={clientSourceChartData} className="min-h-[180px] sm:min-h-[250px] md:min-h-[300px]" />
+        )}
 
         {/* Top Services Bar Chart */}
         <BarChartCard title="Top Services" data={topServices} />
       </div>
 
-      {/* Bottom Row */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Upcoming Bookings */}
-        <ListCard
-          title="Upcoming Bookings"
-          items={upcomingBookingsList}
-          emptyMessage="No upcoming bookings"
-        />
+      {/* Upcoming Bookings - Single Line */}
+      <div className="rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4 shadow-lg">
+        <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-600 mb-2">
+          Upcoming Bookings
+        </h3>
+        {upcomingBookingsList.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {upcomingBookingsList.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 bg-slate-50"
+              >
+                <p className="text-xs font-medium text-slate-900 whitespace-nowrap">{item.title}</p>
+                {item.metadata && <div className="flex-shrink-0 text-[10px] text-slate-400">{item.metadata}</div>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-4 text-slate-400 text-xs">No upcoming bookings</div>
+        )}
+      </div>
 
+      {/* Bottom Row */}
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Recent Customers */}
         <ListCard
           title="Recent Customers"

@@ -43,7 +43,7 @@ export default function Header() {
       animate={{ y: 0 }}
       className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md"
     >
-      <nav className="px-4 sm:px-6 md:px-8 lg:px-16 xl:px-32 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px]">
+      <nav className="px-2 sm:px-6 md:px-8 lg:px-16 xl:px-32 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px]">
         {/* Mobile Menu Button - Left */}
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -137,7 +137,7 @@ export default function Header() {
             exit={{ height: 0, opacity: 0 }}
             className="lg:hidden absolute left-2 sm:left-4 top-full mt-0 bg-white border-t rounded-xl shadow-2xl z-[100] max-w-[90vw] sm:max-w-xs w-[280px] sm:w-64"
           >
-            <div className="px-4 py-4 space-y-3">
+            <div className="px-2 py-4 space-y-3">
               {navLinks.map((link) => (
                 link.isRoute ? (
                   <Link
