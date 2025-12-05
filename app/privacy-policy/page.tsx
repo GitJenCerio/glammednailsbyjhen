@@ -1,3 +1,14 @@
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Privacy Policy',
+  description: 'Privacy policy for Glammed Nails by Jhen. Learn how we collect, use, and protect your personal information.',
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
 export default function PrivacyPolicy() {
   return (
     <main className="max-w-3xl mx-auto py-16 px-4">

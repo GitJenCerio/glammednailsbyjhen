@@ -1,3 +1,14 @@
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Cookies Policy',
+  description: 'Cookies policy for Glammed Nails by Jhen. Learn how we use cookies to improve your browsing experience.',
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
 export default function CookiesPolicy() {
   return (
     <main className="max-w-3xl mx-auto py-16 px-4">
