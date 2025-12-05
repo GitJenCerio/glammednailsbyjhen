@@ -18,10 +18,6 @@ const nextConfig = {
   reactStrictMode: true,
   // Optimize production builds
   productionBrowserSourceMaps: false,
-  // Enable experimental features for better performance
-  experimental: {
-    optimizeCss: true,
-  },
   // Compiler optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
