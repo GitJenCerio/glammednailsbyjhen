@@ -202,12 +202,12 @@ export async function POST(request: Request) {
       return -1;
     };
 
-    const nameColIndex = findColumnIndex(nameColumns.map(c => c.toLowerCase()));
-    const surnameColIndex = findColumnIndex(surnameColumns.map(c => c.toLowerCase()));
-    const emailColIndex = findColumnIndex(emailColumns.map(c => c.toLowerCase()));
-    const phoneColIndex = findColumnIndex(phoneColumns.map(c => c.toLowerCase()));
-    const socialMediaColIndex = findColumnIndex(socialMediaColumns.map(c => c.toLowerCase()));
-    const referralSourceColIndex = findColumnIndex(referralSourceColumns.map(c => c.toLowerCase()));
+    const nameColIndex = findColumnIndex(nameColumns.map((c: string) => c.toLowerCase()));
+    const surnameColIndex = findColumnIndex(surnameColumns.map((c: string) => c.toLowerCase()));
+    const emailColIndex = findColumnIndex(emailColumns.map((c: string) => c.toLowerCase()));
+    const phoneColIndex = findColumnIndex(phoneColumns.map((c: string) => c.toLowerCase()));
+    const socialMediaColIndex = findColumnIndex(socialMediaColumns.map((c: string) => c.toLowerCase()));
+    const referralSourceColIndex = findColumnIndex(referralSourceColumns.map((c: string) => c.toLowerCase()));
     
     // Debug: Log found columns
     console.log('=== Column Detection Results ===');
