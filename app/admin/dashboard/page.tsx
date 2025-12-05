@@ -245,7 +245,10 @@ function AdminDashboardContent() {
         setBookingsView(targetView);
       }
     }
-  }, [searchParams.toString()]); // Use toString() to detect actual URL changes
+    // Note: We intentionally only depend on searchParams, not on activeSection/bookingsView
+    // to avoid infinite loops. The effect should only run when URL changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Update URL when activeSection changes (user action, not from URL sync)
   useEffect(() => {
@@ -265,7 +268,7 @@ function AdminDashboardContent() {
     
     const newUrl = params.toString() ? `?${params.toString()}` : '';
     router.replace(`/admin/dashboard${newUrl}`, { scroll: false });
-  }, [activeSection, router]);
+  }, [activeSection, bookingsView, router]);
 
   // Update URL when bookingsView changes (user action, only for bookings section)
   useEffect(() => {
