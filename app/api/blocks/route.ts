@@ -3,7 +3,15 @@ import { createBlockedDate, listBlockedDates } from '@/lib/services/blockService
 
 export async function GET() {
   const blockedDates = await listBlockedDates();
-  return NextResponse.json({ blockedDates });
+  
+  // Add caching headers (blocks don't change frequently)
+  return NextResponse.json({ blockedDates }, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+      'CDN-Cache-Control': 'public, s-maxage=300',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=300',
+    },
+  });
 }
 
 export async function POST(request: Request) {

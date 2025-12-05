@@ -287,11 +287,12 @@ export default function BookingPage() {
     loadData();
   }, []);
 
-  // Auto-refresh slots every 10 seconds to show updated slot status (pending slots should disappear)
+  // Auto-refresh slots every 30 seconds to show updated slot status (pending slots should disappear)
+  // Increased interval for better performance - cache headers help with freshness
   useEffect(() => {
     const interval = setInterval(() => {
       loadData(false); // Don't show loading spinner on auto-refresh
-    }, 10000); // 10 seconds - more frequent to catch pending slots
+    }, 30000); // 30 seconds - balance between freshness and performance
 
     return () => clearInterval(interval);
   }, []);

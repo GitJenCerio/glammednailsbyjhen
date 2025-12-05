@@ -14,7 +14,15 @@ export async function GET() {
     console.warn('Expired slot cleanup skipped:', error);
   }
   const slots = await listSlots();
-  return NextResponse.json({ slots });
+  
+  // Add caching headers for better performance
+  return NextResponse.json({ slots }, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=60',
+      'CDN-Cache-Control': 'public, s-maxage=10',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=10',
+    },
+  });
 }
 
 export async function POST(request: Request) {

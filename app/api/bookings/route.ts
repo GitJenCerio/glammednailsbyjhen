@@ -71,7 +71,13 @@ export async function GET() {
   }
   
   const bookings = await listBookings();
-  return NextResponse.json({ bookings });
+  
+  // Add caching headers (short cache since bookings change frequently)
+  return NextResponse.json({ bookings }, {
+    headers: {
+      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+    },
+  });
 }
 
 export async function POST(request: Request) {
