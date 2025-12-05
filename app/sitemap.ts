@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://glammednailsbyjhen.vercel.app';
+  // Use the custom domain if available, otherwise fallback to vercel.app
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glammednailsbyjhen.com';
   const baseUrl = siteUrl;
   
   // Get current date for lastModified

@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { StructuredData } from "@/components/StructuredData";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://glammednailsbyjhen.vercel.app';
-const siteName = 'Glammed Nails by Jhen';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glammednailsbyjhen.com';
+const siteName = 'glammednailsbyjhen';
 const defaultTitle = `${siteName} - Professional Nail Art & Manicure Services`;
 const defaultDescription = 'Premium Russian manicure, nail art, pedicure, and nail extension services in Manila, Philippines. Book your appointment online today!';
 
@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   description: defaultDescription,
   keywords: [
     'nail salon',
+    'nail studio',
     'manicure',
     'pedicure',
     'nail art',
@@ -28,9 +29,9 @@ export const metadata: Metadata = {
     'nail technician',
     'nail care',
   ],
-  authors: [{ name: 'Glammed Nails by Jhen' }],
-  creator: 'Glammed Nails by Jhen',
-  publisher: 'Glammed Nails by Jhen',
+  authors: [{ name: 'glammednailsbyjhen' }],
+  creator: 'glammednailsbyjhen',
+  publisher: 'glammednailsbyjhen',
   formatDetection: {
     email: false,
     address: false,
@@ -48,7 +49,7 @@ export const metadata: Metadata = {
         url: '/logo.png',
         width: 1200,
         height: 630,
-        alt: 'Glammed Nails by Jhen - Professional Nail Services',
+        alt: 'glammednailsbyjhen - Professional Nail Services',
       },
     ],
   },
