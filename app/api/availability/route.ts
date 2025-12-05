@@ -8,12 +8,13 @@ export async function GET() {
   // Frontend will filter to show only available slots for display
   const [slots, blockedDates] = await Promise.all([listSlots(), listBlockedDates()]);
   
-  // Add caching headers for better performance (shorter cache for availability)
+  // Reduced cache time for availability to ensure fresh data for client booking
+  // Cache is bypassed by client with cache: 'no-store' and timestamp query param
   return NextResponse.json({ slots, blockedDates }, {
     headers: {
-      'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30',
-      'CDN-Cache-Control': 'public, s-maxage=5',
-      'Vercel-CDN-Cache-Control': 'public, s-maxage=5',
+      'Cache-Control': 'public, s-maxage=1, stale-while-revalidate=10',
+      'CDN-Cache-Control': 'public, s-maxage=1',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=1',
     },
   });
 }

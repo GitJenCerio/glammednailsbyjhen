@@ -325,7 +325,11 @@ export default function BookingPage() {
     }
     setError(null);
     try {
-      const response = await fetch('/api/availability');
+      // Add cache-busting timestamp to ensure fresh data
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/availability?t=${timestamp}`, {
+        cache: 'no-store',
+      });
       const data = await response.json();
       setSlots(data.slots);
       setBlockedDates(data.blockedDates);
