@@ -31,7 +31,7 @@ type CreateBookingOptions = {
   serviceLocation?: 'homebased_studio' | 'home_service';
 };
 
-function getRequiredSlotCount(serviceType: ServiceType): number {
+export function getRequiredSlotCount(serviceType: ServiceType): number {
   switch (serviceType) {
     case 'mani_pedi':
     case 'home_service_2slots':
@@ -296,6 +296,133 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   }
 
   return { bookingId, googleFormUrl };
+}
+
+/**
+ * Recover an expired booking from Google Sheets form data
+ * This recreates a booking with a specific booking ID (e.g., GN-00001)
+ */
+export async function recoverBookingFromForm(
+  bookingId: string,
+  slotId: string,
+  options: CreateBookingOptions,
+  formData: Record<string, string>,
+  fieldOrder?: string[],
+  formResponseId?: string,
+) {
+  const serviceType = options?.serviceType ?? 'manicure';
+  const requiredSlotCount = getRequiredSlotCount(serviceType);
+  const providedLinkedSlotIds = options?.linkedSlotIds ?? (options?.pairedSlotId ? [options.pairedSlotId] : []);
+  const serviceLocation = options?.serviceLocation ?? 'homebased_studio';
+  const blocks = await listBlockedDates();
+
+  await adminDb.runTransaction(async (transaction) => {
+    const slotRef = slotsCollection.doc(slotId);
+    const slotSnap = await transaction.get(slotRef);
+    if (!slotSnap.exists) throw new Error('Slot not found.');
+    const slot = docToSlot(slotSnap.id, slotSnap.data()!);
+
+    // Allow recovering even if slot is pending (it might have been released)
+    if (slot.status !== 'available' && slot.status !== 'pending') {
+      throw new Error(`Slot is ${slot.status} and cannot be used for recovery.`);
+    }
+
+    if (slotIsBlocked(slot, blocks)) {
+      throw new Error('Slot is blocked.');
+    }
+
+    if (requiredSlotCount === 1 && providedLinkedSlotIds.length > 0) {
+      throw new Error('Additional slots provided for a single-slot service.');
+    }
+
+    if (requiredSlotCount > 1 && providedLinkedSlotIds.length !== requiredSlotCount - 1) {
+      throw new Error(`This service requires ${requiredSlotCount} consecutive slots.`);
+    }
+
+    const linkedSlotIds: string[] = [];
+    let previousSlot = slot;
+
+    for (let index = 0; index < providedLinkedSlotIds.length; index += 1) {
+      const linkedSlotId = providedLinkedSlotIds[index];
+      const linkedRef = slotsCollection.doc(linkedSlotId);
+      const linkedSnap = await transaction.get(linkedRef);
+      if (!linkedSnap.exists) throw new Error('The consecutive slot was not found.');
+      const linkedSlot = docToSlot(linkedSnap.id, linkedSnap.data()!);
+
+      if (linkedSlot.status !== 'available' && linkedSlot.status !== 'pending') {
+        throw new Error('The consecutive slot is not available for recovery.');
+      }
+      if (linkedSlot.date !== slot.date) {
+        throw new Error('Consecutive slots must be on the same day.');
+      }
+      const expectedNextTime = getNextSlotTime(previousSlot.time);
+      if (!expectedNextTime || linkedSlot.time !== expectedNextTime) {
+        throw new Error('Selected slots are not consecutive.');
+      }
+      if (slotIsBlocked(linkedSlot, blocks)) {
+        throw new Error('One of the consecutive slots is blocked.');
+      }
+
+      transaction.update(linkedRef, {
+        status: 'pending',
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      });
+
+      linkedSlotIds.push(linkedSlot.id);
+      previousSlot = linkedSlot;
+    }
+
+    transaction.update(slotRef, {
+      status: 'pending',
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    });
+
+    // Find or create customer from form data
+    const customer = await findOrCreateCustomer(formData);
+
+    const bookingRef = bookingsCollection.doc();
+    const bookingData: any = {
+      slotId,
+      bookingId, // Use the specified booking ID
+      customerId: customer.id,
+      serviceType,
+      status: 'pending_payment', // Set directly to pending_payment since form is already submitted
+      customerData: formData,
+      formResponseId,
+      createdAt: Timestamp.now().toDate().toISOString(),
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    };
+
+    if (linkedSlotIds.length > 0) {
+      bookingData.pairedSlotId = linkedSlotIds[0];
+      bookingData.linkedSlotIds = linkedSlotIds;
+    } else {
+      bookingData.pairedSlotId = null;
+    }
+
+    if (options?.clientType) {
+      bookingData.clientType = options.clientType;
+    }
+
+    if (options?.serviceLocation) {
+      bookingData.serviceLocation = options.serviceLocation;
+    }
+
+    if (fieldOrder && fieldOrder.length > 0) {
+      bookingData.customerDataOrder = fieldOrder;
+    }
+
+    transaction.set(bookingRef, bookingData);
+  });
+
+  // Return the recovered booking
+  const bookingSnapshot = await bookingsCollection.where('bookingId', '==', bookingId).limit(1).get();
+  if (bookingSnapshot.empty) {
+    throw new Error('Failed to retrieve recovered booking.');
+  }
+
+  const doc = bookingSnapshot.docs[0];
+  return docToBooking(doc.id, doc.data());
 }
 
 export async function syncBookingWithForm(
@@ -711,7 +838,109 @@ export async function rescheduleBooking(bookingId: string, newSlotId: string, li
   });
 }
 
+/**
+ * Get bookings eligible for manual release
+ * Returns bookings that are:
+ * - 2+ hours old from creation time
+ * - Still in 'pending_form' status
+ * - No form has been synced (no formResponseId)
+ */
+export async function getEligibleBookingsForRelease() {
+  const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+  const snapshot = await bookingsCollection.where('status', '==', 'pending_form').get();
+
+  const eligibleBookings: Booking[] = [];
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
+    if (!data.createdAt) continue;
+    
+    const createdAt = new Date(data.createdAt).getTime();
+    if (Number.isNaN(createdAt) || createdAt >= twoHoursAgo) continue;
+    
+    // Only include bookings that haven't been synced with a form yet
+    // If formResponseId exists, it means a form was received and synced
+    if (data.formResponseId) continue;
+
+    eligibleBookings.push(docToBooking(docSnap.id, data));
+  }
+
+  return eligibleBookings;
+}
+
+/**
+ * Manually release selected pending bookings
+ * This releases slots back to available status and deletes the booking records
+ */
+export async function manuallyReleaseBookings(bookingIds: string[]) {
+  if (!bookingIds || bookingIds.length === 0) {
+    return { released: 0 };
+  }
+
+  let releasedCount = 0;
+
+  await Promise.all(
+    bookingIds.map(async (bookingId) => {
+      try {
+        const bookingRef = bookingsCollection.doc(bookingId);
+        const bookingSnap = await bookingRef.get();
+        
+        if (!bookingSnap.exists) return;
+        const data = bookingSnap.data()!;
+        
+        // Only release bookings that are still in pending_form status
+        if (data.status !== 'pending_form') return;
+
+        await adminDb.runTransaction(async (transaction) => {
+          const slotRef = slotsCollection.doc(data.slotId);
+          const slotSnap = await transaction.get(slotRef);
+
+          const linkedSlotIds: string[] = Array.isArray(data.linkedSlotIds)
+            ? data.linkedSlotIds
+            : data.pairedSlotId
+              ? [data.pairedSlotId]
+              : [];
+          const linkedRefs: FirebaseFirestore.DocumentReference[] = [];
+          const linkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+          for (const linkedId of linkedSlotIds) {
+            const ref = slotsCollection.doc(linkedId);
+            linkedRefs.push(ref);
+            linkedSnaps.push(await transaction.get(ref));
+          }
+
+          transaction.delete(bookingRef);
+
+          if (slotSnap.exists && slotSnap.data()?.status === 'pending') {
+            transaction.update(slotRef, {
+              status: 'available',
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            });
+          }
+          linkedRefs.forEach((ref, index) => {
+            const snap = linkedSnaps[index];
+            if (snap?.exists && snap.data()?.status === 'pending') {
+              transaction.update(ref, {
+                status: 'available',
+                updatedAt: Timestamp.now().toDate().toISOString(),
+              });
+            }
+          });
+        });
+
+        releasedCount += 1;
+      } catch (error) {
+        console.error(`Failed to release booking ${bookingId}:`, error);
+      }
+    }),
+  );
+
+  return { released: releasedCount };
+}
+
+// Keep the old function for backward compatibility but mark as deprecated
 export async function releaseExpiredPendingBookings(maxAgeMinutes = 30) {
+  // This function is deprecated - use manuallyReleaseBookings instead
+  // Keeping it for backward compatibility but it won't be called automatically
   const cutoff = Date.now() - maxAgeMinutes * 60 * 1000;
   const snapshot = await bookingsCollection.where('status', '==', 'pending_form').get();
 

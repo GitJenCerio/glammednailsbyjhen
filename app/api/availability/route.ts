@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 import { listSlots } from '@/lib/services/slotService';
 import { listBlockedDates } from '@/lib/services/blockService';
-import { slotIsBlocked } from '@/lib/scheduling';
-import { releaseExpiredPendingBookings } from '@/lib/services/bookingService';
 
 export async function GET() {
-  await releaseExpiredPendingBookings(30);
-  const [slots, blockedDates] = await Promise.all([listSlots(), listBlockedDates()]);
-  // Return all slots (including booked ones) so we can detect gaps in consecutive slot checking
+  // Automatic release is disabled - use manual release from admin dashboard instead
+  // Return all slots (including booked/pending ones) so we can detect gaps in consecutive slot checking
   // Frontend will filter to show only available slots for display
+  const [slots, blockedDates] = await Promise.all([listSlots(), listBlockedDates()]);
   return NextResponse.json({ slots, blockedDates });
 }
 

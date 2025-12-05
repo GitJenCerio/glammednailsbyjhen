@@ -287,11 +287,11 @@ export default function BookingPage() {
     loadData();
   }, []);
 
-  // Auto-refresh slots every 30 seconds to show newly created slots
+  // Auto-refresh slots every 10 seconds to show updated slot status (pending slots should disappear)
   useEffect(() => {
     const interval = setInterval(() => {
       loadData(false); // Don't show loading spinner on auto-refresh
-    }, 30000); // 30 seconds
+    }, 10000); // 10 seconds - more frequent to catch pending slots
 
     return () => clearInterval(interval);
   }, []);
@@ -570,6 +570,14 @@ export default function BookingPage() {
       }
 
       const data = await response.json();
+      
+      // Immediately refresh slots before redirecting so other users see updated status
+      // This helps prevent double-booking by updating the slot status to 'pending' quickly
+      await loadData(false);
+      
+      // Small delay to ensure the refresh completes before redirect
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Redirect to Google Form - booking is successfully reserved
       window.location.href = data.googleFormUrl;
       // Note: We don't reset state here since we're redirecting

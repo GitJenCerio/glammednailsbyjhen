@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createBooking, listBookings, releaseExpiredPendingBookings } from '@/lib/services/bookingService';
+import { createBooking, listBookings } from '@/lib/services/bookingService';
 import { fetchSheetRows } from '@/lib/googleSheets';
 import { syncBookingWithForm } from '@/lib/services/bookingService';
 
@@ -58,10 +58,6 @@ async function syncGoogleSheets() {
 }
 
 export async function GET() {
-  // Clean up expired pending bookings (no form submitted after 30 minutes)
-  // This runs whenever admin loads the dashboard or bookings are fetched
-  await releaseExpiredPendingBookings(30);
-  
   // Auto-sync Google Sheets when admin loads dashboard
   // This ensures new form submissions are automatically synced
   try {

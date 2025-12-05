@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { releaseExpiredPendingBookings } from '@/lib/services/bookingService';
 
 /**
  * Cron job endpoint to automatically release expired pending bookings
- * Runs every 5 minutes to check for bookings older than 30 minutes without form submission
+ * DISABLED: Manual release is now used instead
+ * This endpoint is kept for backward compatibility but does nothing
  */
 export async function GET(request: Request) {
   // Verify this is a cron request (optional security check)
@@ -12,13 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  try {
-    // Release bookings that are older than 30 minutes and still pending form submission
-    await releaseExpiredPendingBookings(30);
-    return NextResponse.json({ success: true, message: 'Expired pending bookings released' });
-  } catch (error: any) {
-    console.error('Error releasing expired bookings:', error);
-    return NextResponse.json({ error: error.message ?? 'Failed to release expired bookings' }, { status: 500 });
-  }
+  // Automatic release is disabled - use manual release from admin dashboard instead
+  return NextResponse.json({ success: true, message: 'Automatic release disabled - use manual release from admin dashboard' });
 }
 

@@ -20,6 +20,8 @@ import { BookingsView } from '@/components/BookingsView';
 import { ServicesManager } from '@/components/admin/ServicesManager';
 import { QuotationModal } from '@/components/admin/modals/QuotationModal';
 import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
+import { ReleaseSlotsModal } from '@/components/admin/modals/ReleaseSlotsModal';
+import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingModal';
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
@@ -71,6 +73,8 @@ function AdminDashboardContent() {
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
+  const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
+  const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -551,6 +555,36 @@ function AdminDashboardContent() {
     setToast(`Processed ${data.processed} new form responses.`);
   }
 
+  async function handleReleaseSlots(bookingIds: string[]) {
+    const res = await fetch('/api/bookings/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingIds }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      await loadData();
+      setToast(data.message || `Released ${data.released} booking(s)`);
+    } else {
+      throw new Error(data.error || 'Failed to release bookings');
+    }
+  }
+
+  async function handleRecoverBooking(bookingId: string) {
+    const res = await fetch('/api/bookings/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      await loadData();
+      setToast(data.message || `Booking ${bookingId} recovered successfully`);
+    } else {
+      throw new Error(data.error || 'Failed to recover booking');
+    }
+  }
+
   async function handleLogout() {
     try {
       await signOut(auth);
@@ -622,6 +656,22 @@ function AdminDashboardContent() {
           >
             <span className="hidden sm:inline">Sync Google Sheet</span>
             <span className="sm:hidden">Sync</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReleaseSlotsModalOpen(true)}
+            className="rounded-full border border-amber-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-amber-700 hover:border-amber-600 hover:bg-amber-50 touch-manipulation"
+          >
+            <span className="hidden sm:inline">Release Slots</span>
+            <span className="sm:hidden">Release</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRecoverBookingModalOpen(true)}
+            className="rounded-full border border-blue-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-blue-700 hover:border-blue-600 hover:bg-blue-50 touch-manipulation"
+          >
+            <span className="hidden sm:inline">Recover Booking</span>
+            <span className="sm:hidden">Recover</span>
           </button>
         </div>
       )}
@@ -1123,6 +1173,18 @@ function AdminDashboardContent() {
           onReschedule={handleRescheduleConfirm}
         />
       )}
+
+      <ReleaseSlotsModal
+        open={releaseSlotsModalOpen}
+        onClose={() => setReleaseSlotsModalOpen(false)}
+        onRelease={handleReleaseSlots}
+      />
+
+      <RecoverBookingModal
+        open={recoverBookingModalOpen}
+        onClose={() => setRecoverBookingModalOpen(false)}
+        onRecover={handleRecoverBooking}
+      />
     </div>
   );
 }
