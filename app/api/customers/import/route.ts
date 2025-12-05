@@ -245,6 +245,8 @@ export async function POST(request: Request) {
       name: string; 
       email?: string; 
       phone?: string; 
+      socialMediaName?: string;
+      referralSource?: string;
       row: number; 
       data: Record<string, string> 
     }> = [];
