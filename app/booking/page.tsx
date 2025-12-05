@@ -107,6 +107,8 @@ interface SlotModalProps {
   serviceMessage: string | null;
   clientType: ClientType;
   onClientTypeChange: (value: ClientType) => void;
+  repeatClientEmail: string;
+  onRepeatClientEmailChange: (value: string) => void;
   serviceLocation: ServiceLocation;
   onServiceLocationChange: (value: ServiceLocation) => void;
   squeezeFeeAcknowledged: boolean;
@@ -125,6 +127,8 @@ function SlotModal({
   serviceMessage,
   clientType,
   onClientTypeChange,
+  repeatClientEmail,
+  onRepeatClientEmailChange,
   serviceLocation,
   onServiceLocationChange,
   squeezeFeeAcknowledged,
@@ -201,6 +205,23 @@ function SlotModal({
               <option value="repeat">Repeat Client</option>
             </select>
           </div>
+          {clientType === 'repeat' && (
+            <div>
+              <label className="text-sm sm:text-base text-gray-600 mb-1 block">
+                What is your email address you used before when booking with us?
+              </label>
+              <input
+                type="email"
+                value={repeatClientEmail}
+                onChange={(e) => onRepeatClientEmailChange(e.target.value)}
+                placeholder="Enter your email address"
+                className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
+                We'll auto-fill your information if we find your previous booking records.
+              </p>
+            </div>
+          )}
           {requiresMultipleSlots && missingLinkedSlots && (
             <div className="rounded-2xl border-2 border-rose-400 bg-rose-200 px-4 py-3 text-sm text-rose-800">
               <p>This service requires <strong>{requiredSlots} consecutive slots</strong>. Please select a different time or date where {requiredSlots} consecutive slots are available.</p>
@@ -271,6 +292,7 @@ export default function BookingPage() {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedService, setSelectedService] = useState<ServiceType>('manicure');
   const [clientType, setClientType] = useState<ClientType>('new');
+  const [repeatClientEmail, setRepeatClientEmail] = useState('');
   const [serviceLocation, setServiceLocation] = useState<ServiceLocation>('homebased_studio');
   const [linkedSlots, setLinkedSlots] = useState<Slot[]>([]);
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
@@ -494,7 +516,8 @@ export default function BookingPage() {
   const handleSelectSlot = (slot: Slot) => {
     if (slot.status !== 'available') return;
     setSelectedService('manicure');
-    setClientType('new');
+      setClientType('new');
+      setRepeatClientEmail('');
     setServiceLocation('homebased_studio');
     setLinkedSlots([]);
     setServiceMessage(null);
@@ -556,6 +579,7 @@ export default function BookingPage() {
           pairedSlotId: linkedSlotIds[0],
           linkedSlotIds,
           clientType,
+          repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
           serviceLocation,
         }),
       });
@@ -727,6 +751,8 @@ export default function BookingPage() {
         serviceMessage={serviceMessage}
         clientType={clientType}
         onClientTypeChange={setClientType}
+        repeatClientEmail={repeatClientEmail}
+        onRepeatClientEmailChange={setRepeatClientEmail}
         serviceLocation={serviceLocation}
         onServiceLocationChange={setServiceLocation}
         squeezeFeeAcknowledged={squeezeFeeAcknowledged}

@@ -25,6 +25,7 @@ import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingMod
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
+import { CustomerImport } from '@/components/admin/CustomerImport';
 import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
 import type { Customer } from '@/lib/types';
 
@@ -101,19 +102,21 @@ function AdminDashboardContent() {
       if (booking.customerId) {
         bookingCounts[booking.customerId] = (bookingCounts[booking.customerId] || 0) + 1;
       }
-      // We don't currently have a dedicated 'cancelled' status in BookingStatus,
-      // so keep this metric at 0 for now to avoid type issues.
+      // Count cancelled bookings
+      if (booking.status === 'cancelled') {
+        cancelledBookings += 1;
+      }
     });
 
+    // Use isRepeatClient field to determine new vs repeat clients
     let newClients = 0;
     let repeatClients = 0;
 
     customers.forEach((customer) => {
-      const count = bookingCounts[customer.id] || 0;
-      if (count <= 1) {
-        newClients += 1;
-      } else {
+      if (customer.isRepeatClient === true) {
         repeatClients += 1;
+      } else {
+        newClients += 1;
       }
     });
 
@@ -1081,6 +1084,20 @@ function AdminDashboardContent() {
                   </p>
                 </div>
               </div>
+
+              {/* Customer Import */}
+              <CustomerImport
+                onImportComplete={async () => {
+                  // Reload customers after import
+                  try {
+                    const customersRes = await fetch('/api/customers').then((res) => res.json()).catch(() => ({ customers: [] }));
+                    setCustomers(customersRes.customers || []);
+                    setToast('Customers imported successfully!');
+                  } catch (error) {
+                    console.error('Failed to reload customers', error);
+                  }
+                }}
+              />
 
               {/* Customers list + detail */}
               <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr]">

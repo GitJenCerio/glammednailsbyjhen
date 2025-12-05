@@ -6,11 +6,12 @@ import { listBlockedDates } from './blockService';
 import { slotIsBlocked } from '../scheduling';
 import { buildPrefilledGoogleFormUrl } from '../googleForms';
 import { getNextSlotTime } from '../constants/slots';
-import { findOrCreateCustomer, getCustomerById } from './customerService';
+import { findOrCreateCustomer, getCustomerById, getCustomerByEmail, getCustomerByPhone } from './customerService';
 // Email functionality disabled - imports removed
 
 const bookingsCollection = adminDb.collection('bookings');
 const slotsCollection = adminDb.collection('slots');
+const customersCollection = adminDb.collection('customers');
 
 export async function listBookings(): Promise<Booking[]> {
   const snapshot = await bookingsCollection.orderBy('createdAt', 'desc').get();
@@ -28,6 +29,7 @@ type CreateBookingOptions = {
   pairedSlotId?: string | null;
   linkedSlotIds?: string[] | null;
   clientType?: 'new' | 'repeat';
+  repeatClientEmail?: string; // Email for repeat clients to lookup and prefill
   serviceLocation?: 'homebased_studio' | 'home_service';
 };
 
@@ -81,6 +83,41 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   const formDateEntryKey = process.env.GOOGLE_FORM_DATE_ENTRY;
   const formTimeEntryKey = process.env.GOOGLE_FORM_TIME_ENTRY;
   const formServiceLocationEntryKey = process.env.GOOGLE_FORM_SERVICE_LOCATION_ENTRY;
+  
+  // Customer data prefill entry keys (optional - set in environment variables)
+  const formNameEntryKey = process.env.GOOGLE_FORM_NAME_ENTRY;
+  const formEmailEntryKey = process.env.GOOGLE_FORM_EMAIL_ENTRY;
+  // Get phone entry key and fix common typos (like "eentry" instead of "entry")
+  let formPhoneEntryKey = process.env.GOOGLE_FORM_PHONE_ENTRY || process.env.GOOGLE_FORM_CONTACT_NUMBER_ENTRY;
+  if (formPhoneEntryKey && formPhoneEntryKey.startsWith('eentry.')) {
+    // Fix typo: eentry. -> entry.
+    formPhoneEntryKey = 'entry.' + formPhoneEntryKey.substring(7);
+    console.warn(`Fixed typo in phone entry key: changed "${process.env.GOOGLE_FORM_PHONE_ENTRY || process.env.GOOGLE_FORM_CONTACT_NUMBER_ENTRY}" to "${formPhoneEntryKey}"`);
+  }
+  const formFirstNameEntryKey = process.env.GOOGLE_FORM_FIRST_NAME_ENTRY;
+  const formLastNameEntryKey = process.env.GOOGLE_FORM_LAST_NAME_ENTRY;
+  const formSocialMediaEntryKey = process.env.GOOGLE_FORM_SOCIAL_MEDIA_ENTRY;
+  const formReferralSourceEntryKey = process.env.GOOGLE_FORM_REFERRAL_SOURCE_ENTRY;
+  
+  // Look up customer by email if repeat client email is provided
+  let customerData: { name?: string; firstName?: string; lastName?: string; email?: string; phone?: string; socialMediaName?: string; referralSource?: string } | null = null;
+  if (options?.repeatClientEmail) {
+    const customer = await getCustomerByEmail(options.repeatClientEmail);
+    if (customer) {
+      customerData = {
+        name: customer.name,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        email: customer.email,
+        phone: customer.phone,
+        socialMediaName: customer.socialMediaName,
+        referralSource: customer.referralSource,
+      };
+      console.log(`Found customer by email: ${customer.name} (${customer.email})`);
+    } else {
+      console.log(`No customer found with email: ${options.repeatClientEmail}`);
+    }
+  }
   const formUrl = process.env.GOOGLE_FORM_BASE_URL;
 
   if (!formEntryKey || !formUrl) {
@@ -278,22 +315,64 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     console.warn('GOOGLE_FORM_SERVICE_LOCATION_ENTRY not set - service location will not be pre-filled in form');
   }
 
+  // Add customer data to prefill if found
+  if (customerData) {
+    console.log('Customer data found for prefill:', {
+      name: customerData.name,
+      email: customerData.email,
+      phone: customerData.phone,
+      hasPhone: !!customerData.phone,
+      phoneEntryKey: formPhoneEntryKey
+    });
+    
+    if (formNameEntryKey && customerData.name) {
+      prefillFields[formNameEntryKey] = customerData.name;
+    }
+    if (formFirstNameEntryKey && customerData.firstName) {
+      prefillFields[formFirstNameEntryKey] = customerData.firstName;
+    }
+    if (formLastNameEntryKey && customerData.lastName) {
+      prefillFields[formLastNameEntryKey] = customerData.lastName;
+    }
+    if (formEmailEntryKey && customerData.email) {
+      prefillFields[formEmailEntryKey] = customerData.email;
+    }
+    if (formPhoneEntryKey && customerData.phone) {
+      prefillFields[formPhoneEntryKey] = customerData.phone;
+      console.log(`Adding phone to prefill: ${formPhoneEntryKey} = ${customerData.phone}`);
+    } else if (customerData.phone && !formPhoneEntryKey) {
+      console.warn('Customer has phone number but GOOGLE_FORM_PHONE_ENTRY or GOOGLE_FORM_CONTACT_NUMBER_ENTRY is not set in environment variables');
+    } else if (!customerData.phone) {
+      console.log('Customer record does not have a phone number');
+    }
+    if (formSocialMediaEntryKey && customerData.socialMediaName) {
+      prefillFields[formSocialMediaEntryKey] = customerData.socialMediaName;
+    }
+    if (formReferralSourceEntryKey && customerData.referralSource) {
+      prefillFields[formReferralSourceEntryKey] = customerData.referralSource;
+    }
+  }
+
   // Note: Client type is stored in the booking record, not pre-filled in Google Form
   const googleFormUrl = buildPrefilledGoogleFormUrl(formUrl, prefillFields);
   
-  // Debug logging (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Prefill fields:', Object.keys(prefillFields));
-    console.log('Date entry key:', formDateEntryKey ? `Set (${formDateEntryKey})` : 'Not set');
-    console.log('Time entry key:', formTimeEntryKey ? `Set (${formTimeEntryKey})` : 'Not set');
-    if (formattedDate) {
-      console.log('Formatted date:', formattedDate);
-    }
-    if (formattedTime) {
-      console.log('Formatted time:', formattedTime);
-    }
-    console.log('Full prefill URL:', googleFormUrl);
+  // Debug logging
+  console.log('=== Google Form Prefill Debug ===');
+  console.log('Prefill fields being added:', Object.keys(prefillFields));
+  console.log('Phone entry key:', formPhoneEntryKey ? `Set (${formPhoneEntryKey})` : 'NOT SET - Add GOOGLE_FORM_PHONE_ENTRY or GOOGLE_FORM_CONTACT_NUMBER_ENTRY to .env.local');
+  console.log('Date entry key:', formDateEntryKey ? `Set (${formDateEntryKey})` : 'Not set');
+  console.log('Time entry key:', formTimeEntryKey ? `Set (${formTimeEntryKey})` : 'Not set');
+  if (customerData) {
+    console.log('Customer phone number:', customerData.phone || 'NOT FOUND in customer record');
   }
+  if (formattedDate) {
+    console.log('Formatted date:', formattedDate);
+  }
+  if (formattedTime) {
+    console.log('Formatted time:', formattedTime);
+  }
+  console.log('All prefill values:', prefillFields);
+  console.log('Full prefill URL:', googleFormUrl);
 
   return { bookingId, googleFormUrl };
 }
@@ -378,7 +457,41 @@ export async function recoverBookingFromForm(
     });
 
     // Find or create customer from form data
-    const customer = await findOrCreateCustomer(formData);
+    const customer = await findOrCreateCustomer(formData, fieldOrder);
+    
+    // Determine client type automatically:
+    // 1. Use customer's isRepeatClient field if set
+    // 2. Otherwise, check if customer has previous bookings (excluding cancelled)
+    let determinedClientType: 'new' | 'repeat' | undefined = undefined;
+    if (customer.isRepeatClient === true) {
+      determinedClientType = 'repeat';
+    } else if (customer.isRepeatClient === false) {
+      determinedClientType = 'new';
+    } else {
+      // Check booking history if isRepeatClient is not set
+      // Exclude cancelled bookings and the current booking (by bookingId)
+      const existingBookings = await bookingsCollection
+        .where('customerId', '==', customer.id)
+        .get();
+      
+      // Filter out cancelled bookings and the current booking
+      const validPreviousBookings = existingBookings.docs.filter(doc => {
+        const data = doc.data();
+        return data.status !== 'cancelled' && data.bookingId !== bookingId;
+      });
+      
+      // If customer has any previous non-cancelled bookings, they're a repeat client
+      if (validPreviousBookings.length > 0) {
+        determinedClientType = 'repeat';
+        // Also update customer to mark as repeat client
+        await customersCollection.doc(customer.id).set({
+          isRepeatClient: true,
+          updatedAt: Timestamp.now().toDate().toISOString()
+        }, { merge: true });
+      } else {
+        determinedClientType = 'new';
+      }
+    }
 
     const bookingRef = bookingsCollection.doc();
     const bookingData: any = {
@@ -400,9 +513,8 @@ export async function recoverBookingFromForm(
       bookingData.pairedSlotId = null;
     }
 
-    if (options?.clientType) {
-      bookingData.clientType = options.clientType;
-    }
+    // Use determined client type, or fall back to option if provided
+    bookingData.clientType = determinedClientType || options?.clientType;
 
     if (options?.serviceLocation) {
       bookingData.serviceLocation = options.serviceLocation;
@@ -519,11 +631,45 @@ export async function syncBookingWithForm(
   // This happens outside transaction to avoid conflicts
   const customer = await findOrCreateCustomer(formData);
   
+  // Determine client type automatically:
+  // 1. Use customer's isRepeatClient field if set
+  // 2. Otherwise, check if customer has previous bookings (excluding cancelled and current)
+  let determinedClientType: 'new' | 'repeat' | undefined = undefined;
+  if (customer.isRepeatClient === true) {
+    determinedClientType = 'repeat';
+  } else if (customer.isRepeatClient === false) {
+    determinedClientType = 'new';
+  } else {
+    // Check booking history if isRepeatClient is not set
+    const existingBookings = await bookingsCollection
+      .where('customerId', '==', customer.id)
+      .get();
+    
+    // Filter out cancelled bookings and the current booking (by bookingId)
+    const validPreviousBookings = existingBookings.docs.filter(doc => {
+      const data = doc.data();
+      return data.status !== 'cancelled' && data.bookingId !== bookingId;
+    });
+    
+    // If customer has any previous non-cancelled bookings, they're a repeat client
+    if (validPreviousBookings.length > 0) {
+      determinedClientType = 'repeat';
+      // Also update customer to mark as repeat client
+      await customersCollection.doc(customer.id).set({
+        isRepeatClient: true,
+        updatedAt: Timestamp.now().toDate().toISOString()
+      }, { merge: true });
+    } else {
+      determinedClientType = 'new';
+    }
+  }
+  
   const updateData: any = {
     customerId: customer.id, // Link booking to customer
     customerData: formData,
     status: 'pending_payment',
     formResponseId,
+    clientType: determinedClientType, // Set automatically determined client type
     updatedAt: Timestamp.now().toDate().toISOString(),
   };
   

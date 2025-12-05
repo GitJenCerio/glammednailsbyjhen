@@ -27,12 +27,16 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
     const body = await request.json();
-    const { name, email, phone, notes } = body ?? {};
+    const { name, firstName, lastName, email, phone, socialMediaName, referralSource, notes } = body ?? {};
 
     const updates: Partial<CustomerInput> = {};
     if (name !== undefined) updates.name = name;
+    if (firstName !== undefined) updates.firstName = firstName;
+    if (lastName !== undefined) updates.lastName = lastName;
     if (email !== undefined) updates.email = email;
     if (phone !== undefined) updates.phone = phone;
+    if (socialMediaName !== undefined) updates.socialMediaName = socialMediaName;
+    if (referralSource !== undefined) updates.referralSource = referralSource;
     if (notes !== undefined) updates.notes = notes;
 
     const customer = await updateCustomer(params.id, updates);

@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, phone, notes } = body ?? {};
+    const { name, firstName, lastName, email, phone, socialMediaName, referralSource, notes } = body ?? {};
 
     if (!name) {
       return NextResponse.json({ error: 'Customer name is required.' }, { status: 400 });
@@ -22,8 +22,12 @@ export async function POST(request: Request) {
 
     const customerInput: CustomerInput = {
       name,
+      firstName,
+      lastName,
       email,
       phone,
+      socialMediaName,
+      referralSource,
       notes,
     };
 

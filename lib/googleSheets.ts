@@ -47,9 +47,37 @@ function getAuthClient() {
   }
 }
 
-export async function fetchSheetRows(range: string) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
-  if (!spreadsheetId) throw new Error('Missing GOOGLE_SHEETS_ID.');
+/**
+ * Extract Google Sheets ID from URL or return as-is if already an ID
+ */
+export function extractSheetId(input: string): string {
+  if (!input) return '';
+  
+  // If it's already just an ID (no slashes), return as-is
+  if (!input.includes('/')) {
+    return input.trim();
+  }
+  
+  // Try to extract from URL
+  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  
+  // If no match, try to extract any long alphanumeric string
+  const idMatch = input.match(/([a-zA-Z0-9-_]{20,})/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+  
+  // Return as-is if we can't extract
+  return input.trim();
+}
+
+export async function fetchSheetRows(range: string, sheetId?: string) {
+  // Use provided sheetId or fall back to environment variable
+  const spreadsheetId = sheetId ? extractSheetId(sheetId) : process.env.GOOGLE_SHEETS_ID;
+  if (!spreadsheetId) throw new Error('Missing Google Sheets ID. Please provide a sheetId parameter or set GOOGLE_SHEETS_ID in environment variables.');
 
   const auth = getAuthClient();
   const response = await sheets.spreadsheets.values.get({

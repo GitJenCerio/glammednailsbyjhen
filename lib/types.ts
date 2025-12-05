@@ -42,8 +42,13 @@ export interface BlockedDate {
 export interface Customer {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   phone?: string;
+  socialMediaName?: string; // FB name / Instagram name
+  referralSource?: string; // How did you find out about glammednails
+  isRepeatClient?: boolean; // Mark customers imported from old sheets as repeat clients
   notes?: string;
   createdAt: string;
   updatedAt: string;
