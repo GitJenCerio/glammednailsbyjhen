@@ -207,32 +207,6 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
             <div className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 text-xs sm:text-sm shadow-sm shadow-slate-900/5">
               <div className="flex items-center justify-between mb-1.5 sm:mb-2">
                 <p className="font-semibold">Personal Information</p>
-                {bookings.length > 0 && (!customer.firstName || !customer.lastName || !customer.socialMediaName || !customer.referralSource) && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('/api/customers/enrich', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ customerId: customer.id }),
-                        });
-                        const data = await res.json();
-                        if (res.ok && data.customer) {
-                          // Reload customer data
-                          window.location.reload();
-                        } else {
-                          alert(data.message || 'Failed to enrich customer data');
-                        }
-                      } catch (error) {
-                        alert('Failed to enrich customer data');
-                      }
-                    }}
-                    className="text-[10px] text-blue-600 hover:text-blue-800 underline"
-                    title="Extract missing information from booking records"
-                  >
-                    Enrich from bookings
-                  </button>
-                )}
               </div>
               <div className="space-y-1.5">
                 <div className="grid grid-cols-2 gap-2">

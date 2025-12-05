@@ -25,7 +25,6 @@ import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingMod
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
-import { CustomerImport } from '@/components/admin/CustomerImport';
 import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
 import type { Customer } from '@/lib/types';
 
@@ -1084,20 +1083,6 @@ function AdminDashboardContent() {
                   </p>
                 </div>
               </div>
-
-              {/* Customer Import */}
-              <CustomerImport
-                onImportComplete={async () => {
-                  // Reload customers after import
-                  try {
-                    const customersRes = await fetch('/api/customers').then((res) => res.json()).catch(() => ({ customers: [] }));
-                    setCustomers(customersRes.customers || []);
-                    setToast('Customers imported successfully!');
-                  } catch (error) {
-                    console.error('Failed to reload customers', error);
-                  }
-                }}
-              />
 
               {/* Customers list + detail */}
               <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr]">
