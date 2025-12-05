@@ -18,12 +18,10 @@ import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
 import { ServicesManager } from '@/components/admin/ServicesManager';
-// Lazy load heavy modals for better initial load performance
-import dynamic from 'next/dynamic';
-const QuotationModal = dynamic(() => import('@/components/admin/modals/QuotationModal').then(mod => ({ default: mod.QuotationModal })), { ssr: false });
-const RescheduleModal = dynamic(() => import('@/components/admin/modals/RescheduleModal').then(mod => ({ default: mod.RescheduleModal })), { ssr: false });
-const ReleaseSlotsModal = dynamic(() => import('@/components/admin/modals/ReleaseSlotsModal').then(mod => ({ default: mod.ReleaseSlotsModal })), { ssr: false });
-const RecoverBookingModal = dynamic(() => import('@/components/admin/modals/RecoverBookingModal').then(mod => ({ default: mod.RecoverBookingModal })), { ssr: false });
+import { QuotationModal } from '@/components/admin/modals/QuotationModal';
+import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
+import { ReleaseSlotsModal } from '@/components/admin/modals/ReleaseSlotsModal';
+import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingModal';
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
