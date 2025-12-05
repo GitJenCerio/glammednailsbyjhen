@@ -218,7 +218,7 @@ function SlotModal({
                 className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
               <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
-                We'll auto-fill your information if we find your previous booking records.
+                We&apos;ll auto-fill your information if we find your previous booking records.
               </p>
             </div>
           )}

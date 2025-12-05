@@ -159,7 +159,7 @@ export function CustomerImport({ onImportComplete }: CustomerImportProps) {
             disabled={isImporting || isAnalyzing}
           />
           <p className="text-xs text-slate-500 mt-1">
-            The range of cells to import from your Google Sheet (e.g., 'Sheet1'!A:Z or 'Form Responses 1'!A1:Z1000)
+            The range of cells to import from your Google Sheet (e.g., &apos;Sheet1&apos;!A:Z or &apos;Form Responses 1&apos;!A1:Z1000)
           </p>
         </div>
 
@@ -168,7 +168,7 @@ export function CustomerImport({ onImportComplete }: CustomerImportProps) {
           <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
             <li>Make sure your <strong>old Google Sheet</strong> is shared with your service account email</li>
             <li>The service account email is in your <code className="bg-blue-100 px-1 py-0.5 rounded">.env.local</code> as <code className="bg-blue-100 px-1 py-0.5 rounded">GOOGLE_SERVICE_ACCOUNT_EMAIL</code></li>
-            <li>Give the service account at least "Viewer" access to the old sheet</li>
+            <li>Give the service account at least &quot;Viewer&quot; access to the old sheet</li>
             <li>Your new Google Sheet (for current responses) remains unchanged in <code className="bg-blue-100 px-1 py-0.5 rounded">GOOGLE_SHEETS_ID</code></li>
           </ul>
         </div>
@@ -287,8 +287,8 @@ export function CustomerImport({ onImportComplete }: CustomerImportProps) {
               <p className="text-sm font-medium text-amber-900 mb-2">🔧 Fix Already Imported Customers</p>
               <p className="text-xs text-amber-700 mb-3">
                 If you already imported customers from old Google Sheets, this will:
-                <br />• Mark customers with <strong>NO bookings</strong> as <strong>repeat clients</strong> (they're from old imported data)
-                <br />• Extract missing "How did you find us" field from their booking records
+                <br />• Mark customers with <strong>NO bookings</strong> as <strong>repeat clients</strong> (they&apos;re from old imported data)
+                <br />• Extract missing &quot;How did you find us&quot; field from their booking records
               </p>
               <button
                 onClick={async () => {
