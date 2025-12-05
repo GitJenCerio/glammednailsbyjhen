@@ -84,6 +84,34 @@ export async function deleteExpiredSlots() {
   }
 }
 
+export async function getSlotsByDate(date: string): Promise<Slot[]> {
+  const snapshot = await slotCollection.where('date', '==', date).get();
+  return snapshot.docs.map((doc) => docToSlot(doc.id, doc.data()));
+}
+
+export async function deleteSlotsByDate(date: string, options?: { onlyAvailable?: boolean }): Promise<{ deletedCount: number; slotsDeleted: Slot[] }> {
+  const snapshot = await slotCollection.where('date', '==', date).get();
+  
+  let slotsToDelete = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    slot: docToSlot(doc.id, doc.data()),
+  }));
+  
+  // Filter by status if onlyAvailable is true
+  if (options?.onlyAvailable) {
+    slotsToDelete = slotsToDelete.filter((item) => item.slot.status === 'available');
+  }
+  
+  const slotsDeleted = slotsToDelete.map((item) => item.slot);
+  const deletePromises = slotsToDelete.map((item) => slotCollection.doc(item.id).delete());
+  await Promise.all(deletePromises);
+  
+  return {
+    deletedCount: slotsToDelete.length,
+    slotsDeleted,
+  };
+}
+
 function docToSlot(id: string, data: FirebaseFirestore.DocumentData): Slot {
   return {
     id,

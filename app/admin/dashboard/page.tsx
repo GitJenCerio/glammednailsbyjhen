@@ -14,6 +14,7 @@ import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
 import { DeleteSlotModal } from '@/components/admin/modals/DeleteSlotModal';
+import { DeleteDaySlotsModal } from '@/components/admin/modals/DeleteDaySlotsModal';
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
@@ -52,6 +53,7 @@ function AdminDashboardContent() {
   const [deleteSlotModalOpen, setDeleteSlotModalOpen] = useState(false);
   const [slotToDelete, setSlotToDelete] = useState<Slot | null>(null);
   const [isDeletingSlot, setIsDeletingSlot] = useState(false);
+  const [deleteDaySlotsModalOpen, setDeleteDaySlotsModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [blockDefaults, setBlockDefaults] = useState<{ start?: string | null; end?: string | null }>({});
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
@@ -461,6 +463,24 @@ function AdminDashboardContent() {
     }
   }
 
+  async function handleDeleteDaySlots(onlyAvailable: boolean) {
+    try {
+      const url = `/api/slots/by-date?date=${selectedDate}${onlyAvailable ? '&onlyAvailable=true' : ''}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete slots.');
+      }
+      await loadData();
+      setToast(data.message || `Deleted ${data.deletedCount} slot(s).`);
+      setDeleteDaySlotsModalOpen(false);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to delete slots.';
+      setToast(errorMessage);
+      throw error; // Re-throw so modal can handle it
+    }
+  }
+
   async function handleBlockDates(payload: { startDate: string; endDate: string; scope: BlockedDate['scope']; reason?: string }) {
     const res = await fetch('/api/blocks', {
       method: 'POST',
@@ -744,26 +764,38 @@ function AdminDashboardContent() {
                     {format(new Date(selectedDate), 'EEEE, MMM d')}
                   </h2>
                 </div>
-                {selectedDate >= format(new Date(), 'yyyy-MM-dd') ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingSlot(null);
-                      setSlotModalOpen(true);
-                    }}
-                    className="rounded-full bg-green-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-green-800 hover:bg-green-400 touch-manipulation"
-                  >
-                    Add slot
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-400 cursor-not-allowed opacity-50"
-                  >
-                    Past date
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {selectedSlots.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteDaySlotsModalOpen(true)}
+                      className="rounded-full border border-rose-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 hover:bg-rose-50 touch-manipulation"
+                    >
+                      <span className="hidden sm:inline">Delete all</span>
+                      <span className="sm:hidden">Delete</span>
+                    </button>
+                  )}
+                  {selectedDate >= format(new Date(), 'yyyy-MM-dd') ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingSlot(null);
+                        setSlotModalOpen(true);
+                      }}
+                      className="rounded-full bg-green-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-green-800 hover:bg-green-400 touch-manipulation"
+                    >
+                      Add slot
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-400 cursor-not-allowed opacity-50"
+                    >
+                      Past date
+                    </button>
+                  )}
+                </div>
               </header>
 
               <div className="space-y-4">
@@ -1154,6 +1186,15 @@ function AdminDashboardContent() {
         onConfirm={confirmDeleteSlot}
         isDeleting={isDeletingSlot}
       />
+
+      <DeleteDaySlotsModal
+        open={deleteDaySlotsModalOpen}
+        date={selectedDate}
+        slots={selectedSlots}
+        onClose={() => setDeleteDaySlotsModalOpen(false)}
+        onConfirm={handleDeleteDaySlots}
+      />
+
       {quotationModalOpen && selectedBooking && (
         <QuotationModal
           booking={selectedBooking}
