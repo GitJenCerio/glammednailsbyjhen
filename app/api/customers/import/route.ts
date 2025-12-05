@@ -304,8 +304,8 @@ export async function POST(request: Request) {
             // Found a matching field - use it
             const foundReferralSource = customerData[key].trim();
             if (foundReferralSource) {
-              // Update the customerRow with the found value
-              customerRow.referralSource = foundReferralSource;
+              // Update the referralSource variable with the found value
+              referralSource = foundReferralSource;
               break;
             }
           }
