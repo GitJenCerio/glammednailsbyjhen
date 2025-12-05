@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { listSlots, createSlot, deleteExpiredSlots } from '@/lib/services/slotService';
 import { listBlockedDates } from '@/lib/services/blockService';
-import { releaseExpiredPendingBookings } from '@/lib/services/bookingService';
 
 export async function GET() {
-  await releaseExpiredPendingBookings(30);
+  // Automatic slot release is disabled - use manual release from admin dashboard instead
   // Try to delete expired slots, but don't fail if index is missing
   try {
     const deletedCount = await deleteExpiredSlots();

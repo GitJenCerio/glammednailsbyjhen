@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { listBookings, releaseExpiredPendingBookings } from '@/lib/services/bookingService';
+import { listBookings } from '@/lib/services/bookingService';
 import { listSlots } from '@/lib/services/slotService';
 import { addDays, format, parseISO } from 'date-fns';
 
 /**
  * Combined daily cron job for Vercel Hobby tier (only 1 cron per day allowed)
  * Runs daily at 9:00 AM and handles:
- * 1. Release expired pending bookings
+ * 1. Release expired pending bookings (DISABLED - use manual release from admin dashboard)
  * 2. Sync Google Sheets (automatic form submission sync)
  * 3. Check appointments scheduled for tomorrow (email functionality disabled)
  */
@@ -25,11 +25,12 @@ export async function GET(request: Request) {
 
   try {
     // Task 1: Release expired pending bookings
-    try {
-      await releaseExpiredPendingBookings(30);
-    } catch (error) {
-      console.error('Error releasing expired bookings:', error);
-    }
+    // DISABLED: Automatic release is disabled - use manual release from admin dashboard instead
+    // try {
+    //   await releaseExpiredPendingBookings(30);
+    // } catch (error) {
+    //   console.error('Error releasing expired bookings:', error);
+    // }
 
     // Task 2: Sync Google Sheets (automatic form submission sync)
     try {
