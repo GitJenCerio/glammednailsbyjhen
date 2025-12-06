@@ -36,7 +36,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       setDepositPaymentMethod('CASH');
       setIsConfirming(false);
     }
-  }, [booking?.id, booking?.status]);
+  }, [booking]);
 
   if (!booking) {
     return (
