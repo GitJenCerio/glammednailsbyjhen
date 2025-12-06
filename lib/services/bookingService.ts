@@ -675,9 +675,11 @@ export async function syncBookingWithForm(
     });
     
     // Replace all email fields in formData with the customer's saved email
+    // TypeScript: customer.email is already checked in the if condition, but we need to assert it's defined
+    const customerEmail = customer.email;
     emailKeys.forEach(key => {
-      if (formData[key] !== customer.email) {
-        formData[key] = customer.email;
+      if (formData[key] !== customerEmail) {
+        formData[key] = customerEmail;
       }
     });
   }
