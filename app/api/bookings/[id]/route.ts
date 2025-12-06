@@ -16,7 +16,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (body?.action === 'confirm') {
     const depositAmount = body.depositAmount !== undefined && body.depositAmount !== null ? Number(body.depositAmount) : undefined;
     const withAssistantCommission = Boolean(body.withAssistantCommission);
-    await confirmBooking(params.id, depositAmount, withAssistantCommission);
+    const depositPaymentMethod: 'PNB' | 'CASH' | 'GCASH' | undefined = body.depositPaymentMethod;
+    await confirmBooking(params.id, depositAmount, withAssistantCommission, depositPaymentMethod);
     return NextResponse.json({ success: true });
   }
 
@@ -38,19 +39,21 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const paymentStatus: PaymentStatus = body.paymentStatus;
     const paidAmount: number | undefined = body.paidAmount;
     const tipAmount: number | undefined = body.tipAmount;
+    const paidPaymentMethod: 'PNB' | 'CASH' | 'GCASH' | undefined = body.paidPaymentMethod;
     if (!paymentStatus) {
       return NextResponse.json({ error: 'Payment status required.' }, { status: 400 });
     }
-    await updatePaymentStatus(params.id, paymentStatus, paidAmount, tipAmount);
+    await updatePaymentStatus(params.id, paymentStatus, paidAmount, tipAmount, paidPaymentMethod);
     return NextResponse.json({ success: true });
   }
 
   if (body?.action === 'update_deposit') {
     const depositAmount = body.depositAmount !== undefined ? Number(body.depositAmount) : undefined;
+    const depositPaymentMethod: 'PNB' | 'CASH' | 'GCASH' | undefined = body.depositPaymentMethod;
     if (depositAmount === undefined || isNaN(depositAmount)) {
       return NextResponse.json({ error: 'Valid deposit amount required.' }, { status: 400 });
     }
-    await updateDepositAmount(params.id, depositAmount);
+    await updateDepositAmount(params.id, depositAmount, depositPaymentMethod);
     return NextResponse.json({ success: true });
   }
 

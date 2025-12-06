@@ -7,17 +7,19 @@ type PaymentModalProps = {
   open: boolean;
   booking: Booking | null;
   onClose: () => void;
-  onSubmit: (amountPaid: number) => Promise<void>;
+  onSubmit: (amountPaid: number, paymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
 };
 
 export function PaymentModal({ open, booking, onClose, onSubmit }: PaymentModalProps) {
   const [amountPaid, setAmountPaid] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && booking) {
       setAmountPaid('');
+      setPaymentMethod('CASH'); // Default to CASH
       setError(null);
     }
   }, [open, booking]);
@@ -43,7 +45,7 @@ export function PaymentModal({ open, booking, onClose, onSubmit }: PaymentModalP
     }
 
     try {
-      await onSubmit(amount);
+      await onSubmit(amount, paymentMethod);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to update payment.');
@@ -97,6 +99,20 @@ export function PaymentModal({ open, booking, onClose, onSubmit }: PaymentModalP
               autoFocus
               className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Payment Method
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as 'PNB' | 'CASH' | 'GCASH')}
+              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              required
+            >
+              <option value="CASH">💵 Cash</option>
+              <option value="GCASH">📱 GCash</option>
+              <option value="PNB">🏦 PNB</option>
+            </select>
           </label>
 
           {remainingBalance > 0 && (

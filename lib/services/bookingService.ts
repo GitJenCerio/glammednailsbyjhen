@@ -101,9 +101,11 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   
   // Look up customer by email if repeat client email is provided
   let customerData: { name?: string; firstName?: string; lastName?: string; email?: string; phone?: string; socialMediaName?: string; referralSource?: string } | null = null;
+  let foundCustomerId: string | null = null;
   if (options?.repeatClientEmail) {
     const customer = await getCustomerByEmail(options.repeatClientEmail);
     if (customer) {
+      foundCustomerId = customer.id; // Store the customer ID for later use
       customerData = {
         name: customer.name,
         firstName: customer.firstName,
@@ -204,13 +206,12 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     const bookingRef = bookingsCollection.doc();
     const clientType = options?.clientType;
     
-    // Note: customerId will be set when form is submitted via syncBookingWithForm
-    // For now, we'll use a placeholder that will be updated
-    // This is acceptable because the booking is in 'pending_form' status
+    // For repeat clients, if we found the customer by email, use their customerId
+    // Otherwise, use placeholder that will be updated when form is submitted
     const bookingData: any = {
       slotId,
       bookingId,
-      customerId: 'PENDING_FORM_SUBMISSION', // Will be updated when form is submitted
+      customerId: foundCustomerId || 'PENDING_FORM_SUBMISSION', // Use found customerId if available, otherwise placeholder
       serviceType,
       status: 'pending_form' as BookingStatus,
       createdAt: Timestamp.now().toDate().toISOString(),
@@ -558,9 +559,31 @@ export async function syncBookingWithForm(
   let timeChanged = false;
   const validationWarnings: string[] = [];
 
+  // Get the booking object early to check for existing customerId
+  const booking = docToBooking(doc.id, doc.data());
+
+  // Validate that we actually have form data before proceeding
+  // Check if formData has at least some meaningful content (not all empty values)
+  if (!formData || Object.keys(formData).length === 0) {
+    console.warn(`syncBookingWithForm: No form data received for booking ${bookingId}. Skipping sync.`);
+    return null;
+  }
+  
+  // Check if form data has at least one non-empty value
+  const hasValidFormData = Object.values(formData).some(value => 
+    value !== null && value !== undefined && String(value).trim().length > 0
+  );
+  
+  if (!hasValidFormData) {
+    console.warn(`syncBookingWithForm: Form data for booking ${bookingId} contains only empty values. Skipping sync.`);
+    return null;
+  }
+
+  // Only proceed with sync if booking is still in pending_form status
+  // If it's already pending_payment or confirmed, we should only update customerData, not change status
+  // unless there's a specific reason to do so
   if (formDateEntryKey || formTimeEntryKey) {
     // Get the slot information for this booking
-    const booking = docToBooking(doc.id, doc.data());
     const slotRef = slotsCollection.doc(booking.slotId);
     const slotSnap = await slotRef.get();
     
@@ -627,9 +650,37 @@ export async function syncBookingWithForm(
     }
   }
 
-  // Find or create customer from form data
-  // This happens outside transaction to avoid conflicts
-  const customer = await findOrCreateCustomer(formData);
+  // Check if booking already has a customerId (e.g., from repeat client booking)
+  let customer;
+  
+  if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION') {
+    // Booking already linked to a customer (repeat client), use that customer
+    customer = await getCustomerById(booking.customerId);
+    if (!customer) {
+      // Customer not found, fall back to findOrCreateCustomer
+      customer = await findOrCreateCustomer(formData);
+    }
+  } else {
+    // No existing customer link, find or create customer from form data
+    customer = await findOrCreateCustomer(formData);
+  }
+  
+  // If customer already has an email saved in the system, replace the form email with the saved email
+  // This prevents different emails from overwriting the customer's primary email
+  if (customer.email) {
+    // Find all possible email field keys in the form data
+    const emailKeys = Object.keys(formData).filter(key => {
+      const lowerKey = key.toLowerCase();
+      return lowerKey.includes('email') && formData[key];
+    });
+    
+    // Replace all email fields in formData with the customer's saved email
+    emailKeys.forEach(key => {
+      if (formData[key] !== customer.email) {
+        formData[key] = customer.email;
+      }
+    });
+  }
   
   // Determine client type automatically:
   // 1. Use customer's isRepeatClient field if set
@@ -667,11 +718,16 @@ export async function syncBookingWithForm(
   const updateData: any = {
     customerId: customer.id, // Link booking to customer
     customerData: formData,
-    status: 'pending_payment',
     formResponseId,
     clientType: determinedClientType, // Set automatically determined client type
     updatedAt: Timestamp.now().toDate().toISOString(),
   };
+  
+  // Only change status to 'pending_payment' if booking is currently 'pending_form'
+  // This ensures bookings don't incorrectly skip the 'pending_form' stage
+  if (booking.status === 'pending_form') {
+    updateData.status = 'pending_payment';
+  }
   
   // Store field order to preserve exact form order when displaying
   if (fieldOrder && fieldOrder.length > 0) {
@@ -716,7 +772,7 @@ async function getSlotById(slotId: string): Promise<Slot | null> {
   return docToSlot(snapshot.id, snapshot.data()!);
 }
 
-export async function confirmBooking(bookingId: string, depositAmount?: number, withAssistantCommission?: boolean) {
+export async function confirmBooking(bookingId: string, depositAmount?: number, withAssistantCommission?: boolean, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
   let booking: Booking | null = null;
   let slot: Slot | null = null;
   let customerId: string | null = null;
@@ -771,7 +827,11 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
     // paidAmount is used for payments made AFTER the deposit (e.g. remaining balance).
     if (depositAmount !== undefined && depositAmount !== null && depositAmount > 0) {
       updateData.depositAmount = depositAmount;
+      updateData.depositDate = Timestamp.now().toDate().toISOString(); // Track when deposit was paid
       updateData.paymentStatus = 'partial';
+      if (depositPaymentMethod !== undefined) {
+        updateData.depositPaymentMethod = depositPaymentMethod;
+      }
     }
 
     // If this booking should include assistant commission (e.g. sister helped),
@@ -856,10 +916,11 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
   // Email functionality disabled
 }
 
-export async function updatePaymentStatus(bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number) {
+export async function updatePaymentStatus(bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number, paidPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
+  const now = Timestamp.now().toDate().toISOString();
   const updateData: any = {
     paymentStatus,
-    updatedAt: Timestamp.now().toDate().toISOString(),
+    updatedAt: now,
   };
   
   // When payment is fully paid, set booking status to confirmed (done)
@@ -869,22 +930,45 @@ export async function updatePaymentStatus(bookingId: string, paymentStatus: Paym
   
   if (paidAmount !== undefined) {
     updateData.paidAmount = paidAmount;
+    // Track when payment was made (if it's a new payment or increased payment)
+    // Always update paidDate when paidAmount is provided
+    updateData.paidDate = now;
+  }
+  if (paidPaymentMethod !== undefined) {
+    updateData.paidPaymentMethod = paidPaymentMethod;
   }
   if (tipAmount !== undefined && tipAmount > 0) {
     updateData.tipAmount = tipAmount;
+    // Track when tip was received
+    updateData.tipDate = now;
   }
   
   await bookingsCollection.doc(bookingId).set(updateData, { merge: true });
 }
 
-export async function updateDepositAmount(bookingId: string, depositAmount: number) {
-  await bookingsCollection.doc(bookingId).set(
-    {
-      depositAmount,
-      updatedAt: Timestamp.now().toDate().toISOString(),
-    },
-    { merge: true }
-  );
+export async function updateDepositAmount(bookingId: string, depositAmount: number, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
+  const bookingRef = bookingsCollection.doc(bookingId);
+  const bookingSnap = await bookingRef.get();
+  const currentBooking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
+  
+  const now = Timestamp.now().toDate().toISOString();
+  const updateData: any = {
+    depositAmount,
+    depositDate: now, // Track when deposit was paid
+    updatedAt: now,
+    paymentStatus: 'partial', // Set payment status to partial when deposit is added
+  };
+  if (depositPaymentMethod !== undefined) {
+    updateData.depositPaymentMethod = depositPaymentMethod;
+  }
+  
+  // If booking is pending_payment and has no invoice yet, update status to confirmed when deposit is added
+  // This handles cases where deposit is added separately from the confirmation flow
+  if (currentBooking?.status === 'pending_payment' && !currentBooking.invoice) {
+    updateData.status = 'confirmed';
+  }
+  
+  await bookingRef.set(updateData, { merge: true });
 }
 
 export async function rescheduleBooking(bookingId: string, newSlotId: string, linkedSlotIds?: string[]) {
@@ -1169,6 +1253,11 @@ function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking
     paidAmount: data.paidAmount ?? undefined,
     depositAmount: data.depositAmount ?? undefined,
     tipAmount: data.tipAmount ?? undefined,
+    depositDate: data.depositDate ?? undefined,
+    paidDate: data.paidDate ?? undefined,
+    tipDate: data.tipDate ?? undefined,
+    depositPaymentMethod: data.depositPaymentMethod ?? undefined,
+    paidPaymentMethod: data.paidPaymentMethod ?? undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };

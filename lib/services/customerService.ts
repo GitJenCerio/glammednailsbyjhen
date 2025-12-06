@@ -244,7 +244,9 @@ export async function findOrCreateCustomer(
         if (isRepeatClient !== undefined && existing.isRepeatClient !== isRepeatClient) {
           updates.isRepeatClient = isRepeatClient;
         }
-        if (email && email !== existing.email) {
+        // Preserve existing email - don't update if customer already has an email saved
+        // Only update email if the existing customer doesn't have one
+        if (email && !existing.email) {
           updates.email = email;
         }
         if (Object.keys(updates).length > 1) {
@@ -267,7 +269,9 @@ export async function findOrCreateCustomer(
       } else {
         // Otherwise, update missing fields or changed fields
         const updates: any = { updatedAt: Timestamp.now().toDate().toISOString() };
-        if (email && email !== existing.email) {
+        // Preserve existing email - don't update if customer already has an email saved
+        // Only update email if the existing customer doesn't have one
+        if (email && !existing.email) {
           updates.email = email;
         }
         if (firstName && !existing.firstName) {

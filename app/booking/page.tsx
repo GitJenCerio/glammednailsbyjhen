@@ -109,6 +109,8 @@ interface SlotModalProps {
   onClientTypeChange: (value: ClientType) => void;
   repeatClientEmail: string;
   onRepeatClientEmailChange: (value: string) => void;
+  repeatClientName: string | null;
+  onRepeatClientNameChange: (value: string | null) => void;
   serviceLocation: ServiceLocation;
   onServiceLocationChange: (value: ServiceLocation) => void;
   squeezeFeeAcknowledged: boolean;
@@ -129,6 +131,8 @@ function SlotModal({
   onClientTypeChange,
   repeatClientEmail,
   onRepeatClientEmailChange,
+  repeatClientName,
+  onRepeatClientNameChange,
   serviceLocation,
   onServiceLocationChange,
   squeezeFeeAcknowledged,
@@ -155,6 +159,14 @@ function SlotModal({
       >
         <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4">Book This Slot</h3>
         
+        {/* Client Name Display */}
+        <div className="mb-4 rounded-xl border-2 bg-slate-50 border-slate-200 px-3 py-2">
+          <p className="text-xs text-slate-500 mb-0.5">Client</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {clientType === 'repeat' && repeatClientName ? repeatClientName : clientType === 'repeat' ? 'Repeat Client' : 'New Client'}
+          </p>
+        </div>
+        
         <div className="space-y-2.5 sm:space-y-3 mb-4 sm:mb-6">
           <div>
             <span className="text-sm sm:text-base text-gray-600">Date:</span>
@@ -162,7 +174,24 @@ function SlotModal({
           </div>
           <div>
             <span className="text-sm sm:text-base text-gray-600">Time:</span>
-            <p className="font-medium text-sm sm:text-base">{formatTime12Hour(slot.time)}</p>
+            {requiresMultipleSlots && linkedSlots.length > 0 ? (
+              <div className="mt-1">
+                <p className="font-medium text-sm sm:text-base">
+                  {formatTime12Hour(slot.time)}
+                  {linkedSlots.map((linkedSlot) => (
+                    <span key={linkedSlot.id}> → {formatTime12Hour(linkedSlot.time)}</span>
+                  ))}
+                </p>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+                  This booking will use {requiredSlots} consecutive time slots: <strong>{formatTime12Hour(slot.time)}</strong>
+                  {linkedSlots.map((linkedSlot) => (
+                    <span key={linkedSlot.id}> and <strong>{formatTime12Hour(linkedSlot.time)}</strong></span>
+                  ))}
+                </p>
+              </div>
+            ) : (
+              <p className="font-medium text-sm sm:text-base">{formatTime12Hour(slot.time)}</p>
+            )}
           </div>
           <div>
             <span className="text-sm sm:text-base text-gray-600">Service Location:</span>
@@ -198,7 +227,13 @@ function SlotModal({
             <span className="text-sm sm:text-base text-gray-600">Client Type:</span>
             <select
               value={clientType}
-              onChange={(e) => onClientTypeChange(e.target.value as ClientType)}
+              onChange={(e) => {
+                onClientTypeChange(e.target.value as ClientType);
+                if (e.target.value === 'new') {
+                  onRepeatClientNameChange(null);
+                  onRepeatClientEmailChange('');
+                }
+              }}
               className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
             >
               <option value="new">New Client</option>
@@ -213,18 +248,67 @@ function SlotModal({
               <input
                 type="email"
                 value={repeatClientEmail}
-                onChange={(e) => onRepeatClientEmailChange(e.target.value)}
+                onChange={async (e) => {
+                  onRepeatClientEmailChange(e.target.value);
+                  // Fetch customer name when email is entered
+                  if (e.target.value.trim()) {
+                    try {
+                      const res = await fetch(`/api/customers/by-email?email=${encodeURIComponent(e.target.value.trim())}`);
+                      if (res.ok) {
+                        const data = await res.json();
+                        if (data.customer?.name) {
+                          onRepeatClientNameChange(data.customer.name);
+                        } else {
+                          onRepeatClientNameChange(null);
+                        }
+                      } else {
+                        onRepeatClientNameChange(null);
+                      }
+                    } catch {
+                      onRepeatClientNameChange(null);
+                    }
+                  } else {
+                    onRepeatClientNameChange(null);
+                  }
+                }}
                 placeholder="Enter your email address"
                 className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
+              {repeatClientName && (
+                <p className="mt-1.5 text-[10px] sm:text-xs text-emerald-600 font-medium">
+                  ✓ Welcome back, {repeatClientName}!
+                </p>
+              )}
               <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
                 We&apos;ll auto-fill your information if we find your previous booking records.
               </p>
             </div>
           )}
+          {clientType === 'new' && (
+            <div className="rounded-xl sm:rounded-2xl border-2 border-blue-200 bg-blue-50 px-3 sm:px-4 py-2 text-xs sm:text-sm text-blue-900">
+              <p className="font-semibold">New Client</p>
+              <p className="text-[10px] sm:text-xs mt-1">Please fill out the booking form after confirming this slot.</p>
+            </div>
+          )}
           {requiresMultipleSlots && missingLinkedSlots && (
             <div className="rounded-2xl border-2 border-rose-400 bg-rose-200 px-4 py-3 text-sm text-rose-800">
               <p>This service requires <strong>{requiredSlots} consecutive slots</strong>. Please select a different time or date where {requiredSlots} consecutive slots are available.</p>
+            </div>
+          )}
+          {serviceMessage && !missingLinkedSlots && (
+            <div className="rounded-xl sm:rounded-2xl border-2 border-blue-400 bg-blue-100 px-3 sm:px-4 py-2.5 sm:py-3">
+              <p className="text-xs sm:text-sm font-semibold text-blue-900 mb-1">📅 Slot Information</p>
+              <p className="text-[10px] sm:text-xs text-blue-900 leading-relaxed">
+                {serviceMessage}
+              </p>
+              {requiresMultipleSlots && linkedSlots.length > 0 && (
+                <p className="text-[10px] sm:text-xs text-blue-800 mt-2 italic">
+                  This booking will use these consecutive time slots: <strong>{formatTime12Hour(slot.time)}</strong>
+                  {linkedSlots.map((linkedSlot) => (
+                    <span key={linkedSlot.id}> → <strong>{formatTime12Hour(linkedSlot.time)}</strong></span>
+                  ))}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -297,6 +381,7 @@ export default function BookingPage() {
   const [linkedSlots, setLinkedSlots] = useState<Slot[]>([]);
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
   const [squeezeFeeAcknowledged, setSqueezeFeeAcknowledged] = useState(false);
+  const [repeatClientName, setRepeatClientName] = useState<string | null>(null);
   const serviceOptions = SERVICE_OPTIONS[serviceLocation];
 
   useEffect(() => {
@@ -450,9 +535,19 @@ export default function BookingPage() {
     const lastSlot = collected[collected.length - 1];
     const serviceLabel =
       serviceOptions.find((option) => option.value === selectedService)?.label ?? 'This service';
-    setServiceMessage(
-      `${serviceLabel} will use ${formatTime12Hour(selectedSlot.time)}${lastSlot ? ` to ${formatTime12Hour(lastSlot.time)}` : ''}.`,
-    );
+    
+    if (requiredSlots > 1) {
+      // For multiple slots, show clear explanation
+      const allSlots = [selectedSlot, ...collected];
+      const slotTimes = allSlots.map(s => formatTime12Hour(s.time)).join(' and ');
+      setServiceMessage(
+        `This slot selection will use ${slotTimes} for this booking. The system will automatically reserve ${requiredSlots} consecutive time slots for your ${serviceLabel}.`
+      );
+    } else {
+      setServiceMessage(
+        `This booking will use the time slot at ${formatTime12Hour(selectedSlot.time)}.`
+      );
+    }
   }, [selectedSlot, selectedService, slots, serviceOptions, blockedDates]);
 
   const availableSlotsForDate = useMemo(
@@ -520,8 +615,9 @@ export default function BookingPage() {
   const handleSelectSlot = (slot: Slot) => {
     if (slot.status !== 'available') return;
     setSelectedService('manicure');
-      setClientType('new');
-      setRepeatClientEmail('');
+    setClientType('new');
+    setRepeatClientEmail('');
+    setRepeatClientName(null);
     setServiceLocation('homebased_studio');
     setLinkedSlots([]);
     setServiceMessage(null);
@@ -757,6 +853,8 @@ export default function BookingPage() {
         onClientTypeChange={setClientType}
         repeatClientEmail={repeatClientEmail}
         onRepeatClientEmailChange={setRepeatClientEmail}
+        repeatClientName={repeatClientName}
+        onRepeatClientNameChange={setRepeatClientName}
         serviceLocation={serviceLocation}
         onServiceLocationChange={setServiceLocation}
         squeezeFeeAcknowledged={squeezeFeeAcknowledged}
@@ -767,6 +865,8 @@ export default function BookingPage() {
           setSelectedSlot(null);
           setSelectedService('manicure');
           setClientType('new');
+          setRepeatClientEmail('');
+          setRepeatClientName(null);
           setServiceLocation('homebased_studio');
           setLinkedSlots([]);
           setServiceMessage(null);

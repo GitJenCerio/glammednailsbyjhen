@@ -492,18 +492,58 @@ function AdminDashboardContent() {
     setToast('Dates blocked.');
   }
 
-  async function handleConfirmBooking(id: string, depositAmount?: number, withAssistantCommission?: boolean) {
-    await fetch(`/api/bookings/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'confirm',
-        depositAmount: depositAmount !== undefined ? depositAmount : null,
-        withAssistantCommission: withAssistantCommission ?? false,
-      }),
-    });
-    await loadData();
-    setToast(depositAmount ? `Booking confirmed. Deposit: ₱${depositAmount.toLocaleString('en-PH')}` : 'Booking confirmed.');
+  async function handleConfirmBooking(id: string, depositAmount?: number, withAssistantCommission?: boolean, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
+    try {
+      const res = await fetch(`/api/bookings/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'confirm',
+          depositAmount: depositAmount !== undefined ? depositAmount : null,
+          withAssistantCommission: withAssistantCommission ?? false,
+          depositPaymentMethod: depositPaymentMethod,
+        }),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to confirm booking');
+      }
+      
+      // Immediately update the local booking state to 'confirmed' to prevent UI loop
+      // This prevents the confirm button from showing again while waiting for Firebase
+      setBookings(prevBookings => 
+        prevBookings.map(booking => {
+          if (booking.id === id) {
+            const updated: Booking = { ...booking, status: 'confirmed' as const };
+            if (depositAmount !== undefined && depositAmount !== null && depositAmount > 0) {
+              updated.depositAmount = depositAmount;
+              updated.depositDate = new Date().toISOString();
+              updated.paymentStatus = 'partial';
+              if (depositPaymentMethod) {
+                updated.depositPaymentMethod = depositPaymentMethod;
+              }
+            }
+            return updated;
+          }
+          return booking;
+        })
+      );
+      
+      // Wait a bit to ensure Firebase transaction completes before refreshing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Reload data from Firebase to get the actual confirmed status
+      await loadData();
+      
+      // Re-select the booking after refresh to ensure UI updates
+      setSelectedBookingId(id);
+      
+      setToast(depositAmount ? `Booking confirmed. Deposit: ₱${depositAmount.toLocaleString('en-PH')}` : 'Booking confirmed.');
+    } catch (error: any) {
+      console.error('Failed to confirm booking:', error);
+      setToast(`Error: ${error.message || 'Failed to confirm booking'}`);
+    }
   }
 
   async function handleCancelBooking(id: string) {
@@ -719,6 +759,7 @@ function AdminDashboardContent() {
           bookings={bookings}
           slots={slots}
           selectedDate={selectedDate}
+          customers={customers}
           onCancel={handleCancelBooking}
           onReschedule={handleRescheduleBooking}
           onMakeQuotation={handleMakeQuotation}
@@ -805,7 +846,15 @@ function AdminDashboardContent() {
                   </div>
                 )}
                 {selectedSlots.map((slot) => {
-                  const bookingForSlot = bookingsWithSlots.find((b) => b.slotId === slot.id && b.status === 'confirmed');
+                  // Find booking for this slot - prioritize confirmed bookings, but also include pending_payment if slot is confirmed
+                  // This ensures bookings show up correctly even if there's a slight sync delay
+                  const bookingForSlot = bookingsWithSlots.find((b) => {
+                    if (b.slotId !== slot.id) return false;
+                    // If slot is confirmed, show booking regardless of booking status (slot status is source of truth)
+                    if (slot.status === 'confirmed') return true;
+                    // Otherwise, only show confirmed bookings
+                    return b.status === 'confirmed';
+                  });
                   const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
                   return (
                     <SlotCard
@@ -879,6 +928,7 @@ function AdminDashboardContent() {
                 bookings={filteredBookingsForOverview}
                 onSelect={(booking) => setSelectedBookingId(booking.id)}
                 selectedId={selectedBooking?.id ?? null}
+                customers={customers}
               />
             </div>
             <BookingDetailPanel

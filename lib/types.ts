@@ -79,6 +79,13 @@ export interface Booking {
   paidAmount?: number;
   depositAmount?: number;
   tipAmount?: number;
+  // Payment date tracking (when payments were actually received)
+  depositDate?: string; // ISO date string when deposit was paid
+  paidDate?: string; // ISO date string when full/partial payment was made
+  tipDate?: string; // ISO date string when tip was received
+  // Payment method tracking
+  depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH'; // Payment method for deposit
+  paidPaymentMethod?: 'PNB' | 'CASH' | 'GCASH'; // Payment method for total payment
   createdAt: string;
   updatedAt: string;
 }

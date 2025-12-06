@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Booking } from '@/lib/types';
 
 type BookingDetailPanelProps = {
   booking: Booking | null;
   slotLabel?: string;
   pairedSlotLabel?: string;
-  onConfirm: (bookingId: string, depositAmount?: number, withAssistantCommission?: boolean) => Promise<void>;
+  onConfirm: (bookingId: string, depositAmount?: number, withAssistantCommission?: boolean, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
   onCancel?: (bookingId: string) => Promise<void>;
   onReschedule?: (bookingId: string) => Promise<void>;
   onMakeQuotation?: (bookingId: string) => void;
@@ -24,7 +24,19 @@ const serviceLabels: Record<string, string> = {
 export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConfirm, onCancel, onReschedule, onMakeQuotation }: BookingDetailPanelProps) {
   const [showDepositInput, setShowDepositInput] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
+  const [depositPaymentMethod, setDepositPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
   const [withAssistantCommission, setWithAssistantCommission] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  // Reset deposit input and confirming state when booking changes or status changes to confirmed
+  useEffect(() => {
+    if (booking?.status === 'confirmed' || !booking) {
+      setShowDepositInput(false);
+      setDepositAmount('');
+      setDepositPaymentMethod('CASH');
+      setIsConfirming(false);
+    }
+  }, [booking?.id, booking?.status]);
 
   if (!booking) {
     return (
@@ -50,29 +62,149 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
     entries = Object.entries(customerData);
   }
 
-  const handleConfirmClick = () => {
+  const handleConfirmClick = async () => {
+    // Prevent confirming already confirmed bookings
+    if (booking.status === 'confirmed' || isConfirming) {
+      return;
+    }
+    
     if (booking.status === 'pending_payment') {
       setShowDepositInput(true);
-    } else {
-      onConfirm(booking.id, undefined, withAssistantCommission);
+    } else if (booking.status === 'pending_form') {
+      // For pending_form bookings, confirm without deposit
+      setIsConfirming(true);
+      try {
+        await onConfirm(booking.id, undefined, withAssistantCommission, undefined);
+      } finally {
+        setIsConfirming(false);
+      }
     }
   };
 
   const handleConfirmWithDeposit = async () => {
+    // Prevent confirming already confirmed bookings or if already confirming
+    if (booking.status === 'confirmed' || isConfirming) {
+      setShowDepositInput(false);
+      setDepositAmount('');
+      setDepositPaymentMethod('CASH');
+      return;
+    }
+    
     const amount = depositAmount ? Number(depositAmount) : undefined;
-    await onConfirm(booking.id, amount, withAssistantCommission);
+    const paymentMethod = amount && amount > 0 ? depositPaymentMethod : undefined;
+    
+    // Set confirming state and close the deposit input immediately to prevent multiple clicks
+    setIsConfirming(true);
     setShowDepositInput(false);
-    setDepositAmount('');
+    
+    try {
+      await onConfirm(booking.id, amount, withAssistantCommission, paymentMethod);
+      // Reset form fields after successful confirmation
+      setDepositAmount('');
+      setDepositPaymentMethod('CASH');
+    } catch (error) {
+      console.error('Failed to confirm booking:', error);
+      // Reopen deposit input on error so user can retry
+      if (booking.status === 'pending_payment') {
+        setShowDepositInput(true);
+        setDepositAmount(amount?.toString() || '');
+      }
+      throw error; // Re-throw to let parent handle error display
+    } finally {
+      setIsConfirming(false);
+    }
   };
   
   // Get customer name (Name + Surname)
   const getCustomerName = () => {
-    if (!booking.customerData) return booking.bookingId;
-    const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
-    const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
-    if (name || surname) {
-      return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
+    if (!booking.customerData || Object.keys(booking.customerData).length === 0) {
+      // Try customer record if available
+      return booking.bookingId;
     }
+    
+    // Helper function to find field by fuzzy matching key names
+    const findField = (keywords: string[]): string | null => {
+      const lowerKeywords = keywords.map(k => k.toLowerCase());
+      for (const [key, value] of Object.entries(booking.customerData!)) {
+        const lowerKey = key.toLowerCase();
+        // Check if key matches any keyword (partial match or exact match)
+        if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      return null;
+    };
+
+    // Try to find full name field first (various formats)
+    const fullName = findField(['full name', 'fullname']);
+    if (fullName) return fullName;
+
+    // Helper function to find first name (excluding surname/last name fields and social media names)
+    const findFirstName = (): string | null => {
+      const keywords = ['first name', 'firstname', 'fname', 'given name'];
+      const lowerKeywords = keywords.map(k => k.toLowerCase());
+      for (const [key, value] of Object.entries(booking.customerData!)) {
+        const lowerKey = key.toLowerCase();
+        // Check for explicit first name keywords
+        if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      // Now try "name" but EXCLUDE social media names, surname, last name, etc.
+      for (const [key, value] of Object.entries(booking.customerData!)) {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.includes('name') && 
+            !lowerKey.includes('surname') && 
+            !lowerKey.includes('last name') && 
+            !lowerKey.includes('lastname') &&
+            !lowerKey.includes('full name') && 
+            !lowerKey.includes('fullname') &&
+            !lowerKey.includes('instagram') &&
+            !lowerKey.includes('facebook') &&
+            !lowerKey.includes('social') &&
+            !lowerKey.includes('inquire') &&
+            value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      return null;
+    };
+
+    // Try to find last name/surname first (including the exact Google Form field name with autofill text)
+    const lastName = findField(['surname', 'last name', 'lastname', 'lname', 'family name']);
+    
+    // Try to find first name (excluding surname fields)
+    const firstName = findFirstName();
+    
+    // If we found both, combine them
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`.trim();
+    }
+    
+    // If we found only first name or only last name, use it
+    if (firstName) return firstName;
+    if (lastName) return lastName;
+    
+    // If we found only first name or only last name, use it
+    if (firstName) return firstName;
+    if (lastName) return lastName;
+    
+    // Last resort: look for any field that might be a name (not email, phone, etc.)
+    for (const [key, value] of Object.entries(booking.customerData)) {
+      const lowerKey = key.toLowerCase();
+      // Skip non-name fields
+      if (lowerKey.includes('email') || lowerKey.includes('phone') || lowerKey.includes('contact') || 
+          lowerKey.includes('booking') || lowerKey.includes('date') || lowerKey.includes('time') ||
+          lowerKey.includes('service') || lowerKey.includes('location') || lowerKey.includes('referral')) {
+        continue;
+      }
+      // If it's a reasonable length and looks like a name, use it
+      const strValue = String(value).trim();
+      if (strValue.length > 0 && strValue.length < 100) {
+        return strValue;
+      }
+    }
+    
     return booking.bookingId;
   };
 
@@ -243,13 +375,24 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       </div>
 
       <div className="mt-4 sm:mt-6 space-y-2">
-        {booking.status === 'pending_payment' && !showDepositInput && (
+        {booking.status === 'pending_payment' && !showDepositInput && !isConfirming && (
           <button
             type="button"
             onClick={handleConfirmClick}
-            className="w-full rounded-full bg-emerald-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98]"
+            disabled={isConfirming}
+            className="w-full rounded-full bg-emerald-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Confirm booking
+            {isConfirming ? 'Confirming...' : 'Confirm booking'}
+          </button>
+        )}
+        {booking.status === 'pending_form' && !isConfirming && (
+          <button
+            type="button"
+            onClick={handleConfirmClick}
+            disabled={isConfirming}
+            className="w-full rounded-full bg-emerald-600 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isConfirming ? 'Confirming...' : 'Confirm booking'}
           </button>
         )}
         {booking.status === 'pending_payment' && showDepositInput && (
@@ -267,12 +410,29 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
               />
               <p className="text-xs text-emerald-700 mt-1">Leave empty if no deposit received</p>
             </div>
+            {depositAmount && Number(depositAmount) > 0 && (
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-emerald-900 mb-2">
+                  Payment Method
+                </label>
+                <select
+                  value={depositPaymentMethod}
+                  onChange={(e) => setDepositPaymentMethod(e.target.value as 'PNB' | 'CASH' | 'GCASH')}
+                  className="w-full rounded-xl border-2 border-emerald-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="CASH">💵 Cash</option>
+                  <option value="GCASH">📱 GCash</option>
+                  <option value="PNB">🏦 PNB</option>
+                </select>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setShowDepositInput(false);
                   setDepositAmount('');
+                  setDepositPaymentMethod('CASH');
                 }}
                 className="flex-1 rounded-full border-2 border-emerald-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-emerald-700 touch-manipulation active:scale-[0.98]"
               >
@@ -281,9 +441,10 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
               <button
                 type="button"
                 onClick={handleConfirmWithDeposit}
-                className="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98]"
+                disabled={isConfirming}
+                className="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white touch-manipulation active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirm
+                {isConfirming ? 'Confirming...' : 'Confirm'}
               </button>
             </div>
           </div>

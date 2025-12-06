@@ -16,6 +16,7 @@ interface BookingsViewProps {
   bookings: Booking[];
   slots: Slot[];
   selectedDate: string;
+  customers?: Array<{ id: string; name?: string; phone?: string }>;
   onCancel?: (bookingId: string) => void;
   onReschedule?: (bookingId: string) => void;
   onMakeQuotation?: (bookingId: string) => void;
@@ -44,7 +45,7 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingsView({ bookings, slots, selectedDate, onCancel, onReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
+export function BookingsView({ bookings, slots, selectedDate, customers = [], onCancel, onReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
@@ -246,22 +247,171 @@ export function BookingsView({ bookings, slots, selectedDate, onCancel, onResche
   }, [bookingsWithSlots, selectedDate, filterPeriod, statusFilter, monthFilter, getBookingStageLabel]);
 
   const getCustomerName = (booking: BookingWithSlot): string => {
-    if (!booking.customerData) return booking.bookingId;
-    const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
-    const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
-    if (name || surname) {
-      return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || booking.bookingId;
+    // Priority 1: Get customer name from form data (for bookings with submitted forms)
+    if (booking.customerData && Object.keys(booking.customerData).length > 0) {
+      // Helper function to find field by fuzzy matching key names
+      const findField = (keywords: string[]): string | null => {
+        const lowerKeywords = keywords.map(k => k.toLowerCase());
+        for (const [key, value] of Object.entries(booking.customerData!)) {
+          const lowerKey = key.toLowerCase();
+          // Check if key matches any keyword (partial match or exact match)
+          if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        return null;
+      };
+
+      // Try to find full name field first (various formats)
+      const fullName = findField(['full name', 'fullname']);
+      if (fullName) return fullName;
+
+      // Helper function to find first name (excluding surname/last name fields and social media names)
+      const findFirstName = (): string | null => {
+        const keywords = ['first name', 'firstname', 'fname', 'given name'];
+        const lowerKeywords = keywords.map(k => k.toLowerCase());
+        for (const [key, value] of Object.entries(booking.customerData!)) {
+          const lowerKey = key.toLowerCase();
+          // Check for explicit first name keywords
+          if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        // Now try "name" but EXCLUDE social media names, surname, last name, etc.
+        for (const [key, value] of Object.entries(booking.customerData!)) {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.includes('name') && 
+              !lowerKey.includes('surname') && 
+              !lowerKey.includes('last name') && 
+              !lowerKey.includes('lastname') &&
+              !lowerKey.includes('full name') && 
+              !lowerKey.includes('fullname') &&
+              !lowerKey.includes('instagram') &&
+              !lowerKey.includes('facebook') &&
+              !lowerKey.includes('social') &&
+              !lowerKey.includes('inquire') &&
+              value && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        return null;
+      };
+
+      // Try to find last name/surname first (including the exact Google Form field name with autofill text)
+      const lastName = findField(['surname', 'last name', 'lastname', 'lname', 'family name']);
+      
+      // Try to find first name (excluding surname fields)
+      const firstName = findFirstName();
+      
+      // If we found both, combine them
+      if (firstName && lastName) {
+        return `${firstName} ${lastName}`.trim();
+      }
+      
+      // If we found only first name or only last name, use it
+      if (firstName) return firstName;
+      if (lastName) return lastName;
+      
+      // If we found only first name or only last name, use it
+      if (firstName) return firstName;
+      if (lastName) return lastName;
+      
+      // Last resort: look for any field that might be a name (not email, phone, etc.)
+      for (const [key, value] of Object.entries(booking.customerData)) {
+        const lowerKey = key.toLowerCase();
+        // Skip non-name fields
+        if (lowerKey.includes('email') || lowerKey.includes('phone') || lowerKey.includes('contact') || 
+            lowerKey.includes('booking') || lowerKey.includes('date') || lowerKey.includes('time') ||
+            lowerKey.includes('service') || lowerKey.includes('location') || lowerKey.includes('referral')) {
+          continue;
+        }
+        // If it's a reasonable length and looks like a name, use it
+        const strValue = String(value).trim();
+        if (strValue.length > 0 && strValue.length < 100) {
+          return strValue;
+        }
+      }
     }
+    
+    // Priority 2: Try to get name from customer record if customerId exists
+    if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+      const customer = customers.find(c => c.id === booking.customerId);
+      if (customer?.name) {
+        return customer.name;
+      }
+    }
+    
+    // Priority 3: For pending_form bookings, check clientType
+    if (booking.status === 'pending_form') {
+      // If it's a repeat client and we have customerId, try to show name
+      if (booking.clientType === 'repeat') {
+        if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+          // Try to find customer name from customers list
+          const customer = customers.find(c => c.id === booking.customerId);
+          if (customer?.name) {
+            return customer.name;
+          }
+        }
+        return 'Repeat Client';
+      } else if (booking.clientType === 'new') {
+        return 'New Client';
+      } else {
+        // clientType not set - check if customerId exists to determine
+        if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+          const customer = customers.find(c => c.id === booking.customerId);
+          if (customer?.name) {
+            return customer.name;
+          }
+          return 'Repeat Client'; // Has customerId but no clientType set
+        }
+        return 'New Client'; // Default for pending_form without customerId
+      }
+    }
+    
+    // Last resort: return bookingId
     return booking.bookingId;
   };
 
   const getCustomerPhone = (booking: BookingWithSlot): string => {
-    if (!booking.customerData) return 'N/A';
-    return booking.customerData['Phone'] || 
-           booking.customerData['phone'] || 
-           booking.customerData['Contact Number'] || 
-           booking.customerData['contact'] || 
-           'N/A';
+    // Priority 1: Try to get phone from form data (for bookings with submitted forms)
+    if (booking.customerData && Object.keys(booking.customerData).length > 0) {
+      // Helper function to find field by fuzzy matching key names
+      const findPhoneField = (keywords: string[]): string | null => {
+        const lowerKeywords = keywords.map(k => k.toLowerCase());
+        for (const [key, value] of Object.entries(booking.customerData!)) {
+          const lowerKey = key.toLowerCase();
+          // Check if key matches any keyword (partial match or exact match)
+          if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        return null;
+      };
+
+      // Try various phone field name variations using fuzzy matching
+      const phone = findPhoneField([
+        'contact number',
+        'phone number',
+        'phone',
+        'contact',
+        'mobile',
+        'cell',
+        'telephone',
+        'tel'
+      ]);
+      
+      if (phone) return phone;
+    }
+    
+    // Priority 2: Try to get phone from customer record if customerId exists
+    if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+      const customer = customers.find(c => c.id === booking.customerId);
+      if (customer?.phone) {
+        return customer.phone;
+      }
+    }
+    
+    return 'N/A';
   };
 
   const getClientTypeFromForm = (customerData: Record<string, string> | undefined): 'repeat' | 'new' | null => {
