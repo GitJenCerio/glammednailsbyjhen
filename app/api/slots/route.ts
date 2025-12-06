@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { listSlots, createSlot, deleteExpiredSlots } from '@/lib/services/slotService';
 import { listBlockedDates } from '@/lib/services/blockService';
 
+// Prevent caching in production
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   // Automatic slot release is disabled - use manual release from admin dashboard instead
   // Try to delete expired slots, but don't fail if index is missing
@@ -15,12 +19,12 @@ export async function GET() {
   }
   const slots = await listSlots();
   
-  // Add caching headers for better performance
+  // Prevent caching to ensure fresh data, especially after deletions
   return NextResponse.json({ slots }, {
     headers: {
-      'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=60',
-      'CDN-Cache-Control': 'public, s-maxage=10',
-      'Vercel-CDN-Cache-Control': 'public, s-maxage=10',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     },
   });
 }

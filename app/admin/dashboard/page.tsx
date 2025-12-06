@@ -296,11 +296,37 @@ function AdminDashboardContent() {
 
   async function loadData() {
     try {
+      // Add cache-busting timestamp to prevent stale data in production
+      const cacheBuster = `?t=${Date.now()}`;
       const [slotsRes, blocksRes, bookingsRes, customersRes] = await Promise.all([
-        fetch('/api/slots').then((res) => res.json()),
-        fetch('/api/blocks').then((res) => res.json()),
-        fetch('/api/bookings').then((res) => res.json()),
-        fetch('/api/customers').then((res) => res.json()).catch(() => ({ customers: [] })),
+        fetch(`/api/slots${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()),
+        fetch(`/api/blocks${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()),
+        fetch(`/api/bookings${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()),
+        fetch(`/api/customers${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()).catch(() => ({ customers: [] })),
       ]);
       setSlots(slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
@@ -451,13 +477,34 @@ function AdminDashboardContent() {
     if (!slotToDelete) return;
     setIsDeletingSlot(true);
     try {
-      await fetch(`/api/slots/${slotToDelete.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/slots/${slotToDelete.id}`, { 
+        method: 'DELETE',
+        cache: 'no-store', // Prevent caching in production
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        }
+      });
+      
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Failed to delete slot' }));
+        throw new Error(error.error || 'Failed to delete slot');
+      }
+      
+      const data = await res.json();
+      
+      // Wait a moment for Firebase to sync
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Force reload data with cache busting
       await loadData();
+      
       setToast('Slot deleted.');
       setDeleteSlotModalOpen(false);
       setSlotToDelete(null);
-    } catch (error) {
-      setToast('Failed to delete slot.');
+    } catch (error: any) {
+      console.error('Error deleting slot:', error);
+      setToast(`Failed to delete slot: ${error.message || 'Unknown error'}`);
     } finally {
       setIsDeletingSlot(false);
     }
