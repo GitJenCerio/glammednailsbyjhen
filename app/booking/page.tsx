@@ -111,6 +111,10 @@ interface SlotModalProps {
   onRepeatClientEmailChange: (value: string) => void;
   repeatClientName: string | null;
   onRepeatClientNameChange: (value: string | null) => void;
+  repeatClientError: string | null;
+  setRepeatClientError: (value: string | null) => void;
+  isCheckingCustomer: boolean;
+  setIsCheckingCustomer: (value: boolean) => void;
   serviceLocation: ServiceLocation;
   onServiceLocationChange: (value: ServiceLocation) => void;
   squeezeFeeAcknowledged: boolean;
@@ -133,6 +137,10 @@ function SlotModal({
   onRepeatClientEmailChange,
   repeatClientName,
   onRepeatClientNameChange,
+  repeatClientError,
+  setRepeatClientError,
+  isCheckingCustomer,
+  setIsCheckingCustomer,
   serviceLocation,
   onServiceLocationChange,
   squeezeFeeAcknowledged,
@@ -158,15 +166,6 @@ function SlotModal({
         className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto"
       >
         <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4">Book This Slot</h3>
-        
-        {/* Client Name Display */}
-        <div className="mb-4 rounded-xl border-2 bg-slate-50 border-slate-200 px-3 py-2">
-          <p className="text-xs text-slate-500 mb-0.5">Client</p>
-          <p className="text-sm font-semibold text-slate-900">
-            {clientType === 'repeat' && repeatClientName ? repeatClientName : clientType === 'repeat' ? 'Repeat Client' : 'New Client'}
-          </p>
-        </div>
-        
         <div className="space-y-2.5 sm:space-y-3 mb-4 sm:mb-6">
           <div>
             <span className="text-sm sm:text-base text-gray-600">Date:</span>
@@ -243,45 +242,109 @@ function SlotModal({
           {clientType === 'repeat' && (
             <div>
               <label className="text-sm sm:text-base text-gray-600 mb-1 block">
-                What is your email address you used before when booking with us?
+                Enter your email address or contact number to find your account
               </label>
-              <input
-                type="email"
-                value={repeatClientEmail}
-                onChange={async (e) => {
-                  onRepeatClientEmailChange(e.target.value);
-                  // Fetch customer name when email is entered
-                  if (e.target.value.trim()) {
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={repeatClientEmail}
+                  onChange={(e) => {
+                    onRepeatClientEmailChange(e.target.value);
+                    onRepeatClientNameChange(null);
+                    setRepeatClientError(null);
+                  }}
+                  placeholder="Email or contact number"
+                  className="flex-1 mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const inputValue = repeatClientEmail.trim();
+                    if (!inputValue) {
+                      return;
+                    }
+                    
+                    setIsCheckingCustomer(true);
+                    setRepeatClientError(null);
+                    
+                    // Determine if it's an email or phone
+                    const isEmail = inputValue.includes('@');
+                    const searchParams = isEmail 
+                      ? `email=${encodeURIComponent(inputValue)}`
+                      : `phone=${encodeURIComponent(inputValue)}`;
+                    
                     try {
-                      const res = await fetch(`/api/customers/by-email?email=${encodeURIComponent(e.target.value.trim())}`);
+                      const res = await fetch(`/api/customers/find?${searchParams}`);
                       if (res.ok) {
                         const data = await res.json();
-                        if (data.customer?.name) {
+                        if (data.found && data.customer?.name) {
                           onRepeatClientNameChange(data.customer.name);
+                          setRepeatClientError(null);
                         } else {
+                          // Customer not found - show error message
                           onRepeatClientNameChange(null);
+                          setRepeatClientError('No existing customer found with this email or contact number. Please select "New Client" if this is your first booking.');
                         }
                       } else {
                         onRepeatClientNameChange(null);
+                        setRepeatClientError('Unable to verify customer. Please try again or select "New Client".');
                       }
-                    } catch {
+                    } catch (error) {
+                      console.error('Error finding customer:', error);
                       onRepeatClientNameChange(null);
+                      setRepeatClientError('Error checking customer. Please try again.');
+                    } finally {
+                      setIsCheckingCustomer(false);
                     }
-                  } else {
-                    onRepeatClientNameChange(null);
-                  }
-                }}
-                placeholder="Enter your email address"
-                className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
-              />
+                  }}
+                  disabled={!repeatClientEmail.trim() || isCheckingCustomer}
+                  className="mt-1 px-4 py-2.5 sm:py-2 text-sm sm:text-base font-semibold text-white bg-slate-900 rounded-xl sm:rounded-2xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400 min-w-[100px]"
+                >
+                  {isCheckingCustomer ? 'Checking...' : 'Confirm'}
+                </button>
+              </div>
+              
               {repeatClientName && (
-                <p className="mt-1.5 text-[10px] sm:text-xs text-emerald-600 font-medium">
-                  ✓ Welcome back, {repeatClientName}!
+                <div className="mt-2 rounded-xl sm:rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-3 sm:px-4 py-2.5">
+                  <p className="text-[10px] sm:text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+                    <span className="text-emerald-600">✓</span>
+                    Welcome back, <span className="font-semibold">{repeatClientName}</span>!
+                  </p>
+                </div>
+              )}
+              
+              {repeatClientError && (
+                <div className="mt-2 rounded-xl sm:rounded-2xl border-2 border-amber-200 bg-amber-50 px-3 sm:px-4 py-2.5">
+                  <p className="text-[10px] sm:text-xs text-amber-800 font-medium flex items-start gap-1.5">
+                    <span className="text-amber-600 mt-0.5">⚠</span>
+                    <span>{repeatClientError}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClientTypeChange('new');
+                      onRepeatClientEmailChange('');
+                      onRepeatClientNameChange(null);
+                      setRepeatClientError(null);
+                    }}
+                    className="mt-2 text-[10px] sm:text-xs text-amber-700 font-semibold underline hover:text-amber-900"
+                  >
+                    Select &quot;New Client&quot; instead
+                  </button>
+                </div>
+              )}
+              
+              {!repeatClientName && !repeatClientError && repeatClientEmail.trim() && (
+                <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
+                  Click &quot;Confirm&quot; to verify your account.
                 </p>
               )}
-              <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
-                We&apos;ll auto-fill your information if we find your previous booking records.
-              </p>
+              
+              {!repeatClientEmail.trim() && (
+                <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
+                  We&apos;ll auto-fill your information if we find your previous booking records.
+                </p>
+              )}
             </div>
           )}
           {clientType === 'new' && (
@@ -382,6 +445,8 @@ export default function BookingPage() {
   const [serviceMessage, setServiceMessage] = useState<string | null>(null);
   const [squeezeFeeAcknowledged, setSqueezeFeeAcknowledged] = useState(false);
   const [repeatClientName, setRepeatClientName] = useState<string | null>(null);
+  const [repeatClientError, setRepeatClientError] = useState<string | null>(null);
+  const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
   const serviceOptions = SERVICE_OPTIONS[serviceLocation];
 
   useEffect(() => {
@@ -855,6 +920,10 @@ export default function BookingPage() {
         onRepeatClientEmailChange={setRepeatClientEmail}
         repeatClientName={repeatClientName}
         onRepeatClientNameChange={setRepeatClientName}
+        repeatClientError={repeatClientError}
+        setRepeatClientError={setRepeatClientError}
+        isCheckingCustomer={isCheckingCustomer}
+        setIsCheckingCustomer={setIsCheckingCustomer}
         serviceLocation={serviceLocation}
         onServiceLocationChange={setServiceLocation}
         squeezeFeeAcknowledged={squeezeFeeAcknowledged}

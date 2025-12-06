@@ -99,11 +99,34 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   const formSocialMediaEntryKey = process.env.GOOGLE_FORM_SOCIAL_MEDIA_ENTRY;
   const formReferralSourceEntryKey = process.env.GOOGLE_FORM_REFERRAL_SOURCE_ENTRY;
   
-  // Look up customer by email if repeat client email is provided
+  // Look up customer by email or phone if repeat client identifier is provided
   let customerData: { name?: string; firstName?: string; lastName?: string; email?: string; phone?: string; socialMediaName?: string; referralSource?: string } | null = null;
   let foundCustomerId: string | null = null;
   if (options?.repeatClientEmail) {
-    const customer = await getCustomerByEmail(options.repeatClientEmail);
+    // Determine if it's an email or phone number
+    const isEmail = options.repeatClientEmail.includes('@');
+    let customer = null;
+    
+    if (isEmail) {
+      // Try email first
+      customer = await getCustomerByEmail(options.repeatClientEmail);
+      if (customer) {
+        console.log(`Found customer by email: ${customer.name} (${customer.email})`);
+      }
+    } else {
+      // Try phone number
+      customer = await getCustomerByPhone(options.repeatClientEmail);
+      if (customer) {
+        console.log(`Found customer by phone: ${customer.name} (${customer.phone})`);
+      }
+    }
+    
+    // If not found and it was an email, try phone as fallback
+    // If not found and it was a phone, try email as fallback (though unlikely to have email in phone format)
+    if (!customer && isEmail) {
+      // Could also try phone, but we don't have phone in this case
+    }
+    
     if (customer) {
       foundCustomerId = customer.id; // Store the customer ID for later use
       customerData = {
@@ -115,9 +138,8 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
         socialMediaName: customer.socialMediaName,
         referralSource: customer.referralSource,
       };
-      console.log(`Found customer by email: ${customer.name} (${customer.email})`);
     } else {
-      console.log(`No customer found with email: ${options.repeatClientEmail}`);
+      console.log(`No customer found with ${isEmail ? 'email' : 'phone'}: ${options.repeatClientEmail}`);
     }
   }
   const formUrl = process.env.GOOGLE_FORM_BASE_URL;
