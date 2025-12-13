@@ -72,7 +72,7 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END P
 
 # Email Notifications (Resend)
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx
-FROM_EMAIL=Glammed Nails <noreply@glammednailsbyjhen.com>
+FROM_EMAIL=glammednailsbyjhen <noreply@glammednailsbyjhen.com>
 REPLY_TO_EMAIL=glammednailsbyjhen@gmail.com
 
 # Payment QR Codes (upload images and add URLs)
@@ -106,7 +106,7 @@ GCASH_QR_CODE_URL=https://your-image-host.com/gcash-qr-code.png
 6. Copy the API key to your `.env.local`:
    - `RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx`
 7. Set your email addresses:
-   - `FROM_EMAIL=Glammed Nails <noreply@yourdomain.com>` (or use Resend's test domain)
+   - `FROM_EMAIL=glammednailsbyjhen <noreply@yourdomain.com>` (or use Resend's test domain)
    - `REPLY_TO_EMAIL=glammednailsbyjhen@gmail.com`
 
 **Note:** If you don't set up Resend, the booking system will still work, but customers won't receive email notifications.

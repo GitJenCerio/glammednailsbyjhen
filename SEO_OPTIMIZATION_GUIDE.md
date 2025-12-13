@@ -1,6 +1,6 @@
 # SEO Optimization Guide
 
-This guide documents all SEO optimizations implemented for the Glammed Nails by Jhen website.
+This guide documents all SEO optimizations implemented for the glammednailsbyjhen website.
 
 ## ✅ Implemented SEO Features
 

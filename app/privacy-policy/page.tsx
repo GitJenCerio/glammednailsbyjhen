@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'Privacy policy for Glammed Nails by Jhen. Learn how we collect, use, and protect your personal information.',
+  description: 'Privacy policy for glammednailsbyjhen. Learn how we collect, use, and protect your personal information.',
   robots: {
     index: true,
     follow: true,

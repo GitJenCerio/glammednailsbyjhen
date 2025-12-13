@@ -1,4 +1,4 @@
-# Glammed Nails by Jhen - Project Summary
+# glammednailsbyjhen - Project Summary
 
 ## 🎯 Project Overview
 
@@ -75,7 +75,7 @@ glammednailsbyjhen/
 ## 📋 Sections Implemented
 
 ### 1. Header (Fixed Navigation)
-- Logo: "Glammed Nails by Jhen"
+- Logo: "glammednailsbyjhen"
 - Navigation links: Home, Services, About, Gallery, Pricing, FAQ
 - "Book Appointment" button
 - Mobile hamburger menu with animated transitions

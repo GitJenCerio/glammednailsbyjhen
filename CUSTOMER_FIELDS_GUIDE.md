@@ -17,7 +17,7 @@ The customer database now supports additional fields extracted from your Google 
 
 ### Social Media & Marketing
 - **FB Name / Instagram Name** - Social media handle
-- **How did you find out about Glammed Nails?** - Referral source/marketing channel
+- **How did you find out about glammednailsbyjhen?** - Referral source/marketing channel
 
 ### Additional
 - **Notes** - Admin notes about the customer
@@ -46,8 +46,8 @@ The system automatically detects these column names in your Google Sheet:
 
 ### Referral Source Fields
 - `How did you find out about glammednails`
-- `How did you find out about Glammed Nails`
-- `How did you find out about Glammed Nails by Jhen`
+- `How did you find out about glammednailsbyjhen`
+- `How did you find out about glammednailsbyjhen`
 - `Referral Source`, `referralSource`
 - `How did you hear about us`, `How did you hear about us?`
 - `Source`, `source`

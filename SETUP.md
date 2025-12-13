@@ -1,6 +1,6 @@
 # Quick Setup Guide
 
-Follow these steps to get your Glammed Nails by Jhen website up and running:
+Follow these steps to get your glammednailsbyjhen website up and running:
 
 ## Step 1: Install Dependencies
 

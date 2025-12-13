@@ -157,7 +157,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">How did you find out about Glammed Nails?</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">How did you find out about glammednailsbyjhen?</label>
               <input
                 type="text"
                 value={editReferralSource}

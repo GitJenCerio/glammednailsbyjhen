@@ -143,7 +143,7 @@ export function ServicesManager() {
   const summaryText = useMemo(() => {
     if (!quoteItems.length) return 'No inspo items selected yet.';
     const lines = [
-      'Glammed Nails by Jhen — Nails Inspo Quotation',
+      'glammednailsbyjhen — Nails Inspo Quotation',
       '',
       ...quoteItems.map(
         (item) =>

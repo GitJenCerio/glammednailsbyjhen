@@ -1,4 +1,4 @@
-# Quick Start Guide - Glammed Nails by Jhen
+# Quick Start Guide - glammednailsbyjhen
 
 Get your website running in under 5 minutes!
 

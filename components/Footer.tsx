@@ -162,7 +162,7 @@ export default function Footer() {
 
         {/* Copyright */}
         <div className="border-t-2 border-black pt-6 sm:pt-8 text-center text-gray-600">
-          <span className="text-xs sm:text-sm text-gray-600 block mb-2 sm:mb-3">© {new Date().getFullYear()} GlammedNailsByJhen</span>
+          <span className="text-xs sm:text-sm text-gray-600 block mb-2 sm:mb-3">© {new Date().getFullYear()} glammednailsbyjhen</span>
           <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
             <a href="/privacy-policy" className="text-gray-500 hover:text-black text-xs sm:text-sm">Privacy Policy</a>
             <a href="/cookies-policy" className="text-gray-500 hover:text-black text-xs sm:text-sm">Cookies Policy</a>

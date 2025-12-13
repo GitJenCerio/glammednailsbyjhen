@@ -1,4 +1,4 @@
-# Deployment Guide for Glammed Nails by Jhen
+# Deployment Guide for glammednailsbyjhen
 
 ## 📋 Pre-Deployment Checklist
 
@@ -49,7 +49,7 @@ vercel
    ```bash
    git init
    git add .
-   git commit -m "Initial commit: Glammed Nails by Jhen website"
+   git commit -m "Initial commit: glammednailsbyjhen website"
    git branch -M main
    git remote add origin https://github.com/yourusername/glammednailsbyjhen.git
    git push -u origin main

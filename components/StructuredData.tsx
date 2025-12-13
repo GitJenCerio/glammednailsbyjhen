@@ -24,7 +24,7 @@ interface StructuredDataProps {
 
 export function StructuredData({
   type = 'LocalBusiness',
-  businessName = 'Glammed Nails by Jhen',
+  businessName = 'glammednailsbyjhen',
   address = {
     addressLocality: 'Manila',
     addressRegion: 'Metro Manila',

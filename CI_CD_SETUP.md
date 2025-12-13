@@ -1,6 +1,6 @@
 # CI/CD Setup Guide
 
-This guide explains how to set up Continuous Integration and Continuous Deployment (CI/CD) for your Glammed Nails by Jhen website.
+This guide explains how to set up Continuous Integration and Continuous Deployment (CI/CD) for your glammednailsbyjhen website.
 
 ## 🎯 Overview
 

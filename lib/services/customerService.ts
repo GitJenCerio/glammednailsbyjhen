@@ -155,8 +155,8 @@ export function extractCustomerInfo(
       getValue('How did you find out about glammednailsbyjhen', 8) ||
       getValue('How did you find out about glammednails', 9) ||
       getValue('How did you find out about glammednails', 8) ||
-      getValue('How did you find out about Glammed Nails', 9) ||
-      getValue('How did you find out about Glammed Nails by Jhen', 9) ||
+      getValue('How did you find out about glammednailsbyjhen', 9) ||
+      getValue('How did you find out about glammednailsbyjhen', 9) ||
       customerData['How did you find out about glammednailsbyjhen?']?.trim() ||
       customerData['How did you find out about glammednailsbyjhen']?.trim() ||
       customerData['Referral Source']?.trim() ||

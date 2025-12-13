@@ -1,4 +1,4 @@
-# Glammed Nails by Jhen Website
+# glammednailsbyjhen Website
 
 A beautiful, modern nail salon website built with Next.js, Tailwind CSS, and Framer Motion.
 

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { deleteSlotsByDate, getSlotsByDate } from '@/lib/services/slotService';
 
+// Prevent caching in production
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
