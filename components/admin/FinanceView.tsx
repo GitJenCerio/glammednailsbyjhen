@@ -191,12 +191,12 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
   const filteredBookings = useMemo(() => {
     let filtered = bookingsWithSlots.filter((booking) => {
       if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
-      // Include bookings with invoices OR bookings with deposits (partial payments)
-      if (!booking.invoice && !booking.depositAmount) return false;
+      // Include bookings with invoices OR bookings with deposits (partial payments) OR confirmed bookings (even with 0 payment)
+      if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
       
-      // For payment tracking view, only show bookings that have payments
+      // For payment tracking view, only show bookings that have payments OR confirmed bookings
       if (viewMode === 'payments') {
-        if (!booking.depositDate && !booking.paidDate && !booking.tipDate) return false;
+        if (!booking.depositDate && !booking.paidDate && !booking.tipDate && booking.status !== 'confirmed') return false;
       }
       
       return true;
