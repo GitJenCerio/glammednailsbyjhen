@@ -27,7 +27,8 @@ import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
 import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
-import type { Customer } from '@/lib/types';
+import { NailTechSettings } from '@/components/admin/NailTechSettings';
+import type { Customer, NailTech } from '@/lib/types';
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: IoStatsChart },
@@ -35,6 +36,7 @@ const navItems = [
   { id: 'finance', label: 'Finance', icon: IoCash },
   { id: 'customers', label: 'Customers', icon: IoPeople },
   { id: 'services', label: 'Services', icon: IoSparkles },
+  { id: 'nail-techs', label: 'Nail Techs', icon: IoPeople },
 ] as const;
 
 type AdminSection = (typeof navItems)[number]['id'];
@@ -78,6 +80,7 @@ function AdminDashboardContent() {
   const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
   const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [nailTechs, setNailTechs] = useState<NailTech[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerBookings, setCustomerBookings] = useState<Booking[]>([]);
@@ -298,7 +301,7 @@ function AdminDashboardContent() {
     try {
       // Add cache-busting timestamp to prevent stale data in production
       const cacheBuster = `?t=${Date.now()}`;
-      const [slotsRes, blocksRes, bookingsRes, customersRes] = await Promise.all([
+      const [slotsRes, blocksRes, bookingsRes, customersRes, nailTechsRes] = await Promise.all([
         fetch(`/api/slots${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
@@ -327,11 +330,19 @@ function AdminDashboardContent() {
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()).catch(() => ({ customers: [] })),
+        fetch(`/api/nail-techs${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
       ]);
       setSlots(slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
       setBookings(bookingsRes.bookings);
       setCustomers(customersRes.customers || []);
+      setNailTechs(nailTechsRes.nailTechs || []);
     } catch (error) {
       console.error('Failed to load admin data', error);
       setToast('Unable to load data. Check your backend configuration.');
@@ -363,7 +374,33 @@ function AdminDashboardContent() {
     }
   }, [selectedCustomerId]);
 
-  const selectedSlots = useMemo(() => slots.filter((slot) => slot.date === selectedDate), [slots, selectedDate]);
+  const selectedSlots = useMemo(() => {
+    let filtered = slots.filter((slot) => slot.date === selectedDate);
+    
+    // Filter by nail tech if selected
+    if (selectedNailTechId !== 'all' && bookings.length > 0) {
+      const bookingsForSelectedDate = bookings.filter((booking) => {
+        const slot = filtered.find((s) => s.id === booking.slotId);
+        if (!slot) return false;
+        if (selectedNailTechId === 'all') return true;
+        return booking.nailTechId === selectedNailTechId;
+      });
+      const slotIdsForFilteredBookings = new Set(bookingsForSelectedDate.map((b) => b.slotId));
+      
+      // Show available/pending slots OR confirmed slots with matching nail tech bookings
+      filtered = filtered.filter((slot) => {
+        if (slot.status === 'available' || slot.status === 'pending') {
+          return true; // Always show available/pending slots
+        }
+        if (slot.status === 'confirmed') {
+          return slotIdsForFilteredBookings.has(slot.id);
+        }
+        return true; // Show blocked slots
+      });
+    }
+    
+    return filtered;
+  }, [slots, selectedDate, selectedNailTechId, bookings]);
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
@@ -839,9 +876,13 @@ function AdminDashboardContent() {
               referenceDate={currentMonth}
               slots={slots}
               blockedDates={blockedDates}
+              bookings={bookings}
+              nailTechs={nailTechs}
               selectedDate={selectedDate}
+              selectedNailTechId={selectedNailTechId}
               onSelectDate={setSelectedDate}
               onChangeMonth={setCurrentMonth}
+              onFilterNailTech={setSelectedNailTechId}
             />
 
             <section className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
@@ -903,12 +944,14 @@ function AdminDashboardContent() {
                     return b.status === 'confirmed';
                   });
                   const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
+                  const nailTechForBooking = bookingForSlot?.nailTechId ? nailTechs.find((t) => t.id === bookingForSlot.nailTechId) : null;
                   return (
                     <SlotCard
                       key={slot.id}
                       slot={slot}
                       booking={bookingForSlot || null}
                       customer={customerForBooking || null}
+                      nailTech={nailTechForBooking || null}
                       onEdit={(value) => {
                         setEditingSlot(value);
                         setSlotModalOpen(true);
@@ -976,6 +1019,7 @@ function AdminDashboardContent() {
                 onSelect={(booking) => setSelectedBookingId(booking.id)}
                 selectedId={selectedBooking?.id ?? null}
                 customers={customers}
+                nailTechs={nailTechs}
               />
             </div>
             <BookingDetailPanel
@@ -990,7 +1034,25 @@ function AdminDashboardContent() {
                     ? formatTime12Hour(selectedBooking.pairedSlot.time)
                     : undefined
               }
+              nailTechs={nailTechs}
               onConfirm={handleConfirmBooking}
+              onUpdateNailTech={async (bookingId, nailTechId) => {
+                const res = await fetch(`/api/bookings/${bookingId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'update_nail_tech',
+                    nailTechId,
+                  }),
+                });
+                if (res.ok) {
+                  await loadData();
+                  setToast('Nail tech assignment updated.');
+                } else {
+                  const error = await res.json();
+                  throw new Error(error.error || 'Failed to update nail tech');
+                }
+              }}
             />
           </div>
         </div>
@@ -1011,6 +1073,7 @@ function AdminDashboardContent() {
     finance: 'View invoices, track payments, and manage revenue.',
     customers: 'See relationship insights and client history.',
     services: 'Manage offerings, durations, and pricing.',
+    'nail-techs': 'Manage nail technicians, availability, and pricing rules.',
   };
 
   return (
@@ -1187,7 +1250,7 @@ function AdminDashboardContent() {
           {activeSection === 'bookings' ? (
             renderBookingsSection()
           ) : activeSection === 'finance' ? (
-            <FinanceView bookings={bookings} slots={slots} customers={customers} />
+            <FinanceView bookings={bookings} slots={slots} customers={customers} nailTechs={nailTechs} />
           ) : activeSection === 'customers' ? (
             <div className="space-y-4 sm:space-y-6">
               {/* Customers overview stats */}
@@ -1247,6 +1310,8 @@ function AdminDashboardContent() {
             </div>
           ) : activeSection === 'services' ? (
             <ServicesManager />
+          ) : activeSection === 'nail-techs' ? (
+            <NailTechSettings />
           ) : (
             /* Overview tab - Analytics Dashboard */
             <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />

@@ -61,6 +61,7 @@ export interface Booking {
   linkedSlotIds?: string[];
   bookingId: string;
   customerId: string; // Required: every booking must have a customer
+  nailTechId?: string; // Optional: link booking to a nail tech
   status: BookingStatus;
   serviceType?: ServiceType;
   clientType?: 'new' | 'repeat';
@@ -103,6 +104,40 @@ export interface BookingWithCustomer extends Booking {
 export type SlotInput = Omit<Slot, 'id' | 'createdAt' | 'updatedAt'>;
 export type BlockedDateInput = Omit<BlockedDate, 'id' | 'createdAt' | 'updatedAt'>;
 export type CustomerInput = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>;
+
+// Nail Tech Types
+export type ServiceLocationAvailability = 'studio_only' | 'home_service_only' | 'both';
+export type PricingRuleType = 'base_rate' | 'percentage_modifier';
+
+// Available time slots (matching system slots)
+export const NAIL_TECH_TIME_SLOTS = ['08:00', '10:30', '13:00', '15:30', '19:00', '21:00'] as const;
+export type NailTechTimeSlot = (typeof NAIL_TECH_TIME_SLOTS)[number];
+
+export interface DayAvailability {
+  dayOfWeek: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  enabled: boolean;
+  availableSlots: NailTechTimeSlot[]; // Array of time slots available on this day
+}
+
+export interface PricingRule {
+  type: PricingRuleType;
+  value: number; // Base rate amount OR percentage (e.g., 0.3 for 30% off)
+}
+
+export interface NailTech {
+  id: string;
+  fullName: string;
+  role?: string; // e.g., 'Senior', 'Junior'
+  isActive: boolean;
+  serviceLocationAvailability: ServiceLocationAvailability;
+  availability: DayAvailability[]; // Array of 7 days (Sunday to Saturday)
+  pricingRule?: PricingRule;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NailTechInput = Omit<NailTech, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type AnalyticsEventType = 'page_view' | 'book_now_click' | 'booking_started' | 'booking_completed';
 

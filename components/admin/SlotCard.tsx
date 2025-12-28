@@ -1,4 +1,4 @@
-import type { Slot, Booking } from '@/lib/types';
+import type { Slot, Booking, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { IoCreateOutline, IoTrashOutline } from 'react-icons/io5';
 
@@ -6,11 +6,12 @@ type SlotCardProps = {
   slot: Slot;
   booking?: Booking | null;
   customer?: { name: string } | null;
+  nailTech?: NailTech | null;
   onEdit: (slot: Slot) => void;
   onDelete: (slot: Slot) => void;
 };
 
-export function SlotCard({ slot, booking, customer, onEdit, onDelete }: SlotCardProps) {
+export function SlotCard({ slot, booking, customer, nailTech, onEdit, onDelete }: SlotCardProps) {
   const isConfirmed = slot.status === 'confirmed';
   
   // Get customer full name - prioritize Customer object, then booking customerData
@@ -70,12 +71,22 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete }: SlotCard
         )}
       </div>
       {isConfirmed && customerName && (
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <p className="font-semibold text-slate-900">{customerName}</p>
-          {serviceLocation && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-200 text-blue-900 border border-blue-300">
-              {serviceLocation}
-            </span>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <p className="font-semibold text-slate-900">{customerName}</p>
+            {serviceLocation && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-200 text-blue-900 border border-blue-300">
+                {serviceLocation}
+              </span>
+            )}
+          </div>
+          {nailTech && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] sm:text-[10px] text-slate-500">Nail Tech:</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-purple-200 text-purple-900 border border-purple-300">
+                {nailTech.fullName}
+              </span>
+            </div>
           )}
         </div>
       )}

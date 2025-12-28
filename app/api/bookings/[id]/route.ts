@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking } from '@/lib/services/bookingService';
+import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, updateBookingNailTech } from '@/lib/services/bookingService';
 import type { Invoice, PaymentStatus } from '@/lib/types';
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -63,6 +63,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: 'New slot ID required.' }, { status: 400 });
     }
     await rescheduleBooking(params.id, newSlotId, linkedSlotIds);
+    return NextResponse.json({ success: true });
+  }
+
+  if (body?.action === 'update_nail_tech') {
+    const { nailTechId } = body;
+    // nailTechId can be null to remove assignment
+    await updateBookingNailTech(params.id, nailTechId || null);
     return NextResponse.json({ success: true });
   }
 

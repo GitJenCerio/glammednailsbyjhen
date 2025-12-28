@@ -905,6 +905,16 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
   // Email functionality disabled
 }
 
+export async function updateBookingNailTech(bookingId: string, nailTechId: string | null) {
+  await bookingsCollection.doc(bookingId).set(
+    {
+      nailTechId: nailTechId || null,
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    },
+    { merge: true },
+  );
+}
+
 export async function saveInvoice(bookingId: string, invoice: Invoice) {
   // Get current booking to preserve status if already confirmed
   const bookingRef = bookingsCollection.doc(bookingId);
@@ -1260,6 +1270,7 @@ function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking
     linkedSlotIds: data.linkedSlotIds ?? undefined,
     bookingId: data.bookingId,
     customerId: customerId, // Required field
+    nailTechId: data.nailTechId ?? undefined, // Optional: link to nail tech
     status: data.status,
     serviceType: data.serviceType,
     clientType: data.clientType,

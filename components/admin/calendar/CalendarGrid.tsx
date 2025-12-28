@@ -1,23 +1,31 @@
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subMonths } from 'date-fns';
-import type { BlockedDate, Slot } from '@/lib/types';
+import type { BlockedDate, Slot, Booking, NailTech } from '@/lib/types';
 import { isDateWithinBlockedRange } from '@/lib/scheduling';
 
 type CalendarGridProps = {
   referenceDate: Date;
   slots: Slot[];
   blockedDates: BlockedDate[];
+  bookings?: Booking[];
+  nailTechs?: NailTech[];
   selectedDate: string | null;
+  selectedNailTechId?: string | 'all';
   onSelectDate: (date: string) => void;
   onChangeMonth: (newDate: Date) => void;
+  onFilterNailTech?: (nailTechId: string | 'all') => void;
 };
 
 export function CalendarGrid({
   referenceDate,
   slots,
   blockedDates,
+  bookings = [],
+  nailTechs = [],
   selectedDate,
+  selectedNailTechId = 'all',
   onSelectDate,
   onChangeMonth,
+  onFilterNailTech,
 }: CalendarGridProps) {
   const start = startOfWeek(startOfMonth(referenceDate), { weekStartsOn: 0 });
   const end = endOfWeek(endOfMonth(referenceDate), { weekStartsOn: 0 });
@@ -31,7 +39,34 @@ export function CalendarGrid({
 
   const getDayMeta = (date: Date) => {
     const isoDate = format(date, 'yyyy-MM-dd');
-    const daySlots = slots.filter((slot) => slot.date === isoDate);
+    let daySlots = slots.filter((slot) => slot.date === isoDate);
+    
+    // Filter by nail tech if selected
+    if (selectedNailTechId !== 'all' && bookings.length > 0) {
+      const bookingsForDay = bookings.filter((booking) => {
+        if (booking.slotId && daySlots.some(s => s.id === booking.slotId)) {
+          if (selectedNailTechId === 'all') return true;
+          return booking.nailTechId === selectedNailTechId;
+        }
+        return false;
+      });
+      const slotIdsForFilteredBookings = new Set(bookingsForDay.map((b) => b.slotId));
+      
+      // Filter slots: show available/pending slots OR confirmed slots with matching nail tech bookings
+      daySlots = daySlots.filter((slot) => {
+        // Always show available and pending slots (they can be assigned)
+        if (slot.status === 'available' || slot.status === 'pending') {
+          return true;
+        }
+        // For confirmed slots, only show if they have a booking with the selected nail tech
+        if (slot.status === 'confirmed') {
+          return slotIdsForFilteredBookings.has(slot.id);
+        }
+        // For blocked slots, show them
+        return true;
+      });
+    }
+    
     const isBlocked = blockedDates.some((block) => isDateWithinBlockedRange(isoDate, block));
     const availableCount = daySlots.filter((slot) => slot.status === 'available').length;
     const pendingCount = daySlots.filter((slot) => slot.status === 'pending').length;
@@ -72,7 +107,21 @@ export function CalendarGrid({
           <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Calendar</p>
           <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900">{format(referenceDate, 'MMMM yyyy')}</h2>
         </div>
-        <div className="flex gap-1.5 sm:gap-2">
+        <div className="flex gap-1.5 sm:gap-2 flex-wrap">
+          {nailTechs.length > 0 && onFilterNailTech && (
+            <select
+              value={selectedNailTechId}
+              onChange={(e) => onFilterNailTech(e.target.value)}
+              className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="all">All Nail Techs</option>
+              {nailTechs.filter(tech => tech.isActive).map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.fullName}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={() => onChangeMonth(subMonths(referenceDate, 1))}

@@ -1,7 +1,7 @@
  'use client';
 
 import { useState } from 'react';
-import type { Booking, BookingStatus, Slot } from '@/lib/types';
+import type { Booking, BookingStatus, Slot, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 
 type BookingRow = Booking & { slot?: Slot; pairedSlot?: Slot; linkedSlots?: Slot[] };
@@ -11,6 +11,7 @@ type BookingListProps = {
   onSelect: (booking: BookingRow) => void;
   selectedId: string | null;
   customers?: Array<{ id: string; name?: string }>;
+  nailTechs?: NailTech[];
 };
 
 const statusLabels: Record<BookingStatus, string> = {
@@ -28,7 +29,7 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 slots)',
 };
 
-export function BookingList({ bookings, onSelect, selectedId, customers = [] }: BookingListProps) {
+export function BookingList({ bookings, onSelect, selectedId, customers = [], nailTechs = [] }: BookingListProps) {
   const [openSections, setOpenSections] = useState<Record<BookingStatus, boolean>>({
     pending_form: true,
     pending_payment: true,
@@ -249,6 +250,11 @@ export function BookingList({ bookings, onSelect, selectedId, customers = [] }: 
                               )
                             </>
                           )}
+                        </p>
+                      )}
+                      {booking.nailTechId && nailTechs.length > 0 && (
+                        <p className="text-[10px] sm:text-xs text-purple-600 truncate">
+                          💅 {nailTechs.find(tech => tech.id === booking.nailTechId)?.fullName || 'Nail Tech'}
                         </p>
                       )}
                     </div>

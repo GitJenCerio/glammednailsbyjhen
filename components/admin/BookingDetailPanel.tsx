@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Booking } from '@/lib/types';
+import type { Booking, NailTech } from '@/lib/types';
 
 type BookingDetailPanelProps = {
   booking: Booking | null;
   slotLabel?: string;
   pairedSlotLabel?: string;
+  nailTechs?: NailTech[];
   onConfirm: (bookingId: string, depositAmount?: number, withAssistantCommission?: boolean, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
   onCancel?: (bookingId: string) => Promise<void>;
   onReschedule?: (bookingId: string) => Promise<void>;
   onMakeQuotation?: (bookingId: string) => void;
+  onUpdateNailTech?: (bookingId: string, nailTechId: string | null) => Promise<void>;
 };
 
 const serviceLabels: Record<string, string> = {
@@ -21,12 +23,14 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConfirm, onCancel, onReschedule, onMakeQuotation }: BookingDetailPanelProps) {
+export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTechs = [], onConfirm, onCancel, onReschedule, onMakeQuotation, onUpdateNailTech }: BookingDetailPanelProps) {
   const [showDepositInput, setShowDepositInput] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
   const [withAssistantCommission, setWithAssistantCommission] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [selectedNailTechId, setSelectedNailTechId] = useState<string | null>(null);
+  const [isUpdatingNailTech, setIsUpdatingNailTech] = useState(false);
 
   // Reset deposit input and confirming state when booking changes or status changes to confirmed
   useEffect(() => {
@@ -35,6 +39,10 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       setDepositAmount('');
       setDepositPaymentMethod('CASH');
       setIsConfirming(false);
+    }
+    // Update selected nail tech when booking changes
+    if (booking) {
+      setSelectedNailTechId(booking.nailTechId || null);
     }
   }, [booking]);
 
@@ -310,6 +318,39 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
           <p className="text-xs sm:text-sm text-slate-600 break-words">
             📍 {booking.serviceLocation === 'home_service' ? 'Home Service (+₱1,000)' : 'Homebased Studio'}
           </p>
+        )}
+        {nailTechs.length > 0 && (
+          <div className="mt-2">
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Assigned Nail Tech</label>
+            <select
+              value={selectedNailTechId || ''}
+              onChange={async (e) => {
+                const newNailTechId = e.target.value || null;
+                setSelectedNailTechId(newNailTechId);
+                if (onUpdateNailTech) {
+                  setIsUpdatingNailTech(true);
+                  try {
+                    await onUpdateNailTech(booking.id, newNailTechId);
+                  } catch (error) {
+                    console.error('Failed to update nail tech:', error);
+                    // Revert on error
+                    setSelectedNailTechId(booking.nailTechId || null);
+                  } finally {
+                    setIsUpdatingNailTech(false);
+                  }
+                }
+              }}
+              disabled={isUpdatingNailTech}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 disabled:opacity-50"
+            >
+              <option value="">No nail tech assigned</option>
+              {nailTechs.filter(tech => tech.isActive).map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.fullName} {tech.role ? `(${tech.role})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </header>
 

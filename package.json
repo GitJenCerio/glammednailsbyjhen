@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "create-placeholders": "node scripts/create-placeholders.js",
-    "clean-database": "tsx scripts/clean-database.ts"
+    "clean-database": "tsx scripts/clean-database.ts",
+    "add-ms-jhen": "npx tsx scripts/add-ms-jhen-nail-tech.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",

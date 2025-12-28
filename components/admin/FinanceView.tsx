@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
-import type { Booking, BookingWithSlot, PaymentStatus, Customer } from '@/lib/types';
+import type { Booking, BookingWithSlot, PaymentStatus, Customer, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { PaymentModal } from './modals/PaymentModal';
 import { IoEllipsisVertical } from 'react-icons/io5';
@@ -11,6 +11,7 @@ type FinanceViewProps = {
   bookings: Booking[];
   slots: any[];
   customers?: Customer[];
+  nailTechs?: NailTech[];
 };
 
 type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
@@ -29,7 +30,7 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
   refunded: 'bg-gray-100 text-gray-800 border-gray-200',
 };
 
-export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProps) {
+export function FinanceView({ bookings, slots, customers = [], nailTechs = [] }: FinanceViewProps) {
   const [viewMode, setViewMode] = useState<'revenue' | 'payments'>('revenue'); // 'revenue' = by service date, 'payments' = by payment date
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'week' | 'month'>('all');
@@ -38,6 +39,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
   const [dateRangeStart, setDateRangeStart] = useState<string>('');
   const [dateRangeEnd, setDateRangeEnd] = useState<string>('');
   const [useDateRange, setUseDateRange] = useState(false);
+  const [filterNailTechId, setFilterNailTechId] = useState<string | 'all'>('all');
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -191,6 +193,12 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
   const filteredBookings = useMemo(() => {
     let filtered = bookingsWithSlots.filter((booking) => {
       if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
+      
+      // Filter by nail tech if selected
+      if (filterNailTechId !== 'all') {
+        if (booking.nailTechId !== filterNailTechId) return false;
+      }
+      
       // Include bookings with invoices OR bookings with deposits (partial payments) OR confirmed bookings (even with 0 payment)
       if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
       
@@ -249,7 +257,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
       const dateB = getRelevantDate(b).getTime();
       return dateB - dateA;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, viewMode]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, viewMode, filterNailTechId]);
 
   // Get available years from bookings data
   const availableYears = useMemo(() => {
@@ -542,6 +550,25 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-start sm:items-center justify-between">
+        {/* Nail Tech filter */}
+        {nailTechs.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] sm:text-xs text-slate-500">Nail Tech:</label>
+            <select
+              value={filterNailTechId}
+              onChange={(e) => setFilterNailTechId(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+            >
+              <option value="all">All Nail Techs</option>
+              {nailTechs.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        
         {/* Status filter */}
         <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
           <button
