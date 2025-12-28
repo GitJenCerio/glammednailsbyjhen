@@ -2,15 +2,16 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
 import type { Booking, Slot, BookingWithSlot } from '@/lib/types';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { PaymentModal } from '@/components/admin/modals/PaymentModal';
 import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline } from 'react-icons/io5';
 
-type FilterPeriod = 'day' | 'week' | 'month' | 'all';
+type FilterPeriod = 'day' | 'week' | 'month' | 'year' | 'all';
 type StatusFilter = 'all' | 'upcoming' | 'done';
 type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+type YearFilter = 'all' | number;
 
 interface BookingsViewProps {
   bookings: Booking[];
@@ -46,9 +47,10 @@ const serviceLabels: Record<string, string> = {
 };
 
 export function BookingsView({ bookings, slots, selectedDate, customers = [], onCancel, onReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
-  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod | 'all'>('all');
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
+  const [yearFilter, setYearFilter] = useState<YearFilter>('all');
   const [clientTypeMap, setClientTypeMap] = useState<Record<string, 'repeat' | 'new'>>({});
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
@@ -175,39 +177,66 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], on
     return 'Invoice generated';
   }, [getFinanceSummary]);
 
-  // Filter bookings by period, status, and month
+  // Filter bookings by period, status, month, and year
   const filteredBookings = useMemo(() => {
     let result: BookingWithSlot[];
 
-    // Base date filtering (All / Day / Week / Month)
+    // Base date filtering (All / Day / Week / Month / Year)
+    // Use today's date for period filters, not the calendar's selectedDate
     if (filterPeriod === 'all') {
       result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
     } else {
-      const baseDate = parseISO(selectedDate);
+      // Use today's date for filtering by period
+      const today = new Date();
       let start: Date;
       let end: Date;
 
       switch (filterPeriod) {
         case 'day':
-          start = startOfDay(baseDate);
-          end = endOfDay(baseDate);
+          start = startOfDay(today);
+          end = endOfDay(today);
           break;
         case 'week':
-          start = startOfWeek(baseDate, { weekStartsOn: 1 }); // Monday
-          end = endOfWeek(baseDate, { weekStartsOn: 1 });
+          start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+          end = endOfWeek(today, { weekStartsOn: 1 });
           break;
         case 'month':
-          start = startOfMonth(baseDate);
-          end = endOfMonth(baseDate);
+          start = startOfMonth(today);
+          end = endOfMonth(today);
+          break;
+        case 'year':
+          start = startOfYear(today);
+          end = endOfYear(today);
           break;
         default:
-          return bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+          // Fallback to all bookings
+          result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+          return result;
       }
 
+      // Filter bookings within the date range
       result = bookingsWithSlots.filter((booking) => {
         if (!booking.slot) return false;
-        const bookingDate = parseISO(booking.slot.date);
-        return isWithinInterval(bookingDate, { start, end });
+        try {
+          const bookingDate = parseISO(booking.slot.date);
+          // Check if bookingDate is valid
+          if (isNaN(bookingDate.getTime())) {
+            return false;
+          }
+          return isWithinInterval(bookingDate, { start, end });
+        } catch (error) {
+          console.error('Error parsing booking date:', booking.slot.date, error);
+          return false;
+        }
+      });
+    }
+
+    // Year filter
+    if (yearFilter !== 'all') {
+      result = result.filter((booking) => {
+        if (!booking.slot) return false;
+        const bookingYear = parseISO(booking.slot.date).getFullYear();
+        return bookingYear === yearFilter;
       });
     }
 
@@ -232,19 +261,16 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], on
       });
     }
 
-    // Sort by date and time (most recent first for 'all', otherwise ascending)
+    // Sort by date and time in ascending order (nearest upcoming first)
     return result.sort((a, b) => {
       if (!a.slot || !b.slot) return 0;
-      const dateCompare =
-        filterPeriod === 'all'
-          ? b.slot.date.localeCompare(a.slot.date)
-          : a.slot.date.localeCompare(b.slot.date);
+      // Compare dates first (ascending - earliest first)
+      const dateCompare = a.slot.date.localeCompare(b.slot.date);
       if (dateCompare !== 0) return dateCompare;
-      return filterPeriod === 'all'
-        ? b.slot.time.localeCompare(a.slot.time)
-        : a.slot.time.localeCompare(b.slot.time);
+      // If dates are equal, compare times (ascending - earliest first)
+      return a.slot.time.localeCompare(b.slot.time);
     });
-  }, [bookingsWithSlots, selectedDate, filterPeriod, statusFilter, monthFilter, getBookingStageLabel]);
+  }, [bookingsWithSlots, selectedDate, filterPeriod, statusFilter, monthFilter, yearFilter, getBookingStageLabel]);
 
   const getCustomerName = (booking: BookingWithSlot): string => {
     // Priority 1: Get customer name from form data (for bookings with submitted forms)
@@ -534,6 +560,16 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], on
             >
               Month
             </button>
+            <button
+              onClick={() => setFilterPeriod('year')}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                filterPeriod === 'year'
+                  ? 'bg-black text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Year
+            </button>
           </div>
           <div className="text-xs sm:text-sm text-slate-600">
             {filterPeriod === 'all' 
@@ -579,30 +615,57 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], on
             </button>
           </div>
 
-          {/* Month dropdown: All, Jan, Feb, ... */}
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] sm:text-xs text-slate-500">Month:</label>
-            <select
-              value={monthFilter}
-              onChange={(e) =>
-                setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter))
-              }
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-            >
-              <option value="all">All months</option>
-              <option value="1">January</option>
-              <option value="2">February</option>
-              <option value="3">March</option>
-              <option value="4">April</option>
-              <option value="5">May</option>
-              <option value="6">June</option>
-              <option value="7">July</option>
-              <option value="8">August</option>
-              <option value="9">September</option>
-              <option value="10">October</option>
-              <option value="11">November</option>
-              <option value="12">December</option>
-            </select>
+          {/* Month and Year dropdowns */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] sm:text-xs text-slate-500">Month:</label>
+              <select
+                value={monthFilter}
+                onChange={(e) =>
+                  setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter))
+                }
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              >
+                <option value="all">All months</option>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] sm:text-xs text-slate-500">Year:</label>
+              <select
+                value={yearFilter}
+                onChange={(e) =>
+                  setYearFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                }
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              >
+                <option value="all">All years</option>
+                {(() => {
+                  const currentYear = new Date().getFullYear();
+                  const years = [];
+                  // Show current year and next 2 years, plus previous 2 years
+                  for (let i = currentYear - 2; i <= currentYear + 2; i++) {
+                    years.push(i);
+                  }
+                  return years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ));
+                })()}
+              </select>
+            </div>
           </div>
         </div>
       </div>

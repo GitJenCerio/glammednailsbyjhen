@@ -71,6 +71,7 @@ export interface Booking {
   customerData?: Record<string, string>; // Keep for backward compatibility and form data
   customerDataOrder?: string[]; // Preserves the exact order of fields from the form
   formResponseId?: string;
+  googleFormUrl?: string; // Stored form URL for resending to customers
   dateChanged?: boolean;
   timeChanged?: boolean;
   validationWarnings?: string[];

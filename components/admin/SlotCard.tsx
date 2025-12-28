@@ -1,6 +1,6 @@
 import type { Slot, Booking } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
-import { IoCreateOutline, IoTrashOutline } from 'react-icons/io5';
+import { IoCreateOutline, IoTrashOutline, IoEyeOutline, IoDocumentTextOutline } from 'react-icons/io5';
 
 type SlotCardProps = {
   slot: Slot;
@@ -8,9 +8,11 @@ type SlotCardProps = {
   customer?: { name: string } | null;
   onEdit: (slot: Slot) => void;
   onDelete: (slot: Slot) => void;
+  onViewBooking?: (booking: Booking) => void;
+  onMakeQuotation?: (booking: Booking) => void;
 };
 
-export function SlotCard({ slot, booking, customer, onEdit, onDelete }: SlotCardProps) {
+export function SlotCard({ slot, booking, customer, onEdit, onDelete, onViewBooking, onMakeQuotation }: SlotCardProps) {
   const isConfirmed = slot.status === 'confirmed';
   
   // Get customer full name - prioritize Customer object, then booking customerData
@@ -80,6 +82,32 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete }: SlotCard
         </div>
       )}
       {slot.notes && <p className="text-xs sm:text-sm text-slate-600 break-words font-medium">{slot.notes}</p>}
+      {isConfirmed && booking && (
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          {onViewBooking && (
+            <button
+              type="button"
+              onClick={() => onViewBooking(booking)}
+              className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50 transition-all flex items-center gap-1.5"
+              title="View Booking"
+            >
+              <IoEyeOutline className="w-3.5 h-3.5" />
+              <span>View</span>
+            </button>
+          )}
+          {onMakeQuotation && (
+            <button
+              type="button"
+              onClick={() => onMakeQuotation(booking)}
+              className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700 transition-all flex items-center gap-1.5"
+              title="Create Quotation"
+            >
+              <IoDocumentTextOutline className="w-3.5 h-3.5" />
+              <span>Quote</span>
+            </button>
+          )}
+        </div>
+      )}
       {!isConfirmed && (
         <div className="flex gap-1.5 sm:gap-2">
           <button

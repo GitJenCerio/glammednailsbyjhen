@@ -18,6 +18,7 @@ import { DeleteDaySlotsModal } from '@/components/admin/modals/DeleteDaySlotsMod
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
+import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { ServicesManager } from '@/components/admin/ServicesManager';
 import { QuotationModal } from '@/components/admin/modals/QuotationModal';
 import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
@@ -77,6 +78,8 @@ function AdminDashboardContent() {
   const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
   const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
   const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
+  const [formResponseModalOpen, setFormResponseModalOpen] = useState(false);
+  const [selectedBookingForFormView, setSelectedBookingForFormView] = useState<Booking | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -914,6 +917,14 @@ function AdminDashboardContent() {
                         setSlotModalOpen(true);
                       }}
                       onDelete={handleDeleteSlot}
+                      onViewBooking={(booking) => {
+                        setSelectedBookingForFormView(booking);
+                        setFormResponseModalOpen(true);
+                      }}
+                      onMakeQuotation={(booking) => {
+                        setSelectedBookingId(booking.id);
+                        setQuotationModalOpen(true);
+                      }}
                     />
                   );
                 })}
@@ -926,17 +937,6 @@ function AdminDashboardContent() {
             <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
               {/* Filter buttons - filter by booking creation date */}
               <div className="mb-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFilterPeriod('all')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-                    filterPeriod === 'all'
-                      ? 'bg-black text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  All
-                </button>
                 <button
                   type="button"
                   onClick={() => setFilterPeriod('day')}
@@ -970,6 +970,17 @@ function AdminDashboardContent() {
                 >
                   Month
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPeriod('all')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
+                    filterPeriod === 'all'
+                      ? 'bg-black text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All
+                </button>
               </div>
               <BookingList
                 bookings={filteredBookingsForOverview}
@@ -991,6 +1002,7 @@ function AdminDashboardContent() {
                     : undefined
               }
               onConfirm={handleConfirmBooking}
+              onMakeQuotation={handleMakeQuotation}
             />
           </div>
         </div>
@@ -1327,6 +1339,15 @@ function AdminDashboardContent() {
         open={recoverBookingModalOpen}
         onClose={() => setRecoverBookingModalOpen(false)}
         onRecover={handleRecoverBooking}
+      />
+
+      <FormResponseModal
+        open={formResponseModalOpen}
+        booking={selectedBookingForFormView}
+        onClose={() => {
+          setFormResponseModalOpen(false);
+          setSelectedBookingForFormView(null);
+        }}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking } from '@/lib/services/bookingService';
+import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, regenerateBookingFormUrl } from '@/lib/services/bookingService';
 import type { Invoice, PaymentStatus } from '@/lib/types';
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -64,6 +64,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
     await rescheduleBooking(params.id, newSlotId, linkedSlotIds);
     return NextResponse.json({ success: true });
+  }
+
+  if (body?.action === 'resend_form') {
+    try {
+      const googleFormUrl = await regenerateBookingFormUrl(params.id);
+      return NextResponse.json({ success: true, googleFormUrl });
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message ?? 'Unable to regenerate form URL.' }, { status: 400 });
+    }
   }
 
   if (!body?.status) {
