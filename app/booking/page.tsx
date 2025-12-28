@@ -695,16 +695,42 @@ export default function BookingPage() {
     
     setIsBooking(true);
     try {
-      // Refresh slot data before booking to ensure we have the latest status
-      await loadData();
+      // Fetch fresh slot data directly (don't rely on state updates)
+      const timestamp = new Date().getTime();
+      const availabilityController = new AbortController();
+      const availabilityTimeout = setTimeout(() => availabilityController.abort(), 10000);
+      
+      let availabilityResponse: Response;
+      try {
+        availabilityResponse = await fetch(`/api/availability?t=${timestamp}`, { 
+          cache: 'no-store',
+          signal: availabilityController.signal 
+        });
+        clearTimeout(availabilityTimeout);
+      } catch (error: any) {
+        clearTimeout(availabilityTimeout);
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout - please try again');
+        }
+        throw error;
+      }
+      
+      if (!availabilityResponse.ok) {
+        throw new Error('Unable to verify slot availability. Please try again.');
+      }
+      
+      const availabilityData = await availabilityResponse.json();
+      const freshSlots = availabilityData.slots || [];
       
       // Verify the selected slot still exists and is available after refresh
-      const refreshedSlot = slots.find((s) => s.id === selectedSlot.id);
+      const refreshedSlot = freshSlots.find((s: Slot) => s.id === selectedSlot.id);
       if (!refreshedSlot) {
         alert('This slot is no longer available. Please select another slot.');
         setSelectedSlot(null);
         setLinkedSlots([]);
         setIsBooking(false);
+        // Refresh the UI
+        await loadData(false);
         return;
       }
       
@@ -713,6 +739,8 @@ export default function BookingPage() {
         setSelectedSlot(null);
         setLinkedSlots([]);
         setIsBooking(false);
+        // Refresh the UI
+        await loadData(false);
         return;
       }
       
@@ -721,7 +749,7 @@ export default function BookingPage() {
       
       const requiredSlots = getRequiredSlotCount(selectedService);
       const linkedSlotIds = linkedSlots.map((slot) => {
-        const refreshedLinkedSlot = slots.find((s) => s.id === slot.id);
+        const refreshedLinkedSlot = freshSlots.find((s: Slot) => s.id === slot.id);
         if (!refreshedLinkedSlot || refreshedLinkedSlot.status !== 'available') {
           return null;
         }
@@ -732,25 +760,42 @@ export default function BookingPage() {
         setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
         setLinkedSlots([]);
         setIsBooking(false);
+        // Refresh the UI
+        await loadData(false);
         return;
       }
 
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slotId: refreshedSlot.id,
-          serviceType: selectedService,
-          pairedSlotId: linkedSlotIds[0],
-          linkedSlotIds,
-          clientType,
-          repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
-          serviceLocation,
-        }),
-      });
+      // Create booking with timeout
+      const bookingController = new AbortController();
+      const bookingTimeout = setTimeout(() => bookingController.abort(), 15000);
+      
+      let bookingResponse: Response;
+      try {
+        bookingResponse = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slotId: refreshedSlot.id,
+            serviceType: selectedService,
+            pairedSlotId: linkedSlotIds[0],
+            linkedSlotIds,
+            clientType,
+            repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
+            serviceLocation,
+          }),
+          signal: bookingController.signal,
+        });
+        clearTimeout(bookingTimeout);
+      } catch (error: any) {
+        clearTimeout(bookingTimeout);
+        if (error.name === 'AbortError') {
+          throw new Error('Booking request timed out. Please try again.');
+        }
+        throw error;
+      }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      if (!bookingResponse.ok) {
+        const errorData = await bookingResponse.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Slot is no longer available.';
         // Check if it's a race condition (slot already booked)
         if (errorMessage.includes('no longer available') || errorMessage.includes('not available')) {
@@ -759,26 +804,34 @@ export default function BookingPage() {
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const data = await bookingResponse.json();
+      
+      if (!data.googleFormUrl) {
+        throw new Error('Booking created but redirect URL is missing. Please contact support.');
+      }
       
       // Immediately refresh slots before redirecting so other users see updated status
       // This helps prevent double-booking by updating the slot status to 'pending' quickly
-      await loadData(false);
-      
-      // Small delay to ensure the refresh completes before redirect
-      await new Promise(resolve => setTimeout(resolve, 500));
+      loadData(false).catch(() => {
+        // Silently fail - we're redirecting anyway
+      });
       
       // Redirect to Google Form - booking is successfully reserved
       window.location.href = data.googleFormUrl;
       // Note: We don't reset state here since we're redirecting
     } catch (error: any) {
       console.error('Error creating booking:', error);
-      alert(error.message || 'This slot is no longer available. Please pick another slot.');
-      await loadData();
+      const errorMessage = error.message || 'Unable to complete booking. Please try again.';
+      alert(errorMessage);
+      
+      // Refresh the UI to show updated slot status
+      loadData(false).catch(() => {
+        // Silently fail if refresh fails
+      });
+      
       // Reset selection to allow user to pick a new slot
       setSelectedSlot(null);
       setLinkedSlots([]);
-    } finally {
       setIsBooking(false);
     }
   }
