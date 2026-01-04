@@ -114,6 +114,38 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
     return null;
   };
 
+  // Get social media name (Facebook or Instagram) from customerData or customer object
+  const getSocialMediaName = (data?: Record<string, string>): string | null => {
+    if (!data || Object.keys(data).length === 0) return null;
+    
+    // Helper function to find field by fuzzy matching key names
+    const findField = (keywords: string[]): string | null => {
+      const lowerKeywords = keywords.map(k => k.toLowerCase());
+      for (const [key, value] of Object.entries(data)) {
+        const lowerKey = key.toLowerCase();
+        // Check if key matches any keyword (partial match or exact match)
+        if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      return null;
+    };
+
+    // Try to find Facebook name first
+    const facebookName = findField(['facebook', 'fb name', 'fb']);
+    if (facebookName) return facebookName;
+
+    // Then try Instagram name
+    const instagramName = findField(['instagram', 'ig name', 'ig', 'insta']);
+    if (instagramName) return instagramName;
+
+    // Try generic social media name
+    const socialName = findField(['social media', 'social', 'social media name']);
+    if (socialName) return socialName;
+
+    return null;
+  };
+
   // Prioritize customerData over customer object name
   // This is because customerData has the most up-to-date info from the form
   // Only use customer.name if it's not "Unknown Customer" and we don't have customerData
@@ -122,6 +154,9 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
     ? customer.name 
     : null;
   const customerName = nameFromData || customerNameFromObject || null;
+  
+  // Get social media name from customerData
+  const socialMediaName = getSocialMediaName(booking?.customerData);
   
   // Debug: Log if we have booking but no name found (only in development)
   if (process.env.NODE_ENV === 'development' && booking && !customerName && slot.status === 'confirmed') {
@@ -245,7 +280,12 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-xs sm:text-sm">
             {customerName ? (
-              <p className="font-semibold text-slate-900">{customerName}</p>
+              <p className="font-semibold text-slate-900">
+                {customerName}
+                {socialMediaName && (
+                  <span className="text-slate-600 font-normal"> ({socialMediaName})</span>
+                )}
+              </p>
             ) : booking?.bookingId ? (
               <p className="font-semibold text-slate-600 italic">{booking.bookingId}</p>
             ) : null}
