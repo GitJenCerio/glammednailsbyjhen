@@ -7,6 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
 import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
+import { CustomSelect } from '@/components/admin/CustomSelect';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import { IoStatsChart, IoCalendar, IoCash, IoPeople, IoSparkles, IoChevronBack, IoChevronForward, IoLogOutOutline, IoMenu, IoClose } from 'react-icons/io5';
 import Image from 'next/image';
@@ -918,70 +919,31 @@ function AdminDashboardContent() {
               Select Nail Technician Calendar
             </label>
             <div className="relative">
-              <select
+              <CustomSelect
                 value={selectedNailTechId || ''}
-                onChange={(e) => {
-                  const newNailTechId = e.target.value || null;
-                  setSelectedNailTechId(newNailTechId);
+                onChange={(newNailTechId) => {
+                  const value = newNailTechId || null;
+                  setSelectedNailTechId(value);
                   // Reset selected date when switching techs for clarity
                   setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
                 }}
-                className="w-full sm:w-auto min-w-[200px] rounded-lg border-2 border-slate-300 bg-white px-3 py-2 pr-8 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 appearance-none"
-              >
-                {nailTechs.length === 0 ? (
-                  <option value="">Loading nail techs...</option>
-                ) : (
-                  <>
-                    <option value="">All Nail Techs</option>
-                    {(() => {
-                      // Sort nail techs by name for consistent color assignment
-                      const sortedTechs = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name));
-                      const sortedTechIds = sortedTechs.map(t => t.id);
-                      
-                      return sortedTechs.map((tech) => {
-                        const colorClasses = getNailTechColorClasses(tech.id, sortedTechIds);
-                        // Extract background color from Tailwind classes for inline style (lighter colors for dropdown)
-                        const bgColorMap: Record<string, string> = {
-                          'bg-blue-500': '#bfdbfe', // blue-200
-                          'bg-purple-500': '#e9d5ff', // purple-200
-                          'bg-pink-500': '#fce7f3', // pink-200
-                          'bg-indigo-500': '#c7d2fe', // indigo-200
-                          'bg-teal-500': '#ccfbf1', // teal-200
-                          'bg-amber-500': '#fde68a', // amber-200
-                          'bg-rose-500': '#fecdd3', // rose-200
-                          'bg-cyan-500': '#cffafe', // cyan-200
-                          'bg-emerald-500': '#d1fae5', // emerald-200
-                          'bg-violet-500': '#ddd6fe', // violet-200
-                          'bg-fuchsia-500': '#fae8ff', // fuchsia-200
-                          'bg-orange-500': '#fed7aa', // orange-200
-                          'bg-lime-500': '#ecfccb', // lime-200
-                          'bg-sky-500': '#e0f2fe', // sky-200
-                          'bg-yellow-500': '#fef08a', // yellow-200
-                        };
-                        const bgColor = Object.keys(bgColorMap).find(key => colorClasses.includes(key)) 
-                          ? bgColorMap[Object.keys(bgColorMap).find(key => colorClasses.includes(key))!]
-                          : '#ffffff';
-                        return (
-                          <option key={tech.id} value={tech.id} style={{ backgroundColor: bgColor }}>
-                            Ms. {tech.name} ({tech.role})
-                          </option>
-                        );
-                      });
-                    })()}
-                  </>
-                )}
-              </select>
+                options={[
+                  { value: '', label: 'All Nail Techs' },
+                  ...nailTechs.sort((a, b) => a.name.localeCompare(b.name)).map((tech) => ({
+                    value: tech.id,
+                    label: `Ms. ${tech.name} (${tech.role})`,
+                  })),
+                ]}
+                placeholder={nailTechs.length === 0 ? 'Loading nail techs...' : 'Select nail tech...'}
+                className="w-full sm:w-auto"
+                allNailTechIds={[...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id)}
+              />
               {selectedNailTechId && nailTechs.find(t => t.id === selectedNailTechId) && (() => {
                 const sortedTechIds = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
                 return (
                   <div className={`absolute right-8 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 ${getNailTechColorClasses(selectedNailTechId, sortedTechIds)} pointer-events-none`} />
                 );
               })()}
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
             </div>
             {selectedNailTechId && (
               <p className="mt-2 text-xs text-slate-600">

@@ -55,3 +55,107 @@
   }
 }
 
+/* Override default browser styling for selected option in select dropdowns - remove all blue colors */
+select,
+select.nail-tech-select {
+  accent-color: black !important;
+  color-scheme: light;
+}
+
+/* Remove ALL blue colors - most aggressive approach */
+select option,
+select.nail-tech-select option {
+  background-color: white !important;
+  background: white !important;
+  color: rgb(15 23 42) !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Selected option - MUST be black, no blue */
+select option:checked,
+select option[selected],
+select option[value]:checked,
+select option[selected="selected"],
+select.nail-tech-select option:checked,
+select.nail-tech-select option[selected],
+select.nail-tech-select option[value]:checked {
+  background-color: black !important;
+  background: black !important;
+  color: white !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* When dropdown is open and focused - selected option must be black */
+select:focus option:checked,
+select:active option:checked,
+select:focus option[selected],
+select:active option[selected],
+select option[selected]:checked {
+  background-color: black !important;
+  background: black !important;
+  color: white !important;
+}
+
+/* Hover states - use dark gray/black, never blue */
+select option:hover {
+  background-color: #1a1a1a !important;
+  background: #1a1a1a !important;
+  color: white !important;
+}
+
+/* Focus states - black, not blue */
+select option:focus {
+  background-color: black !important;
+  background: black !important;
+  color: white !important;
+  outline: none !important;
+}
+
+/* Active states */
+select option:active {
+  background-color: black !important;
+  background: black !important;
+  color: white !important;
+}
+
+/* Override any browser default blue colors in scrollbar */
+select::-webkit-scrollbar-thumb {
+  background-color: black !important;
+}
+
+/* Remove blue outline and focus ring from select element */
+select:focus {
+  outline: none !important;
+  border-color: rgb(203 213 225) !important;
+  box-shadow: none !important;
+}
+
+/* Force remove any blue highlight on tap/click */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+select * {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Additional webkit-specific overrides to remove blue */
+select::-webkit-select-focus-ring-color {
+  color: transparent !important;
+}
+
+/* Override system highlight colors */
+::selection {
+  background-color: black !important;
+  color: white !important;
+}
+
+select option::selection {
+  background-color: black !important;
+  color: white !important;
+}
+

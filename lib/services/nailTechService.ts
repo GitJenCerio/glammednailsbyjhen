@@ -60,11 +60,14 @@ export async function createNailTech(payload: NailTechInput): Promise<NailTech> 
   const now = Timestamp.now().toDate().toISOString();
   // Normalize name to remove "Ms." prefix if present (we'll add it on display)
   const normalizedName = normalizeName(payload.name);
+  // Convert "Both" to "Studio and Home Service" for backward compatibility
+  const serviceAvailability = (payload.serviceAvailability as string) === 'Both' 
+    ? 'Studio and Home Service' 
+    : payload.serviceAvailability;
   const data = {
     ...payload,
     name: normalizedName,
-    // Convert "Both" to "Studio and Home Service" for backward compatibility
-    serviceAvailability: payload.serviceAvailability === 'Both' ? 'Studio and Home Service' : payload.serviceAvailability,
+    serviceAvailability: serviceAvailability as ServiceAvailability,
     createdAt: now,
     updatedAt: now,
   };
@@ -88,8 +91,8 @@ export async function updateNailTech(id: string, updates: Partial<NailTechInput>
   }
   
   // Convert "Both" to "Studio and Home Service" if present
-  if (updateData.serviceAvailability === 'Both') {
-    updateData.serviceAvailability = 'Studio and Home Service';
+  if ((updateData.serviceAvailability as string) === 'Both') {
+    updateData.serviceAvailability = 'Studio and Home Service' as ServiceAvailability;
   }
   
   await ref.set(updateData, { merge: true });
@@ -129,8 +132,8 @@ function docToNailTech(id: string, data: FirebaseFirestore.DocumentData): NailTe
   
   // Handle backward compatibility: convert "Both" to "Studio and Home Service"
   let serviceAvailability = data.serviceAvailability;
-  if (serviceAvailability === 'Both') {
-    serviceAvailability = 'Studio and Home Service';
+  if ((serviceAvailability as string) === 'Both') {
+    serviceAvailability = 'Studio and Home Service' as ServiceAvailability;
   }
   
   return {
