@@ -2,6 +2,9 @@ export type SlotStatus = 'available' | 'blocked' | 'pending' | 'confirmed';
 export type BookingStatus = 'pending_form' | 'pending_payment' | 'confirmed' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'refunded';
 export type ServiceType = 'manicure' | 'pedicure' | 'mani_pedi' | 'home_service_2slots' | 'home_service_3slots';
+export type NailTechRole = 'Owner' | 'Junior Tech' | 'Senior Tech';
+export type ServiceAvailability = 'Studio only' | 'Home service only' | 'Studio and Home Service';
+export type NailTechStatus = 'Active' | 'Inactive';
 
 export interface QuoteItem {
   id: string;
@@ -18,6 +21,19 @@ export interface Invoice {
   updatedAt: string;
 }
 
+export interface NailTech {
+  id: string;
+  name: string; // Name without "Ms." prefix (e.g., "Jhen")
+  role: NailTechRole;
+  serviceAvailability: ServiceAvailability;
+  workingDays: string[]; // Array of day names: ['Monday', 'Tuesday', ...]
+  discount?: number; // Discount percentage (e.g., 15 for 15% discount)
+  commissionRate?: number; // Commission rate (e.g., 0.3 for 30%)
+  status: NailTechStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Slot {
   id: string;
   date: string; // YYYY-MM-DD
@@ -25,6 +41,7 @@ export interface Slot {
   status: SlotStatus;
   slotType?: 'regular' | 'with_squeeze_fee' | null;
   notes?: string | null;
+  nailTechId: string; // Required: every slot belongs to a nail tech
   createdAt: string;
   updatedAt: string;
 }
@@ -61,6 +78,7 @@ export interface Booking {
   linkedSlotIds?: string[];
   bookingId: string;
   customerId: string; // Required: every booking must have a customer
+  nailTechId: string; // Required: every booking belongs to a nail tech
   status: BookingStatus;
   serviceType?: ServiceType;
   clientType?: 'new' | 'repeat';
@@ -71,7 +89,6 @@ export interface Booking {
   customerData?: Record<string, string>; // Keep for backward compatibility and form data
   customerDataOrder?: string[]; // Preserves the exact order of fields from the form
   formResponseId?: string;
-  googleFormUrl?: string; // Stored form URL for resending to customers
   dateChanged?: boolean;
   timeChanged?: boolean;
   validationWarnings?: string[];
@@ -104,6 +121,7 @@ export interface BookingWithCustomer extends Booking {
 export type SlotInput = Omit<Slot, 'id' | 'createdAt' | 'updatedAt'>;
 export type BlockedDateInput = Omit<BlockedDate, 'id' | 'createdAt' | 'updatedAt'>;
 export type CustomerInput = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>;
+export type NailTechInput = Omit<NailTech, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type AnalyticsEventType = 'page_view' | 'book_now_click' | 'booking_started' | 'booking_completed';
 

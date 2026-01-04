@@ -9,6 +9,7 @@ type CalendarGridProps = {
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
   onChangeMonth: (newDate: Date) => void;
+  nailTechName?: string; // Optional: name of the nail tech whose calendar is being displayed
 };
 
 export function CalendarGrid({
@@ -18,6 +19,7 @@ export function CalendarGrid({
   selectedDate,
   onSelectDate,
   onChangeMonth,
+  nailTechName,
 }: CalendarGridProps) {
   const start = startOfWeek(startOfMonth(referenceDate), { weekStartsOn: 0 });
   const end = endOfWeek(endOfMonth(referenceDate), { weekStartsOn: 0 });
@@ -69,7 +71,9 @@ export function CalendarGrid({
     <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-3 sm:p-4 md:p-6 shadow-md shadow-slate-900/10">
       <header className="mb-3 sm:mb-4 md:mb-6 flex items-center justify-between flex-wrap gap-2">
         <div>
-          <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Calendar</p>
+          <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">
+            {nailTechName ? `${nailTechName}'s Calendar` : 'Calendar'}
+          </p>
           <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900">{format(referenceDate, 'MMMM yyyy')}</h2>
         </div>
         <div className="flex gap-1.5 sm:gap-2">

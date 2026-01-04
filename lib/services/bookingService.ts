@@ -7,6 +7,7 @@ import { slotIsBlocked } from '../scheduling';
 import { buildPrefilledGoogleFormUrl } from '../googleForms';
 import { getNextSlotTime } from '../constants/slots';
 import { findOrCreateCustomer, getCustomerById, getCustomerByEmail, getCustomerByPhone } from './customerService';
+import { getDefaultNailTech } from './nailTechService';
 // Email functionality disabled - imports removed
 
 const bookingsCollection = adminDb.collection('bookings');
@@ -15,13 +16,40 @@ const customersCollection = adminDb.collection('customers');
 
 export async function listBookings(): Promise<Booking[]> {
   const snapshot = await bookingsCollection.orderBy('createdAt', 'desc').get();
-  return snapshot.docs.map((doc) => docToBooking(doc.id, doc.data()));
+  
+  // Handle backward compatibility: assign default nail tech to bookings without one
+  const defaultNailTech = await getDefaultNailTech();
+  const bookings: Booking[] = [];
+  
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.nailTechId && defaultNailTech) {
+      // Update booking in database for future queries
+      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      bookings.push(docToBooking(doc.id, { ...data, nailTechId: defaultNailTech.id }));
+    } else {
+      bookings.push(docToBooking(doc.id, data));
+    }
+  }
+  
+  return bookings;
 }
 
 export async function getBookingById(id: string): Promise<Booking | null> {
   const snapshot = await bookingsCollection.doc(id).get();
   if (!snapshot.exists) return null;
-  return docToBooking(snapshot.id, snapshot.data()!);
+  
+  const data = snapshot.data()!;
+  // Handle backward compatibility
+  if (!data.nailTechId) {
+    const defaultNailTech = await getDefaultNailTech();
+    if (defaultNailTech) {
+      await snapshot.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      return docToBooking(snapshot.id, { ...data, nailTechId: defaultNailTech.id });
+    }
+  }
+  
+  return docToBooking(snapshot.id, data);
 }
 
 type CreateBookingOptions = {
@@ -157,6 +185,8 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   let slotTime: string | null = null;
   let finalLinkedSlotTime: string | null = null;
 
+  let slotNailTechId: string | null = null;
+
   await adminDb.runTransaction(async (transaction) => {
     const slotRef = slotsCollection.doc(slotId);
     const slotSnap = await transaction.get(slotRef);
@@ -164,6 +194,7 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     const slot = docToSlot(slotSnap.id, slotSnap.data()!);
     slotDate = slot.date; // Store date for use after transaction
     slotTime = slot.time; // Store time for use after transaction
+    slotNailTechId = slot.nailTechId; // Store nail tech ID from slot
 
     if (slot.status !== 'available') {
       throw new Error(`Slot is no longer available. Current status: ${slot.status}. Please select a different slot.`);
@@ -197,6 +228,10 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
       }
       if (linkedSlot.date !== slot.date) {
         throw new Error('Consecutive slots must be on the same day.');
+      }
+      // Ensure linked slots belong to the same nail tech
+      if (linkedSlot.nailTechId !== slot.nailTechId) {
+        throw new Error('Consecutive slots must belong to the same nail tech.');
       }
       const expectedNextTime = getNextSlotTime(previousSlot.time);
       if (!expectedNextTime || linkedSlot.time !== expectedNextTime) {
@@ -234,6 +269,7 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
       slotId,
       bookingId,
       customerId: foundCustomerId || 'PENDING_FORM_SUBMISSION', // Use found customerId if available, otherwise placeholder
+      nailTechId: slotNailTechId || '', // Required: get from slot
       serviceType,
       status: 'pending_form' as BookingStatus,
       createdAt: Timestamp.now().toDate().toISOString(),
@@ -379,13 +415,6 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   // Note: Client type is stored in the booking record, not pre-filled in Google Form
   const googleFormUrl = buildPrefilledGoogleFormUrl(formUrl, prefillFields);
   
-  // Store the form URL in the booking document
-  const bookingSnapshot = await bookingsCollection.where('bookingId', '==', bookingId).limit(1).get();
-  if (!bookingSnapshot.empty) {
-    const bookingDoc = bookingSnapshot.docs[0];
-    await bookingDoc.ref.set({ googleFormUrl }, { merge: true });
-  }
-  
   // Debug logging
   console.log('=== Google Form Prefill Debug ===');
   console.log('Prefill fields being added:', Object.keys(prefillFields));
@@ -408,172 +437,6 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 }
 
 /**
- * Regenerate the booking form URL with pre-filled data
- * This is useful for resending the form link to customers who didn't complete it
- */
-export async function regenerateBookingFormUrl(bookingId: string): Promise<string> {
-  const booking = await getBookingById(bookingId);
-  if (!booking) {
-    throw new Error('Booking not found.');
-  }
-
-  const formEntryKey = process.env.GOOGLE_FORM_BOOKING_ID_ENTRY;
-  const formDateEntryKey = process.env.GOOGLE_FORM_DATE_ENTRY;
-  const formTimeEntryKey = process.env.GOOGLE_FORM_TIME_ENTRY;
-  const formServiceLocationEntryKey = process.env.GOOGLE_FORM_SERVICE_LOCATION_ENTRY;
-  const formNameEntryKey = process.env.GOOGLE_FORM_NAME_ENTRY;
-  const formEmailEntryKey = process.env.GOOGLE_FORM_EMAIL_ENTRY;
-  let formPhoneEntryKey = process.env.GOOGLE_FORM_PHONE_ENTRY || process.env.GOOGLE_FORM_CONTACT_NUMBER_ENTRY;
-  if (formPhoneEntryKey && formPhoneEntryKey.startsWith('eentry.')) {
-    formPhoneEntryKey = 'entry.' + formPhoneEntryKey.substring(7);
-  }
-  const formFirstNameEntryKey = process.env.GOOGLE_FORM_FIRST_NAME_ENTRY;
-  const formLastNameEntryKey = process.env.GOOGLE_FORM_LAST_NAME_ENTRY;
-  const formSocialMediaEntryKey = process.env.GOOGLE_FORM_SOCIAL_MEDIA_ENTRY;
-  const formReferralSourceEntryKey = process.env.GOOGLE_FORM_REFERRAL_SOURCE_ENTRY;
-  const formUrl = process.env.GOOGLE_FORM_BASE_URL;
-
-  if (!formEntryKey || !formUrl) {
-    throw new Error('Missing Google Form configuration.');
-  }
-
-  // Get slot information
-  const slot = await getSlotById(booking.slotId);
-  if (!slot) {
-    throw new Error('Slot not found.');
-  }
-
-  // Get customer information if available (for repeat clients)
-  let customerData: { name?: string; firstName?: string; lastName?: string; email?: string; phone?: string; socialMediaName?: string; referralSource?: string } | null = null;
-  if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION') {
-    const customer = await getCustomerById(booking.customerId);
-    if (customer) {
-      customerData = {
-        name: customer.name,
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        email: customer.email,
-        phone: customer.phone,
-        socialMediaName: customer.socialMediaName,
-        referralSource: customer.referralSource,
-      };
-    }
-  }
-
-  // Format date
-  let formattedDate: string | undefined = undefined;
-  if (slot.date && formDateEntryKey) {
-    const dateFormat = process.env.GOOGLE_FORM_DATE_FORMAT || 'FULL';
-    const dateObj = parseISO(slot.date);
-    
-    switch (dateFormat.toUpperCase()) {
-      case 'FULL':
-      case 'LONG':
-        formattedDate = format(dateObj, 'EEEE, MMMM d, yyyy');
-        break;
-      case 'YYYY-MM-DD':
-        formattedDate = format(dateObj, 'yyyy-MM-dd');
-        break;
-      case 'DD/MM/YYYY':
-        formattedDate = format(dateObj, 'dd/MM/yyyy');
-        break;
-      case 'MM/DD/YYYY':
-        formattedDate = format(dateObj, 'MM/dd/yyyy');
-        break;
-      default:
-        formattedDate = format(dateObj, 'EEEE, MMMM d, yyyy');
-        break;
-    }
-  }
-
-  // Format time
-  const formatTime12Hour = (time24: string): string => {
-    const [hours, minutes] = time24.split(':');
-    const hour = parseInt(hours, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    const mins = minutes.padStart(2, '0');
-    return `${hour12}:${mins} ${ampm}`;
-  };
-
-  let formattedTime: string | undefined = undefined;
-  if (slot.time && formTimeEntryKey) {
-    const linkedSlotIds = booking.linkedSlotIds?.length
-      ? booking.linkedSlotIds
-      : booking.pairedSlotId
-        ? [booking.pairedSlotId]
-        : [];
-    
-    if (linkedSlotIds.length > 0) {
-      const lastLinkedId = linkedSlotIds[linkedSlotIds.length - 1];
-      const linkedSlot = await getSlotById(lastLinkedId);
-      if (linkedSlot) {
-        formattedTime = `${formatTime12Hour(slot.time)} - ${formatTime12Hour(linkedSlot.time)}`;
-      } else {
-        formattedTime = formatTime12Hour(slot.time);
-      }
-    } else {
-      formattedTime = formatTime12Hour(slot.time);
-    }
-  }
-
-  // Build prefill fields
-  const prefillFields: Record<string, string> = {
-    [formEntryKey]: booking.bookingId,
-  };
-
-  if (formDateEntryKey && formattedDate) {
-    prefillFields[formDateEntryKey] = formattedDate;
-  }
-
-  if (formTimeEntryKey && formattedTime) {
-    prefillFields[formTimeEntryKey] = formattedTime;
-  }
-
-  if (formServiceLocationEntryKey && booking.serviceLocation) {
-    const formattedServiceLocation = booking.serviceLocation === 'home_service' ? 'Home Service' : 'Homebased Studio';
-    prefillFields[formServiceLocationEntryKey] = formattedServiceLocation;
-  }
-
-  // Add customer data to prefill if available
-  if (customerData) {
-    if (formNameEntryKey && customerData.name) {
-      prefillFields[formNameEntryKey] = customerData.name;
-    }
-    if (formFirstNameEntryKey && customerData.firstName) {
-      prefillFields[formFirstNameEntryKey] = customerData.firstName;
-    }
-    if (formLastNameEntryKey && customerData.lastName) {
-      prefillFields[formLastNameEntryKey] = customerData.lastName;
-    }
-    if (formEmailEntryKey && customerData.email) {
-      prefillFields[formEmailEntryKey] = customerData.email;
-    }
-    if (formPhoneEntryKey && customerData.phone) {
-      prefillFields[formPhoneEntryKey] = customerData.phone;
-    }
-    if (formSocialMediaEntryKey && customerData.socialMediaName) {
-      prefillFields[formSocialMediaEntryKey] = customerData.socialMediaName;
-    }
-    if (formReferralSourceEntryKey && customerData.referralSource) {
-      prefillFields[formReferralSourceEntryKey] = customerData.referralSource;
-    }
-  }
-
-  // Generate the URL
-  const googleFormUrl = buildPrefilledGoogleFormUrl(formUrl, prefillFields);
-  
-  // Update the booking with the new URL
-  const bookingSnapshot = await bookingsCollection.where('bookingId', '==', booking.bookingId).limit(1).get();
-  if (!bookingSnapshot.empty) {
-    const bookingDoc = bookingSnapshot.docs[0];
-    await bookingDoc.ref.set({ googleFormUrl }, { merge: true });
-  }
-
-  return googleFormUrl;
-}
-
-/**
  * Recover an expired booking from Google Sheets form data
  * This recreates a booking with a specific booking ID (e.g., GN-00001)
  */
@@ -591,11 +454,14 @@ export async function recoverBookingFromForm(
   const serviceLocation = options?.serviceLocation ?? 'homebased_studio';
   const blocks = await listBlockedDates();
 
+  let slotNailTechId: string | null = null;
+
   await adminDb.runTransaction(async (transaction) => {
     const slotRef = slotsCollection.doc(slotId);
     const slotSnap = await transaction.get(slotRef);
     if (!slotSnap.exists) throw new Error('Slot not found.');
     const slot = docToSlot(slotSnap.id, slotSnap.data()!);
+    slotNailTechId = slot.nailTechId; // Store nail tech ID from slot
 
     // Allow recovering even if slot is pending (it might have been released)
     if (slot.status !== 'available' && slot.status !== 'pending') {
@@ -629,6 +495,10 @@ export async function recoverBookingFromForm(
       }
       if (linkedSlot.date !== slot.date) {
         throw new Error('Consecutive slots must be on the same day.');
+      }
+      // Ensure linked slots belong to the same nail tech
+      if (linkedSlot.nailTechId !== slot.nailTechId) {
+        throw new Error('Consecutive slots must belong to the same nail tech.');
       }
       const expectedNextTime = getNextSlotTime(previousSlot.time);
       if (!expectedNextTime || linkedSlot.time !== expectedNextTime) {
@@ -694,6 +564,7 @@ export async function recoverBookingFromForm(
       slotId,
       bookingId, // Use the specified booking ID
       customerId: customer.id,
+      nailTechId: slotNailTechId || '', // Required: get from slot
       serviceType,
       status: 'pending_payment', // Set directly to pending_payment since form is already submitted
       customerData: formData,
@@ -1433,6 +1304,7 @@ function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking
     linkedSlotIds: data.linkedSlotIds ?? undefined,
     bookingId: data.bookingId,
     customerId: customerId, // Required field
+    nailTechId: data.nailTechId || '', // Required field - should be set before calling this function
     status: data.status,
     serviceType: data.serviceType,
     clientType: data.clientType,
@@ -1442,7 +1314,6 @@ function docToBooking(id: string, data: FirebaseFirestore.DocumentData): Booking
     customerData: data.customerData ?? undefined,
     customerDataOrder: data.customerDataOrder ?? undefined,
     formResponseId: data.formResponseId,
-    googleFormUrl: data.googleFormUrl ?? undefined,
     dateChanged: data.dateChanged,
     timeChanged: data.timeChanged,
     validationWarnings: data.validationWarnings,
@@ -1467,7 +1338,9 @@ function docToSlot(id: string, data: FirebaseFirestore.DocumentData): Slot {
     date: data.date,
     time: data.time,
     status: data.status,
+    slotType: data.slotType ?? null,
     notes: data.notes ?? null,
+    nailTechId: data.nailTechId || '', // Will be set by migration or default
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };

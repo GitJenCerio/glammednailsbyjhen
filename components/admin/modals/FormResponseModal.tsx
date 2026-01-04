@@ -38,11 +38,83 @@ export function FormResponseModal({ open, booking, onClose }: FormResponseModalP
     return imageExtensions.test(url) || /drive\.google\.com|dropbox\.com|imgur\.com/i.test(url);
   };
 
+  // Extract all URLs from a string (handles comma-separated, newline-separated, or space-separated URLs)
+  const extractUrls = (value: string): string[] => {
+    if (!value) return [];
+    
+    // Try splitting by common separators (comma, newline, or multiple spaces)
+    const separators = [',', '\n', '\r\n', '  ', ';'];
+    let parts: string[] = [value];
+    
+    for (const sep of separators) {
+      const newParts: string[] = [];
+      for (const part of parts) {
+        newParts.push(...part.split(sep));
+      }
+      parts = newParts;
+    }
+    
+    // Extract URLs from each part
+    const urls: string[] = [];
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      
+      // Check if the entire part is a URL
+      if (isUrl(trimmed)) {
+        urls.push(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+        continue;
+      }
+      
+      // Try to extract URLs from within the part using regex
+      const urlRegex = /(https?:\/\/[^\s,;\n\r]+|www\.[^\s,;\n\r]+)/gi;
+      const matches = trimmed.match(urlRegex);
+      if (matches) {
+        urls.push(...matches.map(url => url.startsWith('http') ? url : `https://${url}`));
+      }
+    }
+    
+    return urls;
+  };
+
   const renderValue = (value: string) => {
     if (!value) return value;
 
-    if (isUrl(value)) {
-      const url = value.startsWith('http') ? value : `https://${value}`;
+    // Extract all URLs from the value
+    const urls = extractUrls(value);
+    
+    // If we found multiple URLs, render them all
+    if (urls.length > 1) {
+      return (
+        <div className="flex flex-col gap-2">
+          {urls.map((url, index) => {
+            const isImage = isImageUrl(url);
+            return (
+              <a
+                key={index}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 underline break-all"
+              >
+                {isImage ? (
+                  <span className="flex items-center gap-1">
+                    <span>🖼️</span>
+                    <span>View Image {index + 1}</span>
+                  </span>
+                ) : (
+                  `Link ${index + 1}: ${url}`
+                )}
+              </a>
+            );
+          })}
+        </div>
+      );
+    }
+    
+    // Single URL or no URLs found - use original logic
+    if (urls.length === 1) {
+      const url = urls[0];
       const isImage = isImageUrl(url);
       return (
         <a
@@ -63,6 +135,7 @@ export function FormResponseModal({ open, booking, onClose }: FormResponseModalP
       );
     }
 
+    // No URLs found, try to find URLs in the text
     const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
     const parts = value.split(urlRegex);
 

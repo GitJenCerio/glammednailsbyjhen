@@ -27,9 +27,6 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
   const [withAssistantCommission, setWithAssistantCommission] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [formUrl, setFormUrl] = useState<string | null>(booking?.googleFormUrl || null);
-  const [isResending, setIsResending] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Reset deposit input and confirming state when booking changes or status changes to confirmed
   useEffect(() => {
@@ -39,9 +36,6 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       setDepositPaymentMethod('CASH');
       setIsConfirming(false);
     }
-    // Update form URL when booking changes
-    setFormUrl(booking?.googleFormUrl || null);
-    setCopied(false);
   }, [booking]);
 
   if (!booking) {
@@ -299,55 +293,8 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
     return value;
   };
 
-  const handleResendForm = async () => {
-    if (!booking || isResending) return;
-    
-    setIsResending(true);
-    try {
-      const response = await fetch(`/api/bookings/${booking.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'resend_form' }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || 'Failed to regenerate form URL');
-      }
-
-      const data = await response.json();
-      setFormUrl(data.googleFormUrl);
-    } catch (error: any) {
-      console.error('Error resending form:', error);
-      alert(error.message || 'Failed to resend form link. Please try again.');
-    } finally {
-      setIsResending(false);
-    }
-  };
-
-  const handleCopyUrl = async () => {
-    if (!formUrl) return;
-    
-    try {
-      await navigator.clipboard.writeText(formUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('Failed to copy URL:', error);
-      // Fallback: select text
-      const textArea = document.createElement('textarea');
-      textArea.value = formUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   return (
-    <div id="booking-detail-panel" className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
+    <div className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-md shadow-slate-900/5">
       <header className="mb-3 sm:mb-4">
         <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-400">Booking</p>
         <h2 className="text-lg sm:text-xl md:text-2xl font-semibold break-words">{getCustomerName()}</h2>
@@ -422,57 +369,6 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
                   </div>
                 ))}
               </dl>
-            )}
-          </div>
-        )}
-
-        {/* Booking Form Link Section */}
-        {(booking.status === 'pending_form' || booking.status === 'pending_payment') && (
-          <div className="rounded-xl sm:rounded-2xl border-2 border-blue-200 bg-blue-50 p-3 sm:p-4 text-xs sm:text-sm">
-            <p className="font-semibold text-blue-900 mb-2">📋 Booking Form Link</p>
-            {formUrl ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={formUrl}
-                    readOnly
-                    className="flex-1 rounded-lg border-2 border-blue-300 bg-white px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyUrl}
-                    className="px-3 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs sm:text-sm hover:bg-blue-700 active:scale-[0.98] transition-colors touch-manipulation whitespace-nowrap"
-                  >
-                    {copied ? '✓ Copied!' : 'Copy'}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleResendForm}
-                  disabled={isResending}
-                  className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
-                >
-                  {isResending ? 'Regenerating...' : '🔄 Regenerate & Resend Form Link'}
-                </button>
-                <p className="text-[10px] sm:text-xs text-blue-700 mt-1">
-                  {booking.clientType === 'repeat' 
-                    ? '✓ Form will auto-fill customer information for repeat clients'
-                    : 'Send this link to the customer to complete their booking'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-blue-800">Form link not available. Generate one to send to the customer.</p>
-                <button
-                  type="button"
-                  onClick={handleResendForm}
-                  disabled={isResending}
-                  className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
-                >
-                  {isResending ? 'Generating...' : 'Generate Form Link'}
-                </button>
-              </div>
             )}
           </div>
         )}

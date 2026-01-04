@@ -2,33 +2,102 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../firebaseAdmin';
 import { BlockedDate, Slot, SlotInput, SlotStatus } from '../types';
 import { preventSlotInBlockedRange } from '../scheduling';
+import { getDefaultNailTech } from './nailTechService';
 
 const slotCollection = adminDb.collection('slots');
 const allowedStatuses: SlotStatus[] = ['available', 'blocked', 'pending', 'confirmed'];
 
-export async function listSlots(): Promise<Slot[]> {
-  const snapshot = await slotCollection.orderBy('date', 'asc').orderBy('time', 'asc').get();
-  return snapshot.docs.map((doc) => docToSlot(doc.id, doc.data()));
+export async function listSlots(nailTechId?: string): Promise<Slot[]> {
+  // Fetch all slots and filter/sort in memory to avoid requiring composite index
+  const snapshot = await slotCollection.get();
+  
+  // Handle backward compatibility: assign default nail tech to slots without one
+  const defaultNailTech = await getDefaultNailTech();
+  const slots: Slot[] = [];
+  
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.nailTechId && defaultNailTech) {
+      // Update slot in database for future queries
+      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      slots.push(docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id }));
+    } else {
+      slots.push(docToSlot(doc.id, data));
+    }
+  }
+  
+  // Filter by nailTechId if provided
+  let filteredSlots = slots;
+  if (nailTechId) {
+    filteredSlots = slots.filter((slot) => slot.nailTechId === nailTechId);
+  }
+  
+  // Sort by date and time
+  return filteredSlots.sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return a.time.localeCompare(b.time);
+  });
 }
 
-export async function listSlotsByStatus(status: Slot['status']): Promise<Slot[]> {
-  const snapshot = await slotCollection.where('status', '==', status).get();
-  return snapshot.docs.map((doc) => docToSlot(doc.id, doc.data()));
+export async function listSlotsByNailTech(nailTechId: string): Promise<Slot[]> {
+  // Use listSlots which handles filtering and sorting in memory
+  return listSlots(nailTechId);
+}
+
+export async function listSlotsByStatus(status: Slot['status'], nailTechId?: string): Promise<Slot[]> {
+  let snapshot;
+  if (nailTechId) {
+    snapshot = await slotCollection
+      .where('status', '==', status)
+      .where('nailTechId', '==', nailTechId)
+      .get();
+  } else {
+    snapshot = await slotCollection.where('status', '==', status).get();
+  }
+  
+  // Handle backward compatibility
+  const defaultNailTech = await getDefaultNailTech();
+  const slots: Slot[] = [];
+  
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.nailTechId && defaultNailTech) {
+      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      slots.push(docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id }));
+    } else {
+      slots.push(docToSlot(doc.id, data));
+    }
+  }
+  
+  return slots;
 }
 
 export async function createSlot(payload: SlotInput, blocks: BlockedDate[]): Promise<Slot> {
   if (!allowedStatuses.includes(payload.status)) {
     throw new Error('Invalid slot status.');
   }
+  
+  // Ensure nailTechId is set
+  if (!payload.nailTechId) {
+    const defaultNailTech = await getDefaultNailTech();
+    if (!defaultNailTech) {
+      throw new Error('No nail tech available. Please create a nail tech first.');
+    }
+    payload.nailTechId = defaultNailTech.id;
+  }
+  
   preventSlotInBlockedRange(payload as Slot, blocks);
 
+  // Check for duplicate slot for the same nail tech
   const duplicateSnapshot = await slotCollection
     .where('date', '==', payload.date)
     .where('time', '==', payload.time)
+    .where('nailTechId', '==', payload.nailTechId)
     .get();
 
   if (!duplicateSnapshot.empty) {
-    throw new Error('A slot already exists for that date and time.');
+    throw new Error('A slot already exists for that date, time, and nail tech.');
   }
 
   const now = Timestamp.now().toDate().toISOString();
@@ -84,9 +153,32 @@ export async function deleteExpiredSlots() {
   }
 }
 
-export async function getSlotsByDate(date: string): Promise<Slot[]> {
-  const snapshot = await slotCollection.where('date', '==', date).get();
-  return snapshot.docs.map((doc) => docToSlot(doc.id, doc.data()));
+export async function getSlotsByDate(date: string, nailTechId?: string): Promise<Slot[]> {
+  let snapshot;
+  if (nailTechId) {
+    snapshot = await slotCollection
+      .where('date', '==', date)
+      .where('nailTechId', '==', nailTechId)
+      .get();
+  } else {
+    snapshot = await slotCollection.where('date', '==', date).get();
+  }
+  
+  // Handle backward compatibility
+  const defaultNailTech = await getDefaultNailTech();
+  const slots: Slot[] = [];
+  
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.nailTechId && defaultNailTech) {
+      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      slots.push(docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id }));
+    } else {
+      slots.push(docToSlot(doc.id, data));
+    }
+  }
+  
+  return slots;
 }
 
 export async function deleteSlotsByDate(date: string, options?: { onlyAvailable?: boolean }): Promise<{ deletedCount: number; slotsDeleted: Slot[] }> {
@@ -120,6 +212,7 @@ function docToSlot(id: string, data: FirebaseFirestore.DocumentData): Slot {
     status: data.status,
     slotType: data.slotType ?? null,
     notes: data.notes ?? null,
+    nailTechId: data.nailTechId, // Required - should be set before calling this function
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };

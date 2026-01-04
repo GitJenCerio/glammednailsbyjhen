@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
-import type { Slot, BlockedDate, ServiceType } from '@/lib/types';
+import type { Slot, BlockedDate, ServiceType, NailTech } from '@/lib/types';
 import { getNextSlotTime, SLOT_TIMES } from '@/lib/constants/slots';
 import { formatTime12Hour } from '@/lib/utils';
 
@@ -430,6 +430,8 @@ function SlotModal({
 export default function BookingPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
+  const [nailTechs, setNailTechs] = useState<NailTech[]>([]);
+  const [selectedNailTechId, setSelectedNailTechId] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [loading, setLoading] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
@@ -456,20 +458,51 @@ export default function BookingPage() {
   }, [serviceLocation, serviceOptions, selectedService]);
 
   useEffect(() => {
-    loadData();
+    loadNailTechs();
   }, []);
+
+  useEffect(() => {
+    if (selectedNailTechId) {
+      loadData();
+    }
+  }, [selectedNailTechId]);
 
   // Auto-refresh slots every 30 seconds to show updated slot status (pending slots should disappear)
   // Increased interval for better performance - cache headers help with freshness
   useEffect(() => {
+    if (!selectedNailTechId) return;
+    
     const interval = setInterval(() => {
       loadData(false); // Don't show loading spinner on auto-refresh
     }, 30000); // 30 seconds - balance between freshness and performance
 
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedNailTechId]);
+
+  async function loadNailTechs() {
+    try {
+      const response = await fetch('/api/nail-techs?activeOnly=true', {
+        cache: 'no-store',
+      });
+      const data = await response.json();
+      setNailTechs(data.nailTechs || []);
+      
+      // Default to first active nail tech (should be Ms. Jhen if migration ran)
+      if (data.nailTechs && data.nailTechs.length > 0) {
+        const defaultTech = data.nailTechs.find((tech: NailTech) => 
+          tech.role === 'Owner' && tech.status === 'Active'
+        ) || data.nailTechs[0];
+        setSelectedNailTechId(defaultTech.id);
+      }
+    } catch (err) {
+      console.error('Error loading nail techs', err);
+      setError('Unable to load nail technicians. Please try again.');
+    }
+  }
 
   async function loadData(showLoading = true) {
+    if (!selectedNailTechId) return;
+    
     if (showLoading) {
       setLoading(true);
     }
@@ -477,7 +510,7 @@ export default function BookingPage() {
     try {
       // Add cache-busting timestamp to ensure fresh data
       const timestamp = new Date().getTime();
-      const response = await fetch(`/api/availability?t=${timestamp}`, {
+      const response = await fetch(`/api/availability?t=${timestamp}&nailTechId=${selectedNailTechId}`, {
         cache: 'no-store',
       });
       const data = await response.json();
@@ -695,42 +728,16 @@ export default function BookingPage() {
     
     setIsBooking(true);
     try {
-      // Fetch fresh slot data directly (don't rely on state updates)
-      const timestamp = new Date().getTime();
-      const availabilityController = new AbortController();
-      const availabilityTimeout = setTimeout(() => availabilityController.abort(), 10000);
-      
-      let availabilityResponse: Response;
-      try {
-        availabilityResponse = await fetch(`/api/availability?t=${timestamp}`, { 
-          cache: 'no-store',
-          signal: availabilityController.signal 
-        });
-        clearTimeout(availabilityTimeout);
-      } catch (error: any) {
-        clearTimeout(availabilityTimeout);
-        if (error.name === 'AbortError') {
-          throw new Error('Request timeout - please try again');
-        }
-        throw error;
-      }
-      
-      if (!availabilityResponse.ok) {
-        throw new Error('Unable to verify slot availability. Please try again.');
-      }
-      
-      const availabilityData = await availabilityResponse.json();
-      const freshSlots = availabilityData.slots || [];
+      // Refresh slot data before booking to ensure we have the latest status
+      await loadData();
       
       // Verify the selected slot still exists and is available after refresh
-      const refreshedSlot = freshSlots.find((s: Slot) => s.id === selectedSlot.id);
+      const refreshedSlot = slots.find((s) => s.id === selectedSlot.id);
       if (!refreshedSlot) {
         alert('This slot is no longer available. Please select another slot.');
         setSelectedSlot(null);
         setLinkedSlots([]);
         setIsBooking(false);
-        // Refresh the UI
-        await loadData(false);
         return;
       }
       
@@ -739,8 +746,6 @@ export default function BookingPage() {
         setSelectedSlot(null);
         setLinkedSlots([]);
         setIsBooking(false);
-        // Refresh the UI
-        await loadData(false);
         return;
       }
       
@@ -749,7 +754,7 @@ export default function BookingPage() {
       
       const requiredSlots = getRequiredSlotCount(selectedService);
       const linkedSlotIds = linkedSlots.map((slot) => {
-        const refreshedLinkedSlot = freshSlots.find((s: Slot) => s.id === slot.id);
+        const refreshedLinkedSlot = slots.find((s) => s.id === slot.id);
         if (!refreshedLinkedSlot || refreshedLinkedSlot.status !== 'available') {
           return null;
         }
@@ -760,42 +765,25 @@ export default function BookingPage() {
         setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
         setLinkedSlots([]);
         setIsBooking(false);
-        // Refresh the UI
-        await loadData(false);
         return;
       }
 
-      // Create booking with timeout
-      const bookingController = new AbortController();
-      const bookingTimeout = setTimeout(() => bookingController.abort(), 15000);
-      
-      let bookingResponse: Response;
-      try {
-        bookingResponse = await fetch('/api/bookings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slotId: refreshedSlot.id,
-            serviceType: selectedService,
-            pairedSlotId: linkedSlotIds[0],
-            linkedSlotIds,
-            clientType,
-            repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
-            serviceLocation,
-          }),
-          signal: bookingController.signal,
-        });
-        clearTimeout(bookingTimeout);
-      } catch (error: any) {
-        clearTimeout(bookingTimeout);
-        if (error.name === 'AbortError') {
-          throw new Error('Booking request timed out. Please try again.');
-        }
-        throw error;
-      }
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slotId: refreshedSlot.id,
+          serviceType: selectedService,
+          pairedSlotId: linkedSlotIds[0],
+          linkedSlotIds,
+          clientType,
+          repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
+          serviceLocation,
+        }),
+      });
 
-      if (!bookingResponse.ok) {
-        const errorData = await bookingResponse.json().catch(() => ({ error: 'Unknown error' }));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Slot is no longer available.';
         // Check if it's a race condition (slot already booked)
         if (errorMessage.includes('no longer available') || errorMessage.includes('not available')) {
@@ -804,34 +792,26 @@ export default function BookingPage() {
         throw new Error(errorMessage);
       }
 
-      const data = await bookingResponse.json();
-      
-      if (!data.googleFormUrl) {
-        throw new Error('Booking created but redirect URL is missing. Please contact support.');
-      }
+      const data = await response.json();
       
       // Immediately refresh slots before redirecting so other users see updated status
       // This helps prevent double-booking by updating the slot status to 'pending' quickly
-      loadData(false).catch(() => {
-        // Silently fail - we're redirecting anyway
-      });
+      await loadData(false);
+      
+      // Small delay to ensure the refresh completes before redirect
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Redirect to Google Form - booking is successfully reserved
       window.location.href = data.googleFormUrl;
       // Note: We don't reset state here since we're redirecting
     } catch (error: any) {
       console.error('Error creating booking:', error);
-      const errorMessage = error.message || 'Unable to complete booking. Please try again.';
-      alert(errorMessage);
-      
-      // Refresh the UI to show updated slot status
-      loadData(false).catch(() => {
-        // Silently fail if refresh fails
-      });
-      
+      alert(error.message || 'This slot is no longer available. Please pick another slot.');
+      await loadData();
       // Reset selection to allow user to pick a new slot
       setSelectedSlot(null);
       setLinkedSlots([]);
+    } finally {
       setIsBooking(false);
     }
   }
@@ -850,8 +830,52 @@ export default function BookingPage() {
             Book Your Appointment
           </h1>
           <p className="text-center text-gray-600 mb-4 sm:mb-6 max-w-2xl mx-auto px-2 sm:px-4 text-xs sm:text-base">
-            Select an available time slot to proceed with your booking
+            Select your preferred nail technician and an available time slot
           </p>
+
+          {/* Nail Tech Selection */}
+          {nailTechs.length > 0 && (
+            <div className="mb-6 sm:mb-8 max-w-4xl mx-auto px-2 sm:px-4">
+              <div className="rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-slate-50 px-4 sm:px-5 py-3 sm:py-4">
+                <label className="block text-sm sm:text-base font-semibold text-slate-900 mb-2">
+                  Select Nail Technician
+                </label>
+                <select
+                  value={selectedNailTechId || ''}
+                  onChange={(e) => {
+                    setSelectedNailTechId(e.target.value);
+                    setSelectedSlot(null);
+                    setLinkedSlots([]);
+                    setServiceMessage(null);
+                  }}
+                  className="w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  {nailTechs.map((tech) => (
+                    <option key={tech.id} value={tech.id}>
+                      Ms. {tech.name} ({tech.role}){tech.discount != null && tech.discount > 0 ? ` - ${tech.discount}% OFF` : ''} - {tech.serviceAvailability}
+                    </option>
+                  ))}
+                </select>
+                {selectedNailTechId && (() => {
+                  const selectedTech = nailTechs.find(t => t.id === selectedNailTechId);
+                  if (!selectedTech) return null;
+                  const hasDiscount = selectedTech.discount !== undefined && selectedTech.discount !== null && selectedTech.discount > 0;
+                  return (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs sm:text-sm text-slate-600">
+                        Viewing calendar for: <strong>Ms. {selectedTech.name}</strong>
+                      </p>
+                      {hasDiscount && (
+                        <p className="text-xs sm:text-sm font-semibold text-green-600">
+                          🎉 Special Offer: {selectedTech.discount}% discount on all services!
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Slot Requirements Notice */}
           <div className="mb-6 sm:mb-8 md:mb-12 max-w-4xl mx-auto px-2 sm:px-4">
@@ -871,7 +895,14 @@ export default function BookingPage() {
             </div>
           </div>
 
-          {loading ? (
+          {!selectedNailTechId ? (
+            <div className="flex justify-center items-center h-96">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4" />
+                <p className="text-slate-600">Loading nail technicians...</p>
+              </div>
+            </div>
+          ) : loading ? (
             <div className="flex justify-center items-center h-96">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black" />
             </div>
@@ -886,6 +917,7 @@ export default function BookingPage() {
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
                     onChangeMonth={setCurrentMonth}
+                    nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
                   />
                 </div>
 

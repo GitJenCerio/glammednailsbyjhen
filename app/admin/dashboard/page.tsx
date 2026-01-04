@@ -12,23 +12,26 @@ import { IoStatsChart, IoCalendar, IoCash, IoPeople, IoSparkles, IoChevronBack, 
 import Image from 'next/image';
 import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
+import { BulkSlotCreatorModal } from '@/components/admin/modals/BulkSlotCreatorModal';
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
 import { DeleteSlotModal } from '@/components/admin/modals/DeleteSlotModal';
 import { DeleteDaySlotsModal } from '@/components/admin/modals/DeleteDaySlotsModal';
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
-import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { ServicesManager } from '@/components/admin/ServicesManager';
 import { QuotationModal } from '@/components/admin/modals/QuotationModal';
 import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
 import { ReleaseSlotsModal } from '@/components/admin/modals/ReleaseSlotsModal';
 import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingModal';
+import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
 import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
-import type { Customer } from '@/lib/types';
+import { NailTechManager } from '@/components/admin/NailTechManager';
+import type { Customer, NailTech } from '@/lib/types';
+import { IoPerson } from 'react-icons/io5';
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: IoStatsChart },
@@ -36,6 +39,7 @@ const navItems = [
   { id: 'finance', label: 'Finance', icon: IoCash },
   { id: 'customers', label: 'Customers', icon: IoPeople },
   { id: 'services', label: 'Services', icon: IoSparkles },
+  { id: 'nail-techs', label: 'Nail Technicians', icon: IoPerson },
 ] as const;
 
 type AdminSection = (typeof navItems)[number]['id'];
@@ -50,6 +54,7 @@ function AdminDashboardContent() {
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [slotModalOpen, setSlotModalOpen] = useState(false);
+  const [bulkSlotModalOpen, setBulkSlotModalOpen] = useState(false);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [deleteSlotModalOpen, setDeleteSlotModalOpen] = useState(false);
   const [slotToDelete, setSlotToDelete] = useState<Slot | null>(null);
@@ -71,21 +76,22 @@ function AdminDashboardContent() {
     viewFromUrl === 'calendar' || viewFromUrl === 'list' ? viewFromUrl : 'calendar'
   );
   const [bookingFilterPeriod, setBookingFilterPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [filterPeriod, setFilterPeriod] = useState<'all' | 'day' | 'week' | 'month'>('all');
+  const [filterPeriod, setFilterPeriod] = useState<'all' | 'day' | 'week' | 'month'>('day');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
   const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
   const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
-  const [formResponseModalOpen, setFormResponseModalOpen] = useState(false);
-  const [selectedBookingForFormView, setSelectedBookingForFormView] = useState<Booking | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerBookings, setCustomerBookings] = useState<Booking[]>([]);
   const [customerLifetimeValue, setCustomerLifetimeValue] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedNailTechId, setSelectedNailTechId] = useState<string | null>(null);
+  const [nailTechs, setNailTechs] = useState<NailTech[]>([]);
+  const [responseModalBooking, setResponseModalBooking] = useState<Booking | null>(null);
   const pendingBookingsCount = useMemo(
     () => bookings.filter((booking) => 
       booking.status === 'pending_payment' && 
@@ -301,7 +307,7 @@ function AdminDashboardContent() {
     try {
       // Add cache-busting timestamp to prevent stale data in production
       const cacheBuster = `?t=${Date.now()}`;
-      const [slotsRes, blocksRes, bookingsRes, customersRes] = await Promise.all([
+      const [slotsRes, blocksRes, bookingsRes, customersRes, nailTechsRes] = await Promise.all([
         fetch(`/api/slots${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
@@ -330,11 +336,44 @@ function AdminDashboardContent() {
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()).catch(() => ({ customers: [] })),
+        fetch(`/api/nail-techs${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
       ]);
       setSlots(slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
       setBookings(bookingsRes.bookings);
       setCustomers(customersRes.customers || []);
+      setNailTechs(nailTechsRes.nailTechs || []);
+      
+      // Default to Ms. Jhen (Owner) - all existing calendar data belongs to her
+      if (!selectedNailTechId && nailTechsRes.nailTechs && nailTechsRes.nailTechs.length > 0) {
+        // First try to find Ms. Jhen by name (case insensitive)
+        let defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
+          tech.name.toLowerCase().includes('jhen') && 
+          tech.status === 'Active'
+        );
+        
+        // If not found, try any Owner with Active status
+        if (!defaultTech) {
+          defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
+            tech.role === 'Owner' && tech.status === 'Active'
+          );
+        }
+        
+        // If still not found, get first active tech
+        if (!defaultTech) {
+          defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => tech.status === 'Active') || nailTechsRes.nailTechs[0];
+        }
+        
+        if (defaultTech) {
+          setSelectedNailTechId(defaultTech.id);
+        }
+      }
     } catch (error) {
       console.error('Failed to load admin data', error);
       setToast('Unable to load data. Check your backend configuration.');
@@ -366,21 +405,39 @@ function AdminDashboardContent() {
     }
   }, [selectedCustomerId]);
 
-  const selectedSlots = useMemo(() => slots.filter((slot) => slot.date === selectedDate), [slots, selectedDate]);
+  const selectedSlots = useMemo(() => {
+    let filteredSlots = slots.filter((slot) => slot.date === selectedDate);
+    if (selectedNailTechId) {
+      filteredSlots = filteredSlots.filter((slot) => slot.nailTechId === selectedNailTechId);
+    }
+    return filteredSlots;
+  }, [slots, selectedDate, selectedNailTechId]);
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
-    bookings.forEach((booking) => {
+    let filteredBookings = bookings;
+    
+    // Filter bookings by selected nail tech if one is selected
+    if (selectedNailTechId) {
+      filteredBookings = bookings.filter((booking) => booking.nailTechId === selectedNailTechId);
+    }
+    
+    filteredBookings.forEach((booking) => {
       const slot = slots.find((candidate) => candidate.id === booking.slotId);
       if (!slot) return;
+      
+      // Also filter by selected nail tech for slots (double-check)
+      if (selectedNailTechId && slot.nailTechId !== selectedNailTechId) return;
+      
       const linkedSlots = (booking.linkedSlotIds ?? [])
         .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
-        .filter((value): value is Slot => Boolean(value));
+        .filter((value): value is Slot => Boolean(value))
+        .filter((linkedSlot) => !selectedNailTechId || linkedSlot.nailTechId === selectedNailTechId);
       const pairedSlot = linkedSlots[0];
       list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
-  }, [bookings, slots]);
+  }, [bookings, slots, selectedNailTechId]);
 
   // Filter bookings by time period (today, week, month)
   // Filter by appointment date (for calendar view)
@@ -450,10 +507,16 @@ function AdminDashboardContent() {
   async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string }) {
     const url = editingSlot ? `/api/slots/${editingSlot.id}` : '/api/slots';
     const method = editingSlot ? 'PATCH' : 'POST';
+    
+    // When creating a new slot, include the selected nail tech ID (defaults to Ms. Jhen)
+    const requestPayload = editingSlot 
+      ? payload 
+      : { ...payload, nailTechId: selectedNailTechId || null };
+    
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     });
     if (!res.ok) {
       let errorMessage = 'Failed to save slot.';
@@ -766,6 +829,16 @@ function AdminDashboardContent() {
           </button>
           <button
             type="button"
+            onClick={() => {
+              setBulkSlotModalOpen(true);
+            }}
+            className="rounded-full bg-blue-300 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-blue-800 hover:bg-blue-400 touch-manipulation"
+          >
+            <span className="hidden sm:inline">Bulk create slots</span>
+            <span className="sm:hidden">Bulk create</span>
+          </button>
+          <button
+            type="button"
             onClick={handleSyncSheets}
             className="rounded-full border border-slate-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
           >
@@ -810,6 +883,9 @@ function AdminDashboardContent() {
           slots={slots}
           selectedDate={selectedDate}
           customers={customers}
+          nailTechs={nailTechs}
+          selectedNailTechId={selectedNailTechId}
+          onNailTechChange={setSelectedNailTechId}
           onCancel={handleCancelBooking}
           onReschedule={handleRescheduleBooking}
           onMakeQuotation={handleMakeQuotation}
@@ -836,16 +912,54 @@ function AdminDashboardContent() {
         />
       ) : (
         <div className="space-y-4 sm:space-y-6">
+          {/* Nail Tech Selector */}
+          <div className="rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">
+              Select Nail Technician Calendar
+            </label>
+            <select
+              value={selectedNailTechId || ''}
+              onChange={(e) => {
+                const newNailTechId = e.target.value || null;
+                setSelectedNailTechId(newNailTechId);
+                // Reset selected date when switching techs for clarity
+                setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
+              }}
+              className="w-full sm:w-auto min-w-[200px] rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              {nailTechs.length === 0 ? (
+                <option value="">Loading nail techs...</option>
+              ) : (
+                <>
+                  <option value="">All Nail Techs</option>
+                  {nailTechs.map((tech) => (
+                    <option key={tech.id} value={tech.id}>
+                      Ms. {tech.name} ({tech.role})
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+            {selectedNailTechId && (
+              <p className="mt-2 text-xs text-slate-600">
+                Viewing calendar for: <strong>Ms. {nailTechs.find(t => t.id === selectedNailTechId)?.name || selectedNailTechId}</strong>
+              </p>
+            )}
+          </div>
+
           {/* Calendar and Slots side by side */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr] xl:grid-cols-[2.5fr,1fr]">
-            <CalendarGrid
-              referenceDate={currentMonth}
-              slots={slots}
-              blockedDates={blockedDates}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onChangeMonth={setCurrentMonth}
-            />
+            <div>
+              <CalendarGrid
+                referenceDate={currentMonth}
+                slots={selectedNailTechId ? slots.filter(s => s.nailTechId === selectedNailTechId) : slots}
+                blockedDates={blockedDates}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                onChangeMonth={setCurrentMonth}
+                nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
+              />
+            </div>
 
             <section className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
               <header className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
@@ -855,79 +969,83 @@ function AdminDashboardContent() {
                     {format(new Date(selectedDate), 'EEEE, MMM d')}
                   </h2>
                 </div>
-                <div className="flex gap-2">
-                  {selectedSlots.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setDeleteDaySlotsModalOpen(true)}
-                      className="rounded-full border border-rose-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 hover:bg-rose-50 touch-manipulation"
-                    >
-                      <span className="hidden sm:inline">Delete all</span>
-                      <span className="sm:hidden">Delete</span>
-                    </button>
-                  )}
-                  {selectedDate >= format(new Date(), 'yyyy-MM-dd') ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingSlot(null);
-                        setSlotModalOpen(true);
-                      }}
-                      className="rounded-full bg-green-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-green-800 hover:bg-green-400 touch-manipulation"
-                    >
-                      Add slot
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                      className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-400 cursor-not-allowed opacity-50"
-                    >
-                      Past date
-                    </button>
-                  )}
-                </div>
-              </header>
-
-              <div className="space-y-4">
-                {selectedSlots.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                    No slots yet. Create one to open this day for booking.
+                  <div className="flex gap-2">
+                    {selectedSlots.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteDaySlotsModalOpen(true)}
+                        className="rounded-full border border-rose-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 hover:bg-rose-50 touch-manipulation"
+                      >
+                        <span className="hidden sm:inline">Delete all</span>
+                        <span className="sm:hidden">Delete</span>
+                      </button>
+                    )}
+                    {selectedDate >= format(new Date(), 'yyyy-MM-dd') ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSlot(null);
+                          setSlotModalOpen(true);
+                        }}
+                        className="rounded-full bg-green-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-green-800 hover:bg-green-400 touch-manipulation"
+                      >
+                        Add slot
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="rounded-full border border-slate-200 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-400 cursor-not-allowed opacity-50"
+                      >
+                        Past date
+                      </button>
+                    )}
                   </div>
-                )}
-                {selectedSlots.map((slot) => {
-                  // Find booking for this slot - prioritize confirmed bookings, but also include pending_payment if slot is confirmed
-                  // This ensures bookings show up correctly even if there's a slight sync delay
-                  const bookingForSlot = bookingsWithSlots.find((b) => {
-                    if (b.slotId !== slot.id) return false;
-                    // If slot is confirmed, show booking regardless of booking status (slot status is source of truth)
-                    if (slot.status === 'confirmed') return true;
-                    // Otherwise, only show confirmed bookings
-                    return b.status === 'confirmed';
-                  });
-                  const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
-                  return (
-                    <SlotCard
-                      key={slot.id}
-                      slot={slot}
-                      booking={bookingForSlot || null}
-                      customer={customerForBooking || null}
-                      onEdit={(value) => {
-                        setEditingSlot(value);
-                        setSlotModalOpen(true);
-                      }}
-                      onDelete={handleDeleteSlot}
-                      onViewBooking={(booking) => {
-                        setSelectedBookingForFormView(booking);
-                        setFormResponseModalOpen(true);
-                      }}
-                      onMakeQuotation={(booking) => {
-                        setSelectedBookingId(booking.id);
-                        setQuotationModalOpen(true);
-                      }}
-                    />
-                  );
-                })}
+                </header>
+
+                <div className="space-y-4">
+                  {selectedSlots.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                      No slots yet. Create one to open this day for booking.
+                    </div>
+                  )}
+                  {selectedSlots.map((slot) => {
+                    // Find booking for this slot - check both direct slotId match AND linked slots
+                    // This handles mani-pedi bookings where one booking uses multiple slots
+                    const bookingForSlot = bookingsWithSlots.find((b) => {
+                      // Check if this slot is the primary slot for this booking
+                      if (b.slotId === slot.id) {
+                        // If slot is confirmed, show booking regardless of booking status (slot status is source of truth)
+                        if (slot.status === 'confirmed') return true;
+                        // Otherwise, only show confirmed bookings
+                        return b.status === 'confirmed';
+                      }
+                      // Check if this slot is a linked slot (for mani-pedi, home service with multiple people, etc.)
+                      if (b.linkedSlotIds && b.linkedSlotIds.includes(slot.id)) {
+                        // If slot is confirmed, show booking regardless of booking status
+                        if (slot.status === 'confirmed') return true;
+                        // Otherwise, only show confirmed bookings
+                        return b.status === 'confirmed';
+                      }
+                      return false;
+                    });
+                    const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
+                    return (
+                      <SlotCard
+                        key={slot.id}
+                        slot={slot}
+                        booking={bookingForSlot || null}
+                        customer={customerForBooking || null}
+                        onEdit={(value) => {
+                          setEditingSlot(value);
+                          setSlotModalOpen(true);
+                        }}
+                        onDelete={handleDeleteSlot}
+                        onView={(booking) => setResponseModalBooking(booking)}
+                        onMakeQuotation={handleMakeQuotation}
+                      />
+                    );
+                  })}
               </div>
             </section>
           </div>
@@ -1002,7 +1120,6 @@ function AdminDashboardContent() {
                     : undefined
               }
               onConfirm={handleConfirmBooking}
-              onMakeQuotation={handleMakeQuotation}
             />
           </div>
         </div>
@@ -1023,6 +1140,7 @@ function AdminDashboardContent() {
     finance: 'View invoices, track payments, and manage revenue.',
     customers: 'See relationship insights and client history.',
     services: 'Manage offerings, durations, and pricing.',
+    'nail-techs': 'Manage nail technicians, their schedules, and availability.',
   };
 
   return (
@@ -1199,7 +1317,14 @@ function AdminDashboardContent() {
           {activeSection === 'bookings' ? (
             renderBookingsSection()
           ) : activeSection === 'finance' ? (
-            <FinanceView bookings={bookings} slots={slots} customers={customers} />
+            <FinanceView 
+              bookings={bookings} 
+              slots={slots} 
+              customers={customers}
+              nailTechs={nailTechs}
+              selectedNailTechId={selectedNailTechId}
+              onNailTechChange={(id) => setSelectedNailTechId(id)}
+            />
           ) : activeSection === 'customers' ? (
             <div className="space-y-4 sm:space-y-6">
               {/* Customers overview stats */}
@@ -1259,6 +1384,8 @@ function AdminDashboardContent() {
             </div>
           ) : activeSection === 'services' ? (
             <ServicesManager />
+          ) : activeSection === 'nail-techs' ? (
+            <NailTechManager />
           ) : (
             /* Overview tab - Analytics Dashboard */
             <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />
@@ -1275,6 +1402,15 @@ function AdminDashboardContent() {
           setEditingSlot(null);
         }}
         onSubmit={handleSaveSlot}
+      />
+
+      <BulkSlotCreatorModal
+        open={bulkSlotModalOpen}
+        onClose={() => {
+          setBulkSlotModalOpen(false);
+        }}
+        onSubmit={handleSaveSlot}
+        defaultNailTechId={selectedNailTechId}
       />
 
       <BlockDateModal
@@ -1342,12 +1478,9 @@ function AdminDashboardContent() {
       />
 
       <FormResponseModal
-        open={formResponseModalOpen}
-        booking={selectedBookingForFormView}
-        onClose={() => {
-          setFormResponseModalOpen(false);
-          setSelectedBookingForFormView(null);
-        }}
+        open={!!responseModalBooking}
+        booking={responseModalBooking}
+        onClose={() => setResponseModalBooking(null)}
       />
     </div>
   );

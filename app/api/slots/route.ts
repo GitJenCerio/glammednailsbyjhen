@@ -44,6 +44,7 @@ export async function POST(request: Request) {
         status: body.status ?? 'available',
         slotType: body.slotType ?? 'regular',
         notes: body.notes ?? null,
+        nailTechId: body.nailTechId || '', // Will default to Ms. Jhen if not provided
       },
       blocks,
     );

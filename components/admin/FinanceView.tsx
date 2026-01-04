@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
-import type { Booking, BookingWithSlot, PaymentStatus, Customer } from '@/lib/types';
+import type { Booking, BookingWithSlot, PaymentStatus, Customer, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { PaymentModal } from './modals/PaymentModal';
 import { IoEllipsisVertical } from 'react-icons/io5';
@@ -11,6 +11,9 @@ type FinanceViewProps = {
   bookings: Booking[];
   slots: any[];
   customers?: Customer[];
+  nailTechs?: NailTech[];
+  selectedNailTechId?: string | null;
+  onNailTechChange?: (nailTechId: string | null) => void;
 };
 
 type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
@@ -29,7 +32,7 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
   refunded: 'bg-gray-100 text-gray-800 border-gray-200',
 };
 
-export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProps) {
+export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange }: FinanceViewProps) {
   const [viewMode, setViewMode] = useState<'revenue' | 'payments'>('revenue'); // 'revenue' = by service date, 'payments' = by payment date
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'week' | 'month'>('all');
@@ -43,20 +46,45 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<Record<string, 'up' | 'down'>>({});
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [localSelectedNailTechId, setLocalSelectedNailTechId] = useState<string | null>(selectedNailTechId || null);
+
+  // Sync local state with prop
+  useEffect(() => {
+    if (selectedNailTechId !== undefined) {
+      setLocalSelectedNailTechId(selectedNailTechId);
+    }
+  }, [selectedNailTechId]);
+
+  const handleNailTechChange = (nailTechId: string | null) => {
+    setLocalSelectedNailTechId(nailTechId);
+    onNailTechChange?.(nailTechId);
+  };
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
-    bookings.forEach((booking) => {
+    let filteredBookings = bookings;
+    
+    // Filter bookings by selected nail tech if one is selected
+    if (localSelectedNailTechId) {
+      filteredBookings = bookings.filter((booking) => booking.nailTechId === localSelectedNailTechId);
+    }
+    
+    filteredBookings.forEach((booking) => {
       const slot = slots.find((candidate) => candidate.id === booking.slotId);
       if (!slot) return;
+      
+      // Also filter by selected nail tech for slots (double-check)
+      if (localSelectedNailTechId && slot.nailTechId !== localSelectedNailTechId) return;
+      
       const linkedSlots = (booking.linkedSlotIds ?? [])
         .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
-        .filter((value): value is any => Boolean(value));
+        .filter((value): value is any => Boolean(value))
+        .filter((linkedSlot) => !localSelectedNailTechId || linkedSlot.nailTechId === localSelectedNailTechId);
       const pairedSlot = linkedSlots[0];
       list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
-  }, [bookings, slots]);
+  }, [bookings, slots, localSelectedNailTechId]);
 
   const getPaymentMethodBadge = (method?: 'PNB' | 'CASH' | 'GCASH') => {
     if (!method) return null;
@@ -329,14 +357,19 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
       
       const tips = filteredBookings.reduce((sum, b) => sum + (b.tipAmount || 0), 0);
 
-      const sisterCommissionTotal = filteredBookings.reduce((sum, b) => {
-        if (b.assistantName === 'Sister' && b.assistantCommissionRate && b.invoice?.total) {
-          return sum + b.invoice.total * b.assistantCommissionRate;
-        }
-        return sum;
+      // Calculate commission based on nail tech's commission rate
+      const nailTechCommissionTotal = filteredBookings.reduce((sum, b) => {
+        if (!b.invoice?.total) return sum;
+        
+        // Find the nail tech for this booking
+        const tech = nailTechs.find(t => t.id === b.nailTechId);
+        if (!tech || !tech.commissionRate) return sum;
+        
+        // Calculate commission: invoice total * commission rate
+        return sum + b.invoice.total * tech.commissionRate;
       }, 0);
 
-      return { unpaid, partial, paid, total, tips, sisterCommissionTotal };
+      return { unpaid, partial, paid, total, tips, nailTechCommissionTotal };
     } else {
       // PAYMENT TRACKING MODE: Count payments by when they were actually received
       // This shows cash flow - when money actually came in
@@ -408,19 +441,24 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
         .filter((b) => b.tipDate !== undefined)
         .reduce((sum, b) => sum + (b.tipAmount || 0), 0);
 
-      const sisterCommissionTotal = filteredBookings.reduce((sum, b) => {
-        if (b.assistantName === 'Sister' && b.assistantCommissionRate && b.invoice?.total) {
-          // Count commission only if payment was received
-          if (b.paidDate || b.depositDate) {
-            return sum + b.invoice.total * b.assistantCommissionRate;
-          }
-        }
-        return sum;
+      // Calculate commission based on nail tech's commission rate (only for paid bookings)
+      const nailTechCommissionTotal = filteredBookings.reduce((sum, b) => {
+        if (!b.invoice?.total) return sum;
+        
+        // Only count commission if payment was received
+        if (!b.paidDate && !b.depositDate) return sum;
+        
+        // Find the nail tech for this booking
+        const tech = nailTechs.find(t => t.id === b.nailTechId);
+        if (!tech || !tech.commissionRate) return sum;
+        
+        // Calculate commission: invoice total * commission rate
+        return sum + b.invoice.total * tech.commissionRate;
       }, 0);
 
-      return { unpaid, partial, paid, total, tips, sisterCommissionTotal };
+      return { unpaid, partial, paid, total, tips, nailTechCommissionTotal };
     }
-  }, [filteredBookings, viewMode]);
+  }, [filteredBookings, viewMode, nailTechs]);
 
   const handleUpdatePayment = async (bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number, paidPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => {
     const res = await fetch(`/api/bookings/${bookingId}`, {
@@ -512,7 +550,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
-        {/* First row: Total Revenue, Total Tips, Sister Commission */}
+        {/* First row: Total Revenue, Total Tips, Nail Tech Commission */}
         <div className="rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow flex flex-col justify-center min-w-0">
           <p className="text-[9px] sm:text-[10px] lg:text-xs text-slate-500 mb-1 sm:mb-2 truncate">Total Revenue</p>
           <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-slate-900 leading-tight break-words">₱{totals.total.toLocaleString('en-PH')}</p>
@@ -522,8 +560,16 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
           <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-purple-700 leading-tight break-words">₱{totals.tips.toLocaleString('en-PH')}</p>
         </div>
         <div className="rounded-xl sm:rounded-2xl border-2 border-amber-300 bg-amber-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-amber-200/50 hover:shadow-xl hover:shadow-amber-300/50 transition-shadow flex flex-col justify-center min-w-0">
-          <p className="text-[9px] sm:text-[10px] lg:text-xs text-amber-600 mb-1 sm:mb-2 line-clamp-2">Sister Commission (10%)</p>
-          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-amber-700 leading-tight break-words">₱{totals.sisterCommissionTotal.toLocaleString('en-PH')}</p>
+          <p className="text-[9px] sm:text-[10px] lg:text-xs text-amber-600 mb-1 sm:mb-2 line-clamp-2">
+            {localSelectedNailTechId 
+              ? (() => {
+                  const tech = nailTechs.find(t => t.id === localSelectedNailTechId);
+                  const rate = tech?.commissionRate ? (tech.commissionRate * 100).toFixed(0) : '0';
+                  return `Nail Tech Commission (${rate}%)`;
+                })()
+              : 'Total Commission'}
+          </p>
+          <p className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-amber-700 leading-tight break-words">₱{totals.nailTechCommissionTotal.toLocaleString('en-PH')}</p>
         </div>
         {/* Second row: Paid, Partial, Unpaid */}
         <div className="rounded-xl sm:rounded-2xl border-2 border-green-300 bg-green-50 px-2 sm:px-3 py-3 sm:py-4 lg:p-5 shadow-lg shadow-green-200/50 hover:shadow-xl hover:shadow-green-300/50 transition-shadow flex flex-col justify-center min-w-0">
@@ -542,6 +588,25 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-start sm:items-center justify-between">
+        {/* Nail Tech Filter */}
+        {nailTechs.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Nail Technician:</label>
+            <select
+              value={localSelectedNailTechId || ''}
+              onChange={(e) => handleNailTechChange(e.target.value || null)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+            >
+              <option value="">All Nail Techs</option>
+              {nailTechs.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  Ms. {tech.name} ({tech.role})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Status filter */}
         <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
           <button
@@ -971,7 +1036,7 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                   Balance
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  Sister 10%
+                  Commission
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Status
@@ -1149,11 +1214,17 @@ export function FinanceView({ bookings, slots, customers = [] }: FinanceViewProp
                       )}
                     </td>
                     <td className="px-4 xl:px-6 py-3">
-                      {booking.assistantName === 'Sister' && booking.assistantCommissionRate && booking.invoice?.total ? (
-                        <span className="text-xs xl:text-sm font-semibold text-amber-700">
-                          ₱{(booking.invoice.total * booking.assistantCommissionRate).toLocaleString('en-PH')}
-                        </span>
-                      ) : (
+                      {booking.invoice?.total ? (() => {
+                        const tech = nailTechs.find(t => t.id === booking.nailTechId);
+                        if (tech && tech.commissionRate) {
+                          return (
+                            <span className="text-xs xl:text-sm font-semibold text-amber-700">
+                              ₱{(booking.invoice.total * tech.commissionRate).toLocaleString('en-PH')}
+                            </span>
+                          );
+                        }
+                        return <span className="text-xs xl:text-sm text-slate-400">—</span>;
+                      })() : (
                         <span className="text-xs xl:text-sm text-slate-400">—</span>
                       )}
                     </td>

@@ -1,6 +1,14 @@
-import type { Slot, Booking } from '@/lib/types';
+import type { Slot, Booking, ServiceType } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { IoCreateOutline, IoTrashOutline, IoEyeOutline, IoDocumentTextOutline } from 'react-icons/io5';
+
+const serviceLabels: Record<ServiceType, string> = {
+  manicure: 'Manicure',
+  pedicure: 'Pedicure',
+  mani_pedi: 'Mani + Pedi',
+  home_service_2slots: 'Home Service (2 pax)',
+  home_service_3slots: 'Home Service (3 pax)',
+};
 
 type SlotCardProps = {
   slot: Slot;
@@ -8,35 +16,128 @@ type SlotCardProps = {
   customer?: { name: string } | null;
   onEdit: (slot: Slot) => void;
   onDelete: (slot: Slot) => void;
-  onViewBooking?: (booking: Booking) => void;
-  onMakeQuotation?: (booking: Booking) => void;
+  onView?: (booking: Booking) => void;
+  onMakeQuotation?: (bookingId: string) => void;
 };
 
-export function SlotCard({ slot, booking, customer, onEdit, onDelete, onViewBooking, onMakeQuotation }: SlotCardProps) {
+export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, onMakeQuotation }: SlotCardProps) {
   const isConfirmed = slot.status === 'confirmed';
   
   // Get customer full name - prioritize Customer object, then booking customerData
-  const customerName = customer?.name ||
-                       booking?.customerData?.['Full Name'] || 
-                       booking?.customerData?.['fullName'] || 
-                       booking?.customerData?.['Full name'] ||
-                       booking?.customerData?.['FULL NAME'] ||
-                       booking?.customerData?.['Name'] || 
-                       booking?.customerData?.['name'] ||
-                       booking?.customerData?.['NAME'] ||
-                       // Try combining first and last name if they exist separately
-                       (booking?.customerData?.['First Name'] && booking?.customerData?.['Last Name'] 
-                         ? `${booking.customerData['First Name']} ${booking.customerData['Last Name']}`.trim()
-                         : null) ||
-                       (booking?.customerData?.['firstName'] && booking?.customerData?.['lastName']
-                         ? `${booking.customerData['firstName']} ${booking.customerData['lastName']}`.trim()
-                         : null) ||
-                       null;
+  // Use comprehensive search through customerData fields (matching BookingList logic exactly)
+  const getCustomerNameFromData = (data?: Record<string, string>): string | null => {
+    if (!data || Object.keys(data).length === 0) return null;
+    
+    // Helper function to find field by fuzzy matching key names (same as BookingList)
+    const findField = (keywords: string[]): string | null => {
+      const lowerKeywords = keywords.map(k => k.toLowerCase());
+      for (const [key, value] of Object.entries(data)) {
+        const lowerKey = key.toLowerCase();
+        // Check if key matches any keyword (partial match or exact match)
+        if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      return null;
+    };
+
+    // Try to find full name field first (various formats)
+    const fullName = findField(['full name', 'fullname']);
+    if (fullName) return fullName;
+
+    // Helper function to find first name (excluding surname/last name fields and social media names)
+    const findFirstName = (): string | null => {
+      const keywords = ['first name', 'firstname', 'fname', 'given name'];
+      const lowerKeywords = keywords.map(k => k.toLowerCase());
+      for (const [key, value] of Object.entries(data)) {
+        const lowerKey = key.toLowerCase();
+        // Check for explicit first name keywords
+        if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      // Now try "name" but EXCLUDE social media names, surname, last name, etc.
+      for (const [key, value] of Object.entries(data)) {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.includes('name') && 
+            !lowerKey.includes('surname') && 
+            !lowerKey.includes('last name') && 
+            !lowerKey.includes('lastname') &&
+            !lowerKey.includes('full name') && 
+            !lowerKey.includes('fullname') &&
+            !lowerKey.includes('instagram') &&
+            !lowerKey.includes('facebook') &&
+            !lowerKey.includes('social') &&
+            !lowerKey.includes('inquire') &&
+            value && String(value).trim()) {
+          return String(value).trim();
+        }
+      }
+      return null;
+    };
+
+    // Try to find last name/surname (including the exact Google Form field name with autofill text)
+    const lastName = findField(['surname', 'last name', 'lastname', 'lname', 'family name']);
+    
+    // Try to find first name (excluding surname fields)
+    const firstName = findFirstName();
+    
+    // If we found both, combine them
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`.trim();
+    }
+    
+    // If we found only first name or only last name, use it
+    if (firstName) return firstName;
+    if (lastName) return lastName;
+    
+    // Last resort: look for any field that might be a name (not email, phone, etc.)
+    // Match BookingList logic exactly - fewer exclusions to catch more name variations like "bi rgere"
+    for (const [key, value] of Object.entries(data)) {
+      const lowerKey = key.toLowerCase();
+      // Skip non-name fields (matching BookingList exclusions - fewer than before)
+      if (lowerKey.includes('email') || lowerKey.includes('phone') || lowerKey.includes('contact') || 
+          lowerKey.includes('booking') || lowerKey.includes('date') || lowerKey.includes('time') ||
+          lowerKey.includes('service') || lowerKey.includes('location') || lowerKey.includes('referral')) {
+        continue;
+      }
+      // If it's a reasonable length, use it (BookingList doesn't check for @ or http - it's more permissive)
+      const strValue = String(value).trim();
+      if (strValue.length > 0 && strValue.length < 100) {
+        return strValue;
+      }
+    }
+    
+    return null;
+  };
+
+  // Prioritize customerData over customer object name
+  // This is because customerData has the most up-to-date info from the form
+  // Only use customer.name if it's not "Unknown Customer" and we don't have customerData
+  const nameFromData = getCustomerNameFromData(booking?.customerData);
+  const customerNameFromObject = customer?.name && customer.name !== 'Unknown Customer' && customer.name.trim() !== '' 
+    ? customer.name 
+    : null;
+  const customerName = nameFromData || customerNameFromObject || null;
+  
+  // Debug: Log if we have booking but no name found (only in development)
+  if (process.env.NODE_ENV === 'development' && booking && !customerName && slot.status === 'confirmed') {
+    console.log('SlotCard: Booking found but no customer name extracted', {
+      bookingId: booking.bookingId,
+      hasCustomerData: !!booking.customerData,
+      customerDataKeys: booking.customerData ? Object.keys(booking.customerData) : [],
+      customerData: booking.customerData,
+      customerName: customer?.name,
+    });
+  }
   
   // Get service location
   const serviceLocation = booking?.serviceLocation === 'home_service' ? 'Home Service' : 
                          booking?.serviceLocation === 'homebased_studio' ? 'Studio' : 
                          null;
+  
+  // Get service type label
+  const serviceTypeLabel = booking?.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : null;
 
   const getStatusColor = () => {
     switch (slot.status) {
@@ -71,38 +172,51 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onViewBook
           </span>
         )}
       </div>
-      {isConfirmed && customerName && (
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <p className="font-semibold text-slate-900">{customerName}</p>
-          {serviceLocation && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-200 text-blue-900 border border-blue-300">
-              {serviceLocation}
-            </span>
+      {isConfirmed && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            {customerName ? (
+              <p className="font-semibold text-slate-900">{customerName}</p>
+            ) : booking?.bookingId ? (
+              <p className="font-semibold text-slate-600 italic">{booking.bookingId}</p>
+            ) : null}
+            {serviceLocation && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-200 text-blue-900 border border-blue-300">
+                {serviceLocation}
+              </span>
+            )}
+          </div>
+          {serviceTypeLabel && (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-300">
+                {serviceTypeLabel}
+              </span>
+            </div>
           )}
         </div>
       )}
       {slot.notes && <p className="text-xs sm:text-sm text-slate-600 break-words font-medium">{slot.notes}</p>}
       {isConfirmed && booking && (
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-          {onViewBooking && (
+        <div className="flex gap-1.5 sm:gap-2 flex-wrap">
+          {onView && booking.customerData && Object.keys(booking.customerData).length > 0 && (
             <button
               type="button"
-              onClick={() => onViewBooking(booking)}
-              className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50 transition-all flex items-center gap-1.5"
-              title="View Booking"
+              onClick={() => onView(booking)}
+              className="inline-flex items-center gap-1 rounded-full border-2 border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50 transition-all"
+              title="View form response"
             >
-              <IoEyeOutline className="w-3.5 h-3.5" />
+              <IoEyeOutline className="w-3 h-3" />
               <span>View</span>
             </button>
           )}
           {onMakeQuotation && (
             <button
               type="button"
-              onClick={() => onMakeQuotation(booking)}
-              className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700 transition-all flex items-center gap-1.5"
-              title="Create Quotation"
+              onClick={() => onMakeQuotation(booking.id)}
+              className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700 transition-all"
+              title="Make quotation"
             >
-              <IoDocumentTextOutline className="w-3.5 h-3.5" />
+              <IoDocumentTextOutline className="w-3 h-3" />
               <span>Quote</span>
             </button>
           )}

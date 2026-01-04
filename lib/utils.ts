@@ -13,5 +13,20 @@ export function formatTime12Hour(time24: string): string {
   return `${hour12}:${mins} ${ampm}`;
 }
 
+/**
+ * Formats nail tech name with "Ms." prefix
+ * @param name - Name without prefix (e.g., "Jhen")
+ * @returns Formatted name with "Ms." prefix (e.g., "Ms. Jhen")
+ */
+export function formatNailTechName(name: string): string {
+  if (!name) return '';
+  const trimmed = name.trim();
+  // Remove "Ms." prefix if already present (case insensitive)
+  const normalized = trimmed.toLowerCase().startsWith('ms.') 
+    ? trimmed.substring(3).trim() 
+    : trimmed;
+  return `Ms. ${normalized}`;
+}
+
 
 
