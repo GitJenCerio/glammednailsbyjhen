@@ -283,7 +283,7 @@ function NailTechForm({
             placeholder="Jhen"
             className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
-          <p className="mt-1 text-xs text-slate-500">"Ms." will be added automatically</p>
+          <p className="mt-1 text-xs text-slate-500">&quot;Ms.&quot; will be added automatically</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

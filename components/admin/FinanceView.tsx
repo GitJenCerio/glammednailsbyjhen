@@ -277,7 +277,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       const dateB = getRelevantDate(b).getTime();
       return dateB - dateA;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, getRelevantDate]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, viewMode, getRelevantDate]);
 
   // Get available years from bookings data
   const availableYears = useMemo(() => {
