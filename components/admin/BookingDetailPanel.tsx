@@ -27,7 +27,8 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
   const [depositAmount, setDepositAmount] = useState('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
   const [isConfirming, setIsConfirming] = useState(false);
-  const [isGettingFormUrl, setIsGettingFormUrl] = useState(false);
+  const [formUrl, setFormUrl] = useState<string | null>(null);
+  const [isLoadingFormUrl, setIsLoadingFormUrl] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
   // Reset deposit input and confirming state when booking changes or status changes to confirmed
@@ -37,7 +38,37 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       setDepositAmount('');
       setDepositPaymentMethod('CASH');
       setIsConfirming(false);
+      setFormUrl(null);
     }
+  }, [booking]);
+
+  // Load form URL when booking is pending_form or pending_payment
+  useEffect(() => {
+    const loadFormUrl = async () => {
+      if (!booking || (booking.status !== 'pending_form' && booking.status !== 'pending_payment')) {
+        setFormUrl(null);
+        return;
+      }
+
+      setIsLoadingFormUrl(true);
+      try {
+        const response = await fetch(`/api/bookings/${booking.id}?action=formUrl`);
+        if (response.ok) {
+          const data = await response.json();
+          setFormUrl(data.formUrl);
+        } else {
+          console.error('Failed to load form URL');
+          setFormUrl(null);
+        }
+      } catch (error) {
+        console.error('Error loading form URL:', error);
+        setFormUrl(null);
+      } finally {
+        setIsLoadingFormUrl(false);
+      }
+    };
+
+    loadFormUrl();
   }, [booking]);
 
   if (!booking) {
@@ -118,22 +149,9 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
   };
 
   const handleCopyFormLink = async () => {
-    if (isGettingFormUrl) return;
-    
-    setIsGettingFormUrl(true);
-    setCopySuccess(false);
+    if (!formUrl) return;
     
     try {
-      const response = await fetch(`/api/bookings/${booking.id}?action=formUrl`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to get form URL' }));
-        throw new Error(errorData.error || 'Failed to get form URL');
-      }
-      
-      const data = await response.json();
-      const formUrl = data.formUrl;
-      
-      // Copy to clipboard
       await navigator.clipboard.writeText(formUrl);
       setCopySuccess(true);
       
@@ -143,9 +161,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       }, 3000);
     } catch (error: any) {
       console.error('Error copying form link:', error);
-      alert(error.message || 'Failed to copy form link. Please try again.');
-    } finally {
-      setIsGettingFormUrl(false);
+      alert('Failed to copy form link. Please try again.');
     }
   };
   
@@ -374,6 +390,47 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
 
         </div>
 
+        {/* Form Link - Always visible for pending bookings */}
+        {(booking.status === 'pending_form' || booking.status === 'pending_payment') && (
+          <div className="rounded-xl sm:rounded-2xl border-2 border-blue-200 bg-blue-50 p-3 sm:p-4 text-xs sm:text-sm shadow-sm shadow-slate-900/5">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <p className="font-semibold text-blue-900">Form Link</p>
+              {formUrl && (
+                <button
+                  type="button"
+                  onClick={handleCopyFormLink}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all touch-manipulation active:scale-[0.98] ${
+                    copySuccess
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-100'
+                  }`}
+                  title="Copy link to clipboard"
+                >
+                  <IoCopyOutline className="w-3.5 h-3.5" />
+                  <span>{copySuccess ? 'Copied!' : 'Copy'}</span>
+                </button>
+              )}
+            </div>
+            {isLoadingFormUrl ? (
+              <p className="text-blue-700">Loading form link...</p>
+            ) : formUrl ? (
+              <div className="space-y-2">
+                <a
+                  href={formUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-blue-700 hover:text-blue-900 underline break-all font-medium"
+                >
+                  {formUrl}
+                </a>
+                <p className="text-blue-600 text-[10px] sm:text-xs">Click the link above to open the form, or use the Copy button to copy it.</p>
+              </div>
+            ) : (
+              <p className="text-blue-700">Unable to load form link. Please refresh the page.</p>
+            )}
+          </div>
+        )}
+
         {/* In Calendar & Slots tab, hide the full form responses once booking is confirmed.
             Admins can still view the complete form in the View Bookings tab via the eye icon. */}
         {booking.status !== 'confirmed' && (
@@ -469,32 +526,6 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
             </div>
           </div>
         )}
-        
-        {/* Recover Link Button - Show for pending bookings */}
-        {(booking.status === 'pending_form' || booking.status === 'pending_payment') && (
-          <button
-            type="button"
-            onClick={handleCopyFormLink}
-            disabled={isGettingFormUrl}
-            className={`w-full rounded-full border-2 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold touch-manipulation active:scale-[0.98] transition-all ${
-              copySuccess
-                ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                : 'border-blue-300 bg-white text-blue-700 hover:bg-blue-50'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {isGettingFormUrl ? (
-              'Getting Link...'
-            ) : copySuccess ? (
-              '✓ Link Copied!'
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                <IoCopyOutline className="w-4 h-4" />
-                <span>Recover Link</span>
-              </span>
-            )}
-          </button>
-        )}
-
         <div className="flex flex-col sm:flex-row gap-2">
           {onMakeQuotation && (
             <button
