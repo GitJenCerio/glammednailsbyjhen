@@ -5,9 +5,18 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx}",
   ],
   safelist: [
     // Safelist nail tech color classes to prevent purging in production
+    // Use pattern matching to ensure all variations are included
+    {
+      pattern: /^(bg|text|border)-(blue|purple|pink|indigo|teal|amber|rose|cyan|emerald|violet|fuchsia|orange|lime|sky|yellow)-(500|700|900)$/,
+    },
+    {
+      pattern: /^shadow-(blue|purple|pink|indigo|teal|amber|rose|cyan|emerald|violet|fuchsia|orange|lime|sky|yellow)-500\/50$/,
+    },
+    // Also include specific classes as fallback
     'bg-blue-500',
     'bg-purple-500',
     'bg-pink-500',
@@ -40,6 +49,7 @@ const config: Config = {
     'border-lime-700',
     'border-sky-700',
     'border-yellow-700',
+    'shadow-lg',
     'shadow-blue-500/50',
     'shadow-purple-500/50',
     'shadow-pink-500/50',

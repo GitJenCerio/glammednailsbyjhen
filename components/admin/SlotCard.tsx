@@ -174,8 +174,56 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
         const colorClasses = getNailTechColorClasses(slotNailTech.id, techIds);
         // Extract text color from color classes (text-white or text-slate-900)
         const textColor = colorClasses.includes('text-slate-900') ? 'text-slate-900' : 'text-white';
+        
+        // Extract background color for inline style fallback (for production builds)
+        const bgColorMap: Record<string, string> = {
+          'bg-blue-500': '#3b82f6',
+          'bg-purple-500': '#a855f7',
+          'bg-pink-500': '#ec4899',
+          'bg-indigo-500': '#6366f1',
+          'bg-teal-500': '#14b8a6',
+          'bg-amber-500': '#f59e0b',
+          'bg-rose-500': '#f43f5e',
+          'bg-cyan-500': '#06b6d4',
+          'bg-emerald-500': '#10b981',
+          'bg-violet-500': '#8b5cf6',
+          'bg-fuchsia-500': '#d946ef',
+          'bg-orange-500': '#f97316',
+          'bg-lime-500': '#84cc16',
+          'bg-sky-500': '#0ea5e9',
+          'bg-yellow-500': '#eab308',
+        };
+        const bgColorClass = colorClasses.match(/bg-\w+-\d+/)?.[0] || 'bg-blue-500';
+        const bgColor = bgColorMap[bgColorClass] || '#3b82f6';
+        const borderColorMap: Record<string, string> = {
+          'border-blue-700': '#1d4ed8',
+          'border-purple-700': '#7e22ce',
+          'border-pink-700': '#be185d',
+          'border-indigo-700': '#4338ca',
+          'border-teal-700': '#0f766e',
+          'border-amber-700': '#b45309',
+          'border-rose-700': '#be123c',
+          'border-cyan-700': '#0e7490',
+          'border-emerald-700': '#047857',
+          'border-violet-700': '#6d28d9',
+          'border-fuchsia-700': '#a21caf',
+          'border-orange-700': '#c2410c',
+          'border-lime-700': '#65a30d',
+          'border-sky-700': '#0369a1',
+          'border-yellow-700': '#a16207',
+        };
+        const borderColorClass = colorClasses.match(/border-\w+-\d+/)?.[0] || 'border-blue-700';
+        const borderColor = borderColorMap[borderColorClass] || '#1d4ed8';
+        
         return (
-          <div className={`absolute top-2 ${slot.slotType === 'with_squeeze_fee' ? 'right-10' : 'right-2'} inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border-2 ${colorClasses}`}>
+          <div 
+            className={`absolute top-2 ${slot.slotType === 'with_squeeze_fee' ? 'right-10' : 'right-2'} inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border-2 ${colorClasses}`}
+            style={{
+              backgroundColor: bgColor,
+              borderColor: borderColor,
+              color: textColor === 'text-slate-900' ? '#0f172a' : '#ffffff',
+            }}
+          >
             <span className={`text-[8px] sm:text-[9px] font-semibold leading-none ${textColor}`}>Ms. {slotNailTech.name}</span>
           </div>
         );
