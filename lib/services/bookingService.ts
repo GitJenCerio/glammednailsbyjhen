@@ -483,9 +483,9 @@ export async function getBookingFormUrl(bookingId: string): Promise<string> {
   const customer = await getCustomerById(booking.customerId);
 
   // Environment variables for Google Form
-  const formUrl = process.env.GOOGLE_FORM_URL;
+  const formUrl = process.env.GOOGLE_FORM_BASE_URL;
   if (!formUrl) {
-    throw new Error('GOOGLE_FORM_URL environment variable is not set.');
+    throw new Error('GOOGLE_FORM_BASE_URL environment variable is not set.');
   }
 
   const formEntryKey = process.env.GOOGLE_FORM_BOOKING_ID_ENTRY || 'entry.123456789';
