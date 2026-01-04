@@ -26,7 +26,7 @@ async function migrate() {
       defaultNailTech = await createDefaultNailTech();
     }
     
-    console.log(`Default nail tech ID: ${defaultNailTech.id} (${defaultNailTech.fullName})`);
+    console.log(`Default nail tech ID: ${defaultNailTech.id} (Ms. ${defaultNailTech.name})`);
 
     // Step 2: Assign all existing slots to Ms. Jhen
     console.log('Step 2: Assigning existing slots to default nail tech...');
@@ -65,7 +65,7 @@ async function migrate() {
     console.log(`Updated ${bookingsUpdated} bookings`);
 
     console.log('✅ Migration completed successfully!');
-    console.log(`- Default nail tech: ${defaultNailTech.fullName} (${defaultNailTech.id})`);
+    console.log(`- Default nail tech: Ms. ${defaultNailTech.name} (${defaultNailTech.id})`);
     console.log(`- Slots updated: ${slotsUpdated}`);
     console.log(`- Bookings updated: ${bookingsUpdated}`);
   } catch (error) {
