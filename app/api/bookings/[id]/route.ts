@@ -15,9 +15,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   if (body?.action === 'confirm') {
     const depositAmount = body.depositAmount !== undefined && body.depositAmount !== null ? Number(body.depositAmount) : undefined;
-    const withAssistantCommission = Boolean(body.withAssistantCommission);
     const depositPaymentMethod: 'PNB' | 'CASH' | 'GCASH' | undefined = body.depositPaymentMethod;
-    await confirmBooking(params.id, depositAmount, withAssistantCommission, depositPaymentMethod);
+    await confirmBooking(params.id, depositAmount, depositPaymentMethod);
     return NextResponse.json({ success: true });
   }
 

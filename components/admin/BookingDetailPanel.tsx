@@ -7,7 +7,7 @@ type BookingDetailPanelProps = {
   booking: Booking | null;
   slotLabel?: string;
   pairedSlotLabel?: string;
-  onConfirm: (bookingId: string, depositAmount?: number, withAssistantCommission?: boolean, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
+  onConfirm: (bookingId: string, depositAmount?: number, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
   onCancel?: (bookingId: string) => Promise<void>;
   onReschedule?: (bookingId: string) => Promise<void>;
   onMakeQuotation?: (bookingId: string) => void;
@@ -25,7 +25,6 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
   const [showDepositInput, setShowDepositInput] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
-  const [withAssistantCommission, setWithAssistantCommission] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
   // Reset deposit input and confirming state when booking changes or status changes to confirmed
@@ -74,7 +73,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       // For pending_form bookings, confirm without deposit
       setIsConfirming(true);
       try {
-        await onConfirm(booking.id, undefined, withAssistantCommission, undefined);
+        await onConfirm(booking.id, undefined, undefined);
       } finally {
         setIsConfirming(false);
       }
@@ -98,7 +97,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
     setShowDepositInput(false);
     
     try {
-      await onConfirm(booking.id, amount, withAssistantCommission, paymentMethod);
+      await onConfirm(booking.id, amount, paymentMethod);
       // Reset form fields after successful confirmation
       setDepositAmount('');
       setDepositPaymentMethod('CASH');
@@ -338,20 +337,6 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
             <p className="capitalize text-slate-600">{booking.status.replace('_', ' ')}</p>
           </div>
 
-          {/* Only show the \"Include 10% commission\" toggle before confirmation */}
-          {booking.status !== 'confirmed' && (
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
-              <label className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={withAssistantCommission}
-                  onChange={(e) => setWithAssistantCommission(e.target.checked)}
-                  className="h-3 w-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span>Include 10% commission for sister</span>
-              </label>
-            </div>
-          )}
         </div>
 
         {/* In Calendar & Slots tab, hide the full form responses once booking is confirmed.

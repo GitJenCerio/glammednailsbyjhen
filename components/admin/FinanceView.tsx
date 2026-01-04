@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import type { Booking, BookingWithSlot, PaymentStatus, Customer, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
@@ -201,7 +201,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
   };
 
   // Helper function to get the relevant date based on view mode
-  const getRelevantDate = (booking: BookingWithSlot): Date => {
+  const getRelevantDate = useCallback((booking: BookingWithSlot): Date => {
     if (viewMode === 'revenue') {
       // Revenue recognition: Use service date (slot.date)
       return parseISO(booking.slot.date);
@@ -214,7 +214,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       if (booking.invoice?.createdAt) return new Date(booking.invoice.createdAt);
       return new Date(booking.updatedAt);
     }
-  };
+  }, [viewMode]);
 
   const filteredBookings = useMemo(() => {
     let filtered = bookingsWithSlots.filter((booking) => {
@@ -277,7 +277,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       const dateB = getRelevantDate(b).getTime();
       return dateB - dateA;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, viewMode]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, getRelevantDate]);
 
   // Get available years from bookings data
   const availableYears = useMemo(() => {

@@ -1,5 +1,5 @@
-import type { Slot, Booking, ServiceType } from '@/lib/types';
-import { formatTime12Hour } from '@/lib/utils';
+import type { Slot, Booking, ServiceType, NailTech } from '@/lib/types';
+import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
 import { IoCreateOutline, IoTrashOutline, IoEyeOutline, IoDocumentTextOutline } from 'react-icons/io5';
 
 const serviceLabels: Record<ServiceType, string> = {
@@ -18,9 +18,12 @@ type SlotCardProps = {
   onDelete: (slot: Slot) => void;
   onView?: (booking: Booking) => void;
   onMakeQuotation?: (bookingId: string) => void;
+  nailTechs?: NailTech[];
+  selectedNailTechId?: string | null;
+  allNailTechIds?: string[]; // Sorted list of all nail tech IDs for consistent color assignment
 };
 
-export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, onMakeQuotation }: SlotCardProps) {
+export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, onMakeQuotation, nailTechs = [], selectedNailTechId, allNailTechIds }: SlotCardProps) {
   const isConfirmed = slot.status === 'confirmed';
   
   // Get customer full name - prioritize Customer object, then booking customerData
@@ -138,6 +141,10 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
   
   // Get service type label
   const serviceTypeLabel = booking?.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : null;
+  
+  // Get nail tech info for this slot (only show when viewing all nail techs)
+  const slotNailTech = slot.nailTechId ? nailTechs.find(t => t.id === slot.nailTechId) : null;
+  const showNailTechBadge = !selectedNailTechId && slotNailTech;
 
   const getStatusColor = () => {
     switch (slot.status) {
@@ -159,7 +166,12 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
           <span className="text-[8px] sm:text-[9px] font-semibold text-white leading-none">SQ</span>
         </div>
       )}
-      <div className="flex items-center gap-2">
+      {showNailTechBadge && slotNailTech && (
+        <div className={`absolute top-2 ${slot.slotType === 'with_squeeze_fee' ? 'right-10' : 'right-2'} inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border ${getNailTechColorClasses(slotNailTech.id, allNailTechIds)}`}>
+          <span className="text-[8px] sm:text-[9px] font-semibold leading-none">Ms. {slotNailTech.name}</span>
+        </div>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
         <p className="text-sm sm:text-base font-bold text-slate-900">{formatTime12Hour(slot.time)}</p>
         {slot.status === 'confirmed' && (
           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-slate-700 text-white border border-slate-800">

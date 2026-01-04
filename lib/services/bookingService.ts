@@ -840,7 +840,7 @@ async function getSlotById(slotId: string): Promise<Slot | null> {
   return docToSlot(snapshot.id, snapshot.data()!);
 }
 
-export async function confirmBooking(bookingId: string, depositAmount?: number, withAssistantCommission?: boolean, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
+export async function confirmBooking(bookingId: string, depositAmount?: number, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
   let booking: Booking | null = null;
   let slot: Slot | null = null;
   let customerId: string | null = null;
@@ -902,13 +902,6 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
       }
     }
 
-    // If this booking should include assistant commission (e.g. sister helped),
-    // store the assistant name and a fixed 10% commission rate.
-    if (withAssistantCommission) {
-      updateData.assistantName = 'Sister';
-      updateData.assistantCommissionRate = 0.1; // 10%
-    }
-    
     transaction.update(bookingRef, updateData);
 
     transaction.update(slotRef, {

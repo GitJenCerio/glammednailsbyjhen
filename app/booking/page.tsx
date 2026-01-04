@@ -465,6 +465,7 @@ export default function BookingPage() {
     if (selectedNailTechId) {
       loadData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNailTechId]);
 
   // Auto-refresh slots every 30 seconds to show updated slot status (pending slots should disappear)
@@ -477,6 +478,7 @@ export default function BookingPage() {
     }, 30000); // 30 seconds - balance between freshness and performance
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNailTechId]);
 
   async function loadNailTechs() {

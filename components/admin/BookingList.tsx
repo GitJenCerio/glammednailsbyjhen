@@ -1,6 +1,6 @@
  'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Booking, BookingStatus, Slot } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 
@@ -29,13 +29,6 @@ const serviceLabels: Record<string, string> = {
 };
 
 export function BookingList({ bookings, onSelect, selectedId, customers = [] }: BookingListProps) {
-  const [openSections, setOpenSections] = useState<Record<BookingStatus, boolean>>({
-    pending_form: true,
-    pending_payment: true,
-    confirmed: true,
-    cancelled: true,
-  });
-
   const grouped = bookings.reduce<Record<BookingStatus, BookingRow[]>>(
     (acc, booking) => {
       // Safety check: ensure the status exists in the accumulator
@@ -46,6 +39,37 @@ export function BookingList({ bookings, onSelect, selectedId, customers = [] }: 
     },
     { pending_form: [], pending_payment: [], confirmed: [], cancelled: [] },
   );
+
+  // Initialize sections: only open sections that have bookings (count > 0)
+  const [openSections, setOpenSections] = useState<Record<BookingStatus, boolean>>(() => {
+    return {
+      pending_form: grouped.pending_form.length > 0,
+      pending_payment: grouped.pending_payment.length > 0,
+      confirmed: grouped.confirmed.length > 0,
+      cancelled: grouped.cancelled.length > 0,
+    };
+  });
+
+  // Update open sections when bookings change: auto-open sections that get bookings
+  useEffect(() => {
+    setOpenSections((prev) => {
+      const updated = { ...prev };
+      // Auto-open sections that now have bookings (if they were closed)
+      if (grouped.pending_form.length > 0 && !prev.pending_form) {
+        updated.pending_form = true;
+      }
+      if (grouped.pending_payment.length > 0 && !prev.pending_payment) {
+        updated.pending_payment = true;
+      }
+      if (grouped.confirmed.length > 0 && !prev.confirmed) {
+        updated.confirmed = true;
+      }
+      if (grouped.cancelled.length > 0 && !prev.cancelled) {
+        updated.cancelled = true;
+      }
+      return updated;
+    });
+  }, [grouped.pending_form.length, grouped.pending_payment.length, grouped.confirmed.length, grouped.cancelled.length]);
 
   return (
     <>
