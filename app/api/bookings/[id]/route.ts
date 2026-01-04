@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
-import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking } from '@/lib/services/bookingService';
+import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl } from '@/lib/services/bookingService';
 import type { Invoice, PaymentStatus } from '@/lib/types';
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const url = new URL(request.url);
+  const action = url.searchParams.get('action');
+  
+  // If action is 'formUrl', return the form URL instead of the booking
+  if (action === 'formUrl') {
+    try {
+      const formUrl = await getBookingFormUrl(params.id);
+      return NextResponse.json({ formUrl });
+    } catch (error: any) {
+      console.error('Error getting form URL:', error);
+      return NextResponse.json({ error: error.message ?? 'Failed to get form URL' }, { status: 500 });
+    }
+  }
+  
   const booking = await getBookingById(params.id);
   if (!booking) {
     return NextResponse.json({ error: 'Booking not found.' }, { status: 404 });

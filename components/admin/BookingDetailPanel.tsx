@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { IoCopyOutline } from 'react-icons/io5';
 import type { Booking } from '@/lib/types';
 
 type BookingDetailPanelProps = {
@@ -26,6 +27,8 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
   const [depositAmount, setDepositAmount] = useState('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<'PNB' | 'CASH' | 'GCASH'>('CASH');
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isGettingFormUrl, setIsGettingFormUrl] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Reset deposit input and confirming state when booking changes or status changes to confirmed
   useEffect(() => {
@@ -111,6 +114,38 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
       throw error; // Re-throw to let parent handle error display
     } finally {
       setIsConfirming(false);
+    }
+  };
+
+  const handleCopyFormLink = async () => {
+    if (isGettingFormUrl) return;
+    
+    setIsGettingFormUrl(true);
+    setCopySuccess(false);
+    
+    try {
+      const response = await fetch(`/api/bookings/${booking.id}?action=formUrl`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to get form URL' }));
+        throw new Error(errorData.error || 'Failed to get form URL');
+      }
+      
+      const data = await response.json();
+      const formUrl = data.formUrl;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(formUrl);
+      setCopySuccess(true);
+      
+      // Reset success message after 3 seconds
+      setTimeout(() => {
+        setCopySuccess(false);
+      }, 3000);
+    } catch (error: any) {
+      console.error('Error copying form link:', error);
+      alert(error.message || 'Failed to copy form link. Please try again.');
+    } finally {
+      setIsGettingFormUrl(false);
     }
   };
   
@@ -435,6 +470,31 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, onConf
           </div>
         )}
         
+        {/* Recover Link Button - Show for pending bookings */}
+        {(booking.status === 'pending_form' || booking.status === 'pending_payment') && (
+          <button
+            type="button"
+            onClick={handleCopyFormLink}
+            disabled={isGettingFormUrl}
+            className={`w-full rounded-full border-2 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold touch-manipulation active:scale-[0.98] transition-all ${
+              copySuccess
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                : 'border-blue-300 bg-white text-blue-700 hover:bg-blue-50'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isGettingFormUrl ? (
+              'Getting Link...'
+            ) : copySuccess ? (
+              '✓ Link Copied!'
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <IoCopyOutline className="w-4 h-4" />
+                <span>Recover Link</span>
+              </span>
+            )}
+          </button>
+        )}
+
         <div className="flex flex-col sm:flex-row gap-2">
           {onMakeQuotation && (
             <button

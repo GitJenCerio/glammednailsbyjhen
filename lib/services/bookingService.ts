@@ -448,6 +448,155 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 }
 
 /**
+ * Generate or regenerate the Google Form URL for an existing booking
+ * This is useful for recovering/resending form links to clients
+ */
+export async function getBookingFormUrl(bookingId: string): Promise<string> {
+  const booking = await getBookingById(bookingId);
+  if (!booking) {
+    throw new Error('Booking not found.');
+  }
+
+  // Get the slot information
+  const slot = await getSlotById(booking.slotId);
+  if (!slot) {
+    throw new Error('Slot not found for this booking.');
+  }
+
+  // Get linked slots if any
+  const linkedSlots: Slot[] = [];
+  if (booking.linkedSlotIds && booking.linkedSlotIds.length > 0) {
+    for (const linkedSlotId of booking.linkedSlotIds) {
+      const linkedSlot = await getSlotById(linkedSlotId);
+      if (linkedSlot) {
+        linkedSlots.push(linkedSlot);
+      }
+    }
+  } else if (booking.pairedSlotId) {
+    const pairedSlot = await getSlotById(booking.pairedSlotId);
+    if (pairedSlot) {
+      linkedSlots.push(pairedSlot);
+    }
+  }
+
+  // Get customer information
+  const customer = await getCustomerById(booking.customerId);
+
+  // Environment variables for Google Form
+  const formUrl = process.env.GOOGLE_FORM_URL;
+  if (!formUrl) {
+    throw new Error('GOOGLE_FORM_URL environment variable is not set.');
+  }
+
+  const formEntryKey = process.env.GOOGLE_FORM_BOOKING_ID_ENTRY || 'entry.123456789';
+  const formDateEntryKey = process.env.GOOGLE_FORM_DATE_ENTRY;
+  const formTimeEntryKey = process.env.GOOGLE_FORM_TIME_ENTRY;
+  const formServiceLocationEntryKey = process.env.GOOGLE_FORM_SERVICE_LOCATION_ENTRY;
+  const formNameEntryKey = process.env.GOOGLE_FORM_NAME_ENTRY;
+  const formFirstNameEntryKey = process.env.GOOGLE_FORM_FIRST_NAME_ENTRY;
+  const formLastNameEntryKey = process.env.GOOGLE_FORM_LAST_NAME_ENTRY;
+  const formEmailEntryKey = process.env.GOOGLE_FORM_EMAIL_ENTRY;
+  const formPhoneEntryKey = process.env.GOOGLE_FORM_PHONE_ENTRY || process.env.GOOGLE_FORM_CONTACT_NUMBER_ENTRY;
+  const formSocialMediaEntryKey = process.env.GOOGLE_FORM_SOCIAL_MEDIA_ENTRY;
+  const formReferralSourceEntryKey = process.env.GOOGLE_FORM_REFERRAL_SOURCE_ENTRY;
+
+  // Format date for Google Forms
+  let formattedDate: string | undefined = undefined;
+  if (slot.date && formDateEntryKey) {
+    const dateFormat = process.env.GOOGLE_FORM_DATE_FORMAT || 'FULL';
+    const dateObj = parseISO(slot.date);
+    
+    switch (dateFormat.toUpperCase()) {
+      case 'FULL':
+      case 'LONG':
+        formattedDate = format(dateObj, 'EEEE, MMMM d, yyyy');
+        break;
+      case 'YYYY-MM-DD':
+        formattedDate = format(dateObj, 'yyyy-MM-dd');
+        break;
+      case 'DD/MM/YYYY':
+        formattedDate = format(dateObj, 'dd/MM/yyyy');
+        break;
+      case 'MM/DD/YYYY':
+        formattedDate = format(dateObj, 'MM/dd/yyyy');
+        break;
+      default:
+        formattedDate = format(dateObj, 'EEEE, MMMM d, yyyy');
+        break;
+    }
+  }
+
+  // Format time for Google Forms
+  const formatTime12Hour = (time24: string): string => {
+    const [hours, minutes] = time24.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    const mins = minutes.padStart(2, '0');
+    return `${hour12}:${mins} ${ampm}`;
+  };
+
+  let formattedTime: string | undefined = undefined;
+  if (slot.time && formTimeEntryKey) {
+    const finalLinkedSlot = linkedSlots.length > 0 ? linkedSlots[linkedSlots.length - 1] : null;
+    if (finalLinkedSlot) {
+      formattedTime = `${formatTime12Hour(slot.time)} - ${formatTime12Hour(finalLinkedSlot.time)}`;
+    } else {
+      formattedTime = formatTime12Hour(slot.time);
+    }
+  }
+
+  // Build prefill fields
+  const prefillFields: Record<string, string> = {
+    [formEntryKey]: booking.bookingId,
+  };
+
+  if (formDateEntryKey && formattedDate) {
+    prefillFields[formDateEntryKey] = formattedDate;
+  }
+
+  if (formTimeEntryKey && formattedTime) {
+    prefillFields[formTimeEntryKey] = formattedTime;
+  }
+
+  // Format service location for Google Forms
+  if (formServiceLocationEntryKey && booking.serviceLocation) {
+    const formattedServiceLocation = booking.serviceLocation === 'home_service' ? 'Home Service' : 'Homebased Studio';
+    prefillFields[formServiceLocationEntryKey] = formattedServiceLocation;
+  }
+
+  // Add customer data to prefill if available
+  if (customer) {
+    if (formNameEntryKey && customer.name) {
+      prefillFields[formNameEntryKey] = customer.name;
+    }
+    if (formFirstNameEntryKey && customer.firstName) {
+      prefillFields[formFirstNameEntryKey] = customer.firstName;
+    }
+    if (formLastNameEntryKey && customer.lastName) {
+      prefillFields[formLastNameEntryKey] = customer.lastName;
+    }
+    if (formEmailEntryKey && customer.email) {
+      prefillFields[formEmailEntryKey] = customer.email;
+    }
+    if (formPhoneEntryKey && customer.phone) {
+      prefillFields[formPhoneEntryKey] = customer.phone;
+    }
+    if (formSocialMediaEntryKey && customer.socialMediaName) {
+      prefillFields[formSocialMediaEntryKey] = customer.socialMediaName;
+    }
+    if (formReferralSourceEntryKey && customer.referralSource) {
+      prefillFields[formReferralSourceEntryKey] = customer.referralSource;
+    }
+  }
+
+  // Build the prefilled Google Form URL
+  const googleFormUrl = buildPrefilledGoogleFormUrl(formUrl, prefillFields);
+  
+  return googleFormUrl;
+}
+
+/**
  * Recover an expired booking from Google Sheets form data
  * This recreates a booking with a specific booking ID (e.g., GN-00001)
  */
