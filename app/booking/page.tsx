@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { motion } from 'framer-motion';
+import { IoClose } from 'react-icons/io5';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
@@ -119,6 +120,8 @@ interface SlotModalProps {
   onServiceLocationChange: (value: ServiceLocation) => void;
   squeezeFeeAcknowledged: boolean;
   onSqueezeFeeAcknowledgedChange: (value: boolean) => void;
+  socialMediaName: string;
+  onSocialMediaNameChange: (value: string) => void;
   disableProceed: boolean;
   onClose: () => void;
   onProceed: () => void;
@@ -145,6 +148,8 @@ function SlotModal({
   onServiceLocationChange,
   squeezeFeeAcknowledged,
   onSqueezeFeeAcknowledgedChange,
+  socialMediaName,
+  onSocialMediaNameChange,
   disableProceed,
   isBooking,
   onClose,
@@ -163,34 +168,45 @@ function SlotModal({
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto"
+        className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto relative"
       >
-        <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4">Book This Slot</h3>
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 sm:p-2 rounded-full hover:bg-slate-200 active:bg-slate-300 transition-colors touch-manipulation"
+          aria-label="Close"
+        >
+          <IoClose className="w-5 h-5 sm:w-6 sm:h-6 text-slate-700" />
+        </button>
+        <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4 pr-8 sm:pr-10">Book This Slot</h3>
         <div className="space-y-2.5 sm:space-y-3 mb-4 sm:mb-6">
           <div>
-            <span className="text-sm sm:text-base text-gray-600">Date:</span>
-            <p className="font-medium text-sm sm:text-base">{format(new Date(slot.date), 'EEEE, MMMM d, yyyy')}</p>
+            <p className="text-sm sm:text-base">
+              <span className="text-gray-600">Date:</span>{' '}
+              <span className="font-bold text-black">{format(new Date(slot.date), 'EEEE, MMMM d, yyyy')}</span>
+            </p>
           </div>
           <div>
-            <span className="text-sm sm:text-base text-gray-600">Time:</span>
-            {requiresMultipleSlots && linkedSlots.length > 0 ? (
-              <div className="mt-1">
-                <p className="font-medium text-sm sm:text-base">
-                  {formatTime12Hour(slot.time)}
-                  {linkedSlots.map((linkedSlot) => (
-                    <span key={linkedSlot.id}> → {formatTime12Hour(linkedSlot.time)}</span>
-                  ))}
-                </p>
-                <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
-                  This booking will use {requiredSlots} consecutive time slots: <strong>{formatTime12Hour(slot.time)}</strong>
-                  {linkedSlots.map((linkedSlot) => (
-                    <span key={linkedSlot.id}> and <strong>{formatTime12Hour(linkedSlot.time)}</strong></span>
-                  ))}
-                </p>
-              </div>
-            ) : (
-              <p className="font-medium text-sm sm:text-base">{formatTime12Hour(slot.time)}</p>
-            )}
+            <p className="text-sm sm:text-base">
+              <span className="text-gray-600">Time:</span>{' '}
+              {requiresMultipleSlots && linkedSlots.length > 0 ? (
+                <>
+                  <span className="font-bold text-black">
+                    {formatTime12Hour(slot.time)}
+                    {linkedSlots.map((linkedSlot) => (
+                      <span key={linkedSlot.id}> → {formatTime12Hour(linkedSlot.time)}</span>
+                    ))}
+                  </span>
+                  <span className="text-[10px] sm:text-xs text-slate-500 block mt-1">
+                    This booking will use {requiredSlots} consecutive time slots: <strong>{formatTime12Hour(slot.time)}</strong>
+                    {linkedSlots.map((linkedSlot) => (
+                      <span key={linkedSlot.id}> and <strong>{formatTime12Hour(linkedSlot.time)}</strong></span>
+                    ))}
+                  </span>
+                </>
+              ) : (
+                <span className="font-bold text-black">{formatTime12Hour(slot.time)}</span>
+              )}
+            </p>
           </div>
           <div>
             <span className="text-sm sm:text-base text-gray-600">Service Location:</span>
@@ -231,6 +247,7 @@ function SlotModal({
                 if (e.target.value === 'new') {
                   onRepeatClientNameChange(null);
                   onRepeatClientEmailChange('');
+                  onSocialMediaNameChange('');
                 }
               }}
               className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
@@ -348,9 +365,18 @@ function SlotModal({
             </div>
           )}
           {clientType === 'new' && (
-            <div className="rounded-xl sm:rounded-2xl border-2 border-blue-200 bg-blue-50 px-3 sm:px-4 py-2 text-xs sm:text-sm text-blue-900">
-              <p className="font-semibold">New Client</p>
-              <p className="text-[10px] sm:text-xs mt-1">Please fill out the booking form after confirming this slot.</p>
+            <div>
+              <label className="text-sm sm:text-base text-gray-600 mb-1 block">
+                Facebook or Instagram Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={socialMediaName}
+                onChange={(e) => onSocialMediaNameChange(e.target.value)}
+                placeholder="Enter your FB or IG name"
+                className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                required
+              />
             </div>
           )}
           {requiresMultipleSlots && missingLinkedSlots && (
@@ -399,25 +425,15 @@ function SlotModal({
         <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl border-2 border-amber-400 bg-amber-200 px-3 sm:px-4 py-2.5 sm:py-3">
           <p className="text-xs sm:text-sm font-semibold text-amber-900 mb-1">Deposit Required</p>
           <p className="text-[10px] sm:text-xs text-amber-900 leading-relaxed">
-            ₱500 deposit upon booking is required to reserve your desired date and time, it is consumable and non-refundable. (NO DEPOSIT, NO APPOINTMENT)
+            ₱500 deposit upon booking is required to reserve your slot, it is consumable and non-refundable. (NO DEPOSIT, NO APPOINTMENT)
           </p>
         </div>
 
-        <p className="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-600 leading-relaxed">
-          This slot is available. Click &ldquo;Proceed to Booking Form&rdquo; and you&rsquo;ll be redirected to our Google Form to finish your reservation.
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-3 sm:py-2 border-2 border-black text-black font-medium hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation text-sm sm:text-base"
-          >
-            Close
-          </button>
+        <div>
           <button
             onClick={onProceed}
             disabled={disableProceed}
-            className="flex-1 px-4 py-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation text-sm sm:text-base"
+            className="w-full px-4 py-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation text-sm sm:text-base"
           >
             {isBooking ? 'Reserving Slot...' : 'Proceed to Booking Form'}
           </button>
@@ -449,6 +465,7 @@ export default function BookingPage() {
   const [repeatClientName, setRepeatClientName] = useState<string | null>(null);
   const [repeatClientError, setRepeatClientError] = useState<string | null>(null);
   const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
+  const [socialMediaName, setSocialMediaName] = useState('');
   const serviceOptions = SERVICE_OPTIONS[serviceLocation];
 
   useEffect(() => {
@@ -706,10 +723,12 @@ export default function BookingPage() {
   const requiredSlots = getRequiredSlotCount(selectedService);
   const hasSqueezeFee = selectedSlot?.slotType === 'with_squeeze_fee';
   const missingLinkedSlots = requiredSlots > 1 && linkedSlots.length !== requiredSlots - 1;
+  const missingSocialMediaName = clientType === 'new' && !socialMediaName.trim();
   const disableProceed =
     !selectedSlot ||
     missingLinkedSlots ||
     (hasSqueezeFee && !squeezeFeeAcknowledged) ||
+    missingSocialMediaName ||
     isBooking;
 
   const handleSelectSlot = (slot: Slot) => {
@@ -718,6 +737,7 @@ export default function BookingPage() {
     setClientType('new');
     setRepeatClientEmail('');
     setRepeatClientName(null);
+    setSocialMediaName('');
     setServiceLocation('homebased_studio');
     setLinkedSlots([]);
     setServiceMessage(null);
@@ -781,6 +801,7 @@ export default function BookingPage() {
           clientType,
           repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
           serviceLocation,
+          socialMediaName: clientType === 'new' ? socialMediaName : undefined,
         }),
       });
 
@@ -1015,6 +1036,8 @@ export default function BookingPage() {
         onServiceLocationChange={setServiceLocation}
         squeezeFeeAcknowledged={squeezeFeeAcknowledged}
         onSqueezeFeeAcknowledgedChange={setSqueezeFeeAcknowledged}
+        socialMediaName={socialMediaName}
+        onSocialMediaNameChange={setSocialMediaName}
         disableProceed={disableProceed}
         isBooking={isBooking}
         onClose={() => {
@@ -1023,6 +1046,7 @@ export default function BookingPage() {
           setClientType('new');
           setRepeatClientEmail('');
           setRepeatClientName(null);
+          setSocialMediaName('');
           setServiceLocation('homebased_studio');
           setLinkedSlots([]);
           setServiceMessage(null);

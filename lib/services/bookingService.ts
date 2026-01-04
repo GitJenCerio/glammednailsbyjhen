@@ -59,6 +59,7 @@ type CreateBookingOptions = {
   clientType?: 'new' | 'repeat';
   repeatClientEmail?: string; // Email for repeat clients to lookup and prefill
   serviceLocation?: 'homebased_studio' | 'home_service';
+  socialMediaName?: string; // Facebook or Instagram name for new clients
 };
 
 export function getRequiredSlotCount(serviceType: ServiceType): number {
@@ -289,6 +290,16 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     
     if (options?.serviceLocation) {
       bookingData.serviceLocation = options.serviceLocation;
+    }
+    
+    // Store social media name in customerData for new clients (even if they don't complete the form)
+    if (clientType === 'new' && options?.socialMediaName && options.socialMediaName.trim()) {
+      bookingData.customerData = {
+        'Facebook or Instagram Name': options.socialMediaName.trim(),
+        'FB Name': options.socialMediaName.trim(),
+        'Social Media Name': options.socialMediaName.trim(),
+      };
+      bookingData.customerDataOrder = ['Facebook or Instagram Name'];
     }
     
     transaction.set(bookingRef, bookingData);
