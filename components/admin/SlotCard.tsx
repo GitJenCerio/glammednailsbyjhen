@@ -166,11 +166,20 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
           <span className="text-[8px] sm:text-[9px] font-semibold text-white leading-none">SQ</span>
         </div>
       )}
-      {showNailTechBadge && slotNailTech && (
-        <div className={`absolute top-2 ${slot.slotType === 'with_squeeze_fee' ? 'right-10' : 'right-2'} inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border ${getNailTechColorClasses(slotNailTech.id, allNailTechIds)}`}>
-          <span className="text-[8px] sm:text-[9px] font-semibold leading-none">Ms. {slotNailTech.name}</span>
-        </div>
-      )}
+      {showNailTechBadge && slotNailTech && (() => {
+        // Ensure we have allNailTechIds, if not, create it from nailTechs array
+        const techIds = allNailTechIds && allNailTechIds.length > 0 
+          ? allNailTechIds 
+          : nailTechs.sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
+        const colorClasses = getNailTechColorClasses(slotNailTech.id, techIds);
+        // Extract text color from color classes (text-white or text-slate-900)
+        const textColor = colorClasses.includes('text-slate-900') ? 'text-slate-900' : 'text-white';
+        return (
+          <div className={`absolute top-2 ${slot.slotType === 'with_squeeze_fee' ? 'right-10' : 'right-2'} inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border-2 ${colorClasses}`}>
+            <span className={`text-[8px] sm:text-[9px] font-semibold leading-none ${textColor}`}>Ms. {slotNailTech.name}</span>
+          </div>
+        );
+      })()}
       <div className="flex items-center gap-2 flex-wrap">
         <p className="text-sm sm:text-base font-bold text-slate-900">{formatTime12Hour(slot.time)}</p>
         {slot.status === 'confirmed' && (
