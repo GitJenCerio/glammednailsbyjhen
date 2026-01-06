@@ -1104,16 +1104,23 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
       updatedAt: Timestamp.now().toDate().toISOString(),
     };
     
+    // Separate booking status and payment status
+    // Booking status: confirmed (appointment is confirmed)
+    // Payment status: unpaid (no deposit), partial (has deposit), paid (fully paid)
+    
     // When confirming with a deposit, record it separately.
     // We intentionally do NOT set paidAmount here.
     // paidAmount is used for payments made AFTER the deposit (e.g. remaining balance).
     if (depositAmount !== undefined && depositAmount !== null && depositAmount > 0) {
       updateData.depositAmount = depositAmount;
       updateData.depositDate = Timestamp.now().toDate().toISOString(); // Track when deposit was paid
-      updateData.paymentStatus = 'partial';
+      updateData.paymentStatus = 'partial'; // Has deposit = partial payment
       if (depositPaymentMethod !== undefined) {
         updateData.depositPaymentMethod = depositPaymentMethod;
       }
+    } else {
+      // No deposit = unpaid
+      updateData.paymentStatus = 'unpaid';
     }
 
     transaction.update(bookingRef, updateData);
@@ -1174,17 +1181,41 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
   const wasPendingPayment = currentBooking?.status === 'pending_payment';
   const isNowPendingPayment = currentBooking?.status !== 'confirmed';
   
-  // Only update status if booking is not already confirmed
+  // Separate booking status and payment status
+  // Booking status: pending_form, pending_payment, confirmed, cancelled
+  // Payment status: unpaid (no deposit), partial (has deposit), paid (fully paid)
+  
+  // Only update booking status if booking is not already confirmed
   // If booking is confirmed (with or without deposit), keep it as confirmed
   if (currentBooking?.status !== 'confirmed') {
     updateData.status = 'pending_payment';
-    updateData.paymentStatus = 'unpaid';
-  } else {
-    // If already confirmed, only set paymentStatus if not already set
-    if (!currentBooking.paymentStatus) {
-      updateData.paymentStatus = currentBooking.depositAmount ? 'partial' : 'unpaid';
-    }
   }
+  
+  // Always set payment status based on deposit amount (separate from booking status)
+  // unpaid: no deposit, partial: has deposit, paid: fully paid (set via updatePaymentStatus)
+  const hasDeposit = currentBooking?.depositAmount && currentBooking.depositAmount > 0;
+  const isFullyPaid = currentBooking?.paymentStatus === 'paid';
+  
+  if (isFullyPaid) {
+    // Preserve paid status if already fully paid
+    updateData.paymentStatus = 'paid';
+  } else if (hasDeposit) {
+    // Has deposit but not fully paid = partial
+    updateData.paymentStatus = 'partial';
+  } else {
+    // No deposit = unpaid
+    updateData.paymentStatus = 'unpaid';
+  }
+  
+  // IMPORTANT: Do NOT set or preserve paidAmount when saving invoice
+  // paidAmount should only be set via updatePaymentStatus when actual payment is received
+  // If there's an incorrect paidAmount, we need to clear it unless it was explicitly set via payment status update
+  // Only preserve paidAmount if it was set through proper payment tracking (has paidDate)
+  if (!currentBooking?.paidDate) {
+    // If there's no paidDate, it means paidAmount was incorrectly set, so clear it
+    updateData.paidAmount = null;
+  }
+  // Otherwise, preserve existing paidAmount (it was set through proper payment tracking)
   
   await bookingRef.set(updateData, { merge: true });
 
@@ -1198,8 +1229,14 @@ export async function updatePaymentStatus(bookingId: string, paymentStatus: Paym
     updatedAt: now,
   };
   
-  // When payment is fully paid, set booking status to confirmed (done)
+  // Separate booking status and payment status
+  // Payment status: unpaid, partial, paid, refunded
+  // Booking status: pending_form, pending_payment, confirmed, cancelled
+  // When payment is fully paid, we can optionally update booking status to confirmed
+  // But payment status and booking status are independent
   if (paymentStatus === 'paid') {
+    // Optionally set booking status to confirmed when fully paid
+    // But keep them separate - booking status can be confirmed even if payment is partial
     updateData.status = 'confirmed';
   }
   
@@ -1229,17 +1266,31 @@ export async function updateDepositAmount(bookingId: string, depositAmount: numb
   const now = Timestamp.now().toDate().toISOString();
   const updateData: any = {
     depositAmount,
-    depositDate: now, // Track when deposit was paid
     updatedAt: now,
-    paymentStatus: 'partial', // Set payment status to partial when deposit is added
   };
-  if (depositPaymentMethod !== undefined) {
-    updateData.depositPaymentMethod = depositPaymentMethod;
+  
+  // Separate booking status and payment status
+  // Payment status: unpaid (no deposit), partial (has deposit), paid (fully paid)
+  if (depositAmount > 0) {
+    updateData.depositDate = now; // Track when deposit was paid
+    updateData.paymentStatus = 'partial'; // Has deposit = partial payment
+    if (depositPaymentMethod !== undefined) {
+      updateData.depositPaymentMethod = depositPaymentMethod;
+    }
+  } else {
+    // Deposit removed or set to 0 = unpaid (unless already fully paid)
+    if (currentBooking?.paymentStatus !== 'paid') {
+      updateData.paymentStatus = 'unpaid';
+    }
+    // Clear deposit-related fields if deposit is removed
+    updateData.depositDate = null;
+    updateData.depositPaymentMethod = null;
   }
   
   // If booking is pending_payment and has no invoice yet, update status to confirmed when deposit is added
   // This handles cases where deposit is added separately from the confirmation flow
-  if (currentBooking?.status === 'pending_payment' && !currentBooking.invoice) {
+  // Note: Booking status is separate from payment status
+  if (currentBooking?.status === 'pending_payment' && !currentBooking.invoice && depositAmount > 0) {
     updateData.status = 'confirmed';
   }
   

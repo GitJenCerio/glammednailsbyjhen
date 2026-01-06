@@ -270,13 +270,18 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
             Confirmed
           </span>
         )}
+        {slot.status === 'pending' && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-amber-500 text-white border border-amber-600">
+            Pending
+          </span>
+        )}
         {slot.status === 'available' && (
           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-emerald-500 text-white border border-emerald-600">
             Available
           </span>
         )}
       </div>
-      {isConfirmed && (
+      {booking && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-xs sm:text-sm">
             {customerName ? (
@@ -305,7 +310,7 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
         </div>
       )}
       {slot.notes && <p className="text-xs sm:text-sm text-slate-600 break-words font-medium">{slot.notes}</p>}
-      {isConfirmed && booking && (
+      {booking && slot.status === 'confirmed' && (
         <div className="flex gap-1.5 sm:gap-2 flex-wrap">
           {onView && booking.customerData && Object.keys(booking.customerData).length > 0 && (
             <button
@@ -323,10 +328,10 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
               type="button"
               onClick={() => onMakeQuotation(booking.id)}
               className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700 transition-all"
-              title="Make quotation"
+              title={booking.invoice ? "Requote" : "Make quotation"}
             >
               <IoDocumentTextOutline className="w-3 h-3" />
-              <span>Quote</span>
+              <span>{booking.invoice ? 'Requote' : 'Quote'}</span>
             </button>
           )}
         </div>

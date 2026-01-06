@@ -58,7 +58,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
     return bookingWithSlot.slot?.slotType === 'with_squeeze_fee';
   }, [booking]);
 
-  // Reset quote items when booking changes
+  // Load existing invoice data when booking changes
   useEffect(() => {
     if (!booking) {
       setQuoteItems([]);
@@ -73,8 +73,23 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
     }
 
     lastBookingIdRef.current = booking.id;
-    // Clear items when booking changes (squeeze-in fee is handled separately, not as a quote item)
-    setQuoteItems([]);
+    
+    // Load existing invoice if it exists
+    if (booking.invoice) {
+      // Convert invoice items to quote items (add IDs if missing)
+      const loadedItems = booking.invoice.items.map((item, index) => ({
+        id: item.id || generateId(),
+        description: item.description,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+      }));
+      setQuoteItems(loadedItems);
+      setNotes(booking.invoice.notes || '');
+    } else {
+      // Clear items when booking changes (squeeze-in fee is handled separately, not as a quote item)
+      setQuoteItems([]);
+      setNotes('');
+    }
   }, [booking]); // Run when booking changes
 
   useEffect(() => {
@@ -648,13 +663,17 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
         onClose();
       }, 500);
 
+      // Recalculate total to ensure it's correct before saving
+      const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const recalculatedTotal = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+      
       // Save invoice to booking (squeeze-in fee is included in total, not as a separate item)
       const invoiceData = {
         items: quoteItems,
-        total,
+        total: recalculatedTotal, // Use recalculated total to ensure accuracy
         notes,
         squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined, // Store squeeze-in fee separately for reference
-        createdAt: new Date().toISOString(),
+        createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date if editing
         updatedAt: new Date().toISOString(),
       };
 
@@ -774,10 +793,17 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
       >
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <div>
-            <h3 className="text-xl sm:text-2xl font-semibold leading-tight">Create Invoice</h3>
+            <h3 className="text-xl sm:text-2xl font-semibold leading-tight">
+              {booking.invoice ? 'Edit Invoice' : 'Create Invoice'}
+            </h3>
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-snug">
               {getCustomerName()} · {booking.bookingId} · {slotLabel}
             </p>
+            {booking.invoice && (
+              <p className="text-xs text-slate-400 mt-1">
+                Last updated: {format(new Date(booking.invoice.updatedAt), 'MMM d, yyyy h:mm a')}
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -858,6 +884,17 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                   Add
                 </button>
               </div>
+            </div>
+
+            <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-4 shadow-lg shadow-slate-200/50">
+              <h4 className="font-semibold mb-2 text-slate-900 text-sm sm:text-base">Notes</h4>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add any additional notes or instructions..."
+                rows={3}
+                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-xs sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm resize-none"
+              />
             </div>
 
           </div>
@@ -945,19 +982,17 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                     Total: ₱{total.toLocaleString('en-PH')}
                   </p>
                   {depositAmount > 0 && (
-                    <>
-                      <p className="text-xs sm:text-sm font-semibold text-emerald-700 leading-snug">
-                        Deposit Paid: -₱{depositAmount.toLocaleString('en-PH')}
-                      </p>
-                      <p
-                        className={`text-xs sm:text-sm font-semibold ${
-                          balanceDue > 0 ? 'text-rose-600' : 'text-emerald-600'
-                        } leading-snug`}
-                      >
-                        Balance Due: ₱{balanceDue.toLocaleString('en-PH')}
-                      </p>
-                    </>
+                    <p className="text-xs sm:text-sm font-semibold text-emerald-700 leading-snug">
+                      Deposit Paid: -₱{depositAmount.toLocaleString('en-PH')}
+                    </p>
                   )}
+                  <p
+                    className={`text-xs sm:text-sm font-semibold ${
+                      balanceDue > 0 ? 'text-rose-600' : 'text-emerald-600'
+                    } leading-snug`}
+                  >
+                    Balance Due: ₱{balanceDue.toLocaleString('en-PH')}
+                  </p>
                 </div>
               </div>
             )}
@@ -1099,13 +1134,71 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
               
             </div>
 
-            <button
-              onClick={handleGenerateInvoice}
-              disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
-              className="w-full rounded-full bg-rose-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40"
-            >
-              Generate & Download Invoice
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={handleGenerateInvoice}
+                disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
+                className="w-full rounded-full bg-rose-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-rose-700 transition-colors"
+              >
+                {booking.invoice ? 'Update & Download Invoice' : 'Generate & Download Invoice'}
+              </button>
+              {booking.invoice && (
+                <button
+                  onClick={async () => {
+                    // Save quotation without generating/downloading image
+                    if ((!quoteItems.length && !hasSqueezeFee) || !booking) {
+                      alert('Please add at least one item or enable squeeze-in fee.');
+                      return;
+                    }
+                    
+                    // Recalculate total to ensure it's correct
+                    const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+                    const recalculatedTotal = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+                    
+                    const invoiceData = {
+                      items: quoteItems,
+                      total: recalculatedTotal, // Use recalculated total
+                      notes,
+                      squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
+                      createdAt: booking.invoice.createdAt, // Preserve original creation date
+                      updatedAt: new Date().toISOString(),
+                    };
+
+                    try {
+                      const res = await fetch(`/api/bookings/${booking.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          action: 'save_invoice',
+                          invoice: invoiceData,
+                        }),
+                      });
+
+                      if (!res.ok) {
+                        throw new Error('Failed to save invoice');
+                      }
+
+                      if (onSendInvoice) {
+                        await onSendInvoice(booking.id, invoiceData);
+                      }
+                      
+                      // Show success and close
+                      setShowSuccess(true);
+                      setTimeout(() => {
+                        onClose();
+                      }, 500);
+                    } catch (error) {
+                      console.error('Failed to save invoice', error);
+                      alert('Failed to save invoice. Please try again.');
+                    }
+                  }}
+                  disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
+                  className="w-full rounded-full bg-slate-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-slate-700 transition-colors"
+                >
+                  Save Quotation (No Download)
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </motion.div>

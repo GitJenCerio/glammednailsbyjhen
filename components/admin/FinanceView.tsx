@@ -35,7 +35,7 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
 export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange }: FinanceViewProps) {
   const [viewMode, setViewMode] = useState<'revenue' | 'payments'>('revenue'); // 'revenue' = by service date, 'payments' = by payment date
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
-  const [filterPeriod, setFilterPeriod] = useState<'all' | 'week' | 'month'>('all');
+  const [filterPeriod, setFilterPeriod] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
   const [yearFilter, setYearFilter] = useState<number | 'all'>('all');
   const [dateRangeStart, setDateRangeStart] = useState<string>('');
@@ -47,6 +47,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
   const [dropdownPosition, setDropdownPosition] = useState<Record<string, 'up' | 'down'>>({});
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [localSelectedNailTechId, setLocalSelectedNailTechId] = useState<string | null>(selectedNailTechId || null);
+  const [activeFilterField, setActiveFilterField] = useState<'nailTech' | 'status' | 'date'>('status');
 
   // Sync local state with prop
   useEffect(() => {
@@ -232,16 +233,42 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
     if (filterPeriod !== 'all') {
       const now = new Date();
-      const cutoff = new Date();
-      if (filterPeriod === 'week') {
-        cutoff.setDate(now.getDate() - 7);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (filterPeriod === 'today') {
+        // Filter for today's appointments (based on appointment date)
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        filtered = filtered.filter((booking) => {
+          const appointmentDate = parseISO(booking.slot.date);
+          return appointmentDate >= today && appointmentDate < tomorrow;
+        });
+      } else if (filterPeriod === 'week') {
+        // Filter for this week's appointments (current week, Monday to Sunday)
+        const startOfWeek = new Date(today);
+        const dayOfWeek = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+        startOfWeek.setDate(diff);
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 7);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        filtered = filtered.filter((booking) => {
+          const appointmentDate = parseISO(booking.slot.date);
+          return appointmentDate >= startOfWeek && appointmentDate < endOfWeek;
+        });
       } else if (filterPeriod === 'month') {
-        cutoff.setMonth(now.getMonth() - 1);
+        // Filter for this month's appointments (current month)
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        
+        filtered = filtered.filter((booking) => {
+          const appointmentDate = parseISO(booking.slot.date);
+          return appointmentDate >= startOfMonth && appointmentDate <= endOfMonth;
+        });
       }
-      filtered = filtered.filter((booking) => {
-        const bookingDate = getRelevantDate(booking);
-        return bookingDate >= cutoff;
-      });
     }
 
     // Month and Year filter
@@ -272,10 +299,10 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     }
 
     return filtered.sort((a, b) => {
-      // Sort by relevant date (service date or payment date)
+      // Sort by relevant date (service date or payment date) - ascending (earliest first)
       const dateA = getRelevantDate(a).getTime();
       const dateB = getRelevantDate(b).getTime();
-      return dateB - dateA;
+      return dateA - dateB;
     });
   }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, viewMode, getRelevantDate]);
 
@@ -514,8 +541,66 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDropdownId]);
 
+  // Calculate today's bookings
+  const todayBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    return bookingsWithSlots
+      .filter((booking) => {
+        if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
+        if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
+        const appointmentDate = parseISO(booking.slot.date);
+        return appointmentDate >= today && appointmentDate < tomorrow;
+      })
+      .sort((a, b) => {
+        const dateA = parseISO(a.slot.date).getTime();
+        const dateB = parseISO(b.slot.date).getTime();
+        // Sort ascending (earliest first)
+        return dateA - dateB;
+      });
+  }, [bookingsWithSlots, filterStatus]);
+  
+  // Calculate this week's bookings (excluding today's bookings to avoid duplicates)
+  const thisWeekBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const startOfWeek = new Date(today);
+    const dayOfWeek = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    return bookingsWithSlots
+      .filter((booking) => {
+        if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
+        if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
+        const appointmentDate = parseISO(booking.slot.date);
+        // Exclude today's bookings (they're shown in the Today section)
+        if (appointmentDate >= today && appointmentDate < tomorrow) return false;
+        // Include rest of the week
+        return appointmentDate >= startOfWeek && appointmentDate < endOfWeek;
+      })
+      .sort((a, b) => {
+        const dateA = parseISO(a.slot.date).getTime();
+        const dateB = parseISO(b.slot.date).getTime();
+        // Sort ascending (earliest first)
+        return dateA - dateB;
+      });
+  }, [bookingsWithSlots, filterStatus]);
+
   return (
     <div className="space-y-4 sm:space-y-6">
+
       {/* View Mode Toggle */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
@@ -587,98 +672,95 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-start sm:items-center justify-between">
-        {/* Nail Tech Filter */}
-        {nailTechs.length > 0 && (
+      <div className="space-y-2">
+        <p className="text-[11px] sm:text-xs text-slate-500 font-semibold">Filter by:</p>
+        <div className="flex flex-wrap gap-3 items-start sm:items-center">
+          {/* Filter field selector */}
           <div className="flex items-center gap-2">
-            <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Nail Technician:</label>
+            <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Field:</label>
             <select
-              value={localSelectedNailTechId || ''}
-              onChange={(e) => handleNailTechChange(e.target.value || null)}
+              value={activeFilterField}
+              onChange={(e) => {
+                const value = e.target.value as 'nailTech' | 'status' | 'date';
+                setActiveFilterField(value);
+                // Reset other filters when switching field to keep it simple
+                if (value !== 'nailTech') {
+                  handleNailTechChange(null);
+                }
+                if (value !== 'status') {
+                  setFilterStatus('all');
+                }
+                if (value !== 'date') {
+                  setFilterPeriod('all');
+                  setMonthFilter('all');
+                  setYearFilter('all');
+                  setUseDateRange(false);
+                  setDateRangeStart('');
+                  setDateRangeEnd('');
+                }
+              }}
               className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             >
-              <option value="">All Nail Techs</option>
-              {nailTechs.map((tech) => (
-                <option key={tech.id} value={tech.id}>
-                  Ms. {tech.name} ({tech.role})
-                </option>
-              ))}
+              <option value="nailTech">Nail tech</option>
+              <option value="status">Status</option>
+              <option value="date">Date</option>
             </select>
           </div>
-        )}
 
-        {/* Status filter */}
-        <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
-          <button
-            onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterStatus === 'all' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilterStatus('unpaid')}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterStatus === 'unpaid' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Unpaid
-          </button>
-          <button
-            onClick={() => setFilterStatus('partial')}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterStatus === 'partial' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Partial
-          </button>
-          <button
-            onClick={() => setFilterStatus('paid')}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterStatus === 'paid' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Paid
-          </button>
-        </div>
+          {/* Filter value selector (changes based on field) */}
+          {activeFilterField === 'nailTech' && nailTechs.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Nail Technician:</label>
+              <select
+                value={localSelectedNailTechId || ''}
+                onChange={(e) => handleNailTechChange(e.target.value || null)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              >
+                <option value="">All nail techs</option>
+                {nailTechs.map((tech) => (
+                  <option key={tech.id} value={tech.id}>
+                    Ms. {tech.name} ({tech.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        {/* Period filter */}
-        <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
-          <button
-            onClick={() => {
-              setFilterPeriod('all');
-              setUseDateRange(false); // Disable date range when using period filter
-            }}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterPeriod === 'all' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            All Time
-          </button>
-          <button
-            onClick={() => {
-              setFilterPeriod('week');
-              setUseDateRange(false); // Disable date range when using period filter
-            }}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterPeriod === 'week' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            This Week
-          </button>
-          <button
-            onClick={() => {
-              setFilterPeriod('month');
-              setUseDateRange(false); // Disable date range when using period filter
-            }}
-            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-              filterPeriod === 'month' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            This Month
-          </button>
-        </div>
+          {activeFilterField === 'status' && (
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Status:</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as PaymentStatus | 'all')}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              >
+                <option value="all">All</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="partial">Partial</option>
+                <option value="paid">Paid</option>
+                <option value="refunded">Refunded</option>
+              </select>
+            </div>
+          )}
+
+          {activeFilterField === 'date' && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Period:</label>
+                <select
+                  value={filterPeriod}
+                  onChange={(e) => {
+                    setFilterPeriod(e.target.value as 'all' | 'today' | 'week' | 'month');
+                    setUseDateRange(false);
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                >
+                  <option value="all">All time</option>
+                  <option value="today">Today</option>
+                  <option value="week">This week</option>
+                  <option value="month">This month</option>
+                </select>
+              </div>
 
             {/* Month and Year filter */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -737,6 +819,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               </div>
             </div>
           </div>
+          )}
 
           {/* Date Range Filter */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-3 sm:mt-0">
@@ -799,8 +882,322 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-      {/* Mobile Card View */}
+      {/* Today's Bookings Table - Always Visible */}
+      {todayBookings.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span>Today's Bookings</span>
+            <span className="text-sm font-normal text-slate-500">({todayBookings.length})</span>
+          </h2>
+          
+          {/* Mobile Card View for Today */}
+          <div className="lg:hidden space-y-3">
+            {todayBookings.map((booking) => (
+              <div key={booking.id} className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4 shadow-sm">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
+                    </div>
+                    <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
+                      paymentStatusColors[booking.paymentStatus || 'unpaid']
+                    }`}
+                  >
+                    {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Service Date:</span>
+                    <span className="font-medium text-slate-900 text-right">
+                      {format(parseISO(booking.slot.date), 'MMM d, yyyy')} {formatTime12Hour(booking.slot.time)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total Amount:</span>
+                    <span className="font-semibold text-slate-900">
+                      ₱{booking.invoice?.total.toLocaleString('en-PH') || '0'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Deposit (DP):</span>
+                    {booking.depositAmount ? (
+                      <span className="font-semibold text-emerald-700">
+                        ₱{booking.depositAmount.toLocaleString('en-PH')}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">No DP</span>
+                    )}
+                  </div>
+                  {booking.invoice && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-semibold">Balance:</span>
+                      <span className={`font-bold ${
+                        (() => {
+                          const total = booking.invoice?.total || 0;
+                          const deposit = booking.depositAmount || 0;
+                          const paid = booking.paidAmount || 0;
+                          const balance = total - deposit - paid;
+                          return balance > 0 ? 'text-red-700' : 'text-emerald-700';
+                        })()
+                      }`}>
+                        ₱{(() => {
+                          const total = booking.invoice?.total || 0;
+                          const deposit = booking.depositAmount || 0;
+                          const paid = booking.paidAmount || 0;
+                          const balance = total - deposit - paid;
+                          return Math.max(0, balance).toLocaleString('en-PH');
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-blue-200 flex flex-wrap gap-2">
+                  {booking.paymentStatus !== 'paid' && (
+                    <button
+                      onClick={() => {
+                        setSelectedBookingForPayment(booking);
+                        setPaymentModalOpen(true);
+                      }}
+                      className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                    >
+                      Update Payment
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View for Today */}
+          <div className="hidden lg:block rounded-2xl border-2 border-blue-200 bg-blue-50 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead className="bg-blue-100 border-b border-blue-200">
+                  <tr>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Booking</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Customer</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 whitespace-nowrap">Date & Time</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Total</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Deposit</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Paid</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Balance</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Status</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-blue-200">
+                  {todayBookings.map((booking) => {
+                    const total = booking.invoice?.total || 0;
+                    const deposit = booking.depositAmount || 0;
+                    const paid = booking.paidAmount || 0;
+                    const balance = total - deposit - paid;
+                    return (
+                      <tr key={booking.id} className="hover:bg-blue-100/50">
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-medium text-slate-900">{booking.bookingId}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">{getCustomerName(booking)}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">
+                          {format(parseISO(booking.slot.date), 'MMM d')} {formatTime12Hour(booking.slot.time)}
+                        </td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-emerald-700">₱{deposit.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{paid.toLocaleString('en-PH')}</td>
+                        <td className={`px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                          ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                        </td>
+                        <td className="px-4 xl:px-6 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            paymentStatusColors[booking.paymentStatus || 'unpaid']
+                          }`}>
+                            {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                          </span>
+                        </td>
+                        <td className="px-4 xl:px-6 py-3">
+                          {booking.paymentStatus !== 'paid' && (
+                            <button
+                              onClick={() => {
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
+                              }}
+                              className="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                            >
+                              Update
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* This Week's Bookings Table - Always Visible */}
+      {thisWeekBookings.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span>This Week's Bookings</span>
+            <span className="text-sm font-normal text-slate-500">({thisWeekBookings.length})</span>
+          </h2>
+          
+          {/* Mobile Card View for This Week */}
+          <div className="lg:hidden space-y-3">
+            {thisWeekBookings.map((booking) => (
+              <div key={booking.id} className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
+                    </div>
+                    <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
+                      paymentStatusColors[booking.paymentStatus || 'unpaid']
+                    }`}
+                  >
+                    {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Service Date:</span>
+                    <span className="font-medium text-slate-900 text-right">
+                      {format(parseISO(booking.slot.date), 'MMM d, yyyy')} {formatTime12Hour(booking.slot.time)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total Amount:</span>
+                    <span className="font-semibold text-slate-900">
+                      ₱{booking.invoice?.total.toLocaleString('en-PH') || '0'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Deposit (DP):</span>
+                    {booking.depositAmount ? (
+                      <span className="font-semibold text-emerald-700">
+                        ₱{booking.depositAmount.toLocaleString('en-PH')}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">No DP</span>
+                    )}
+                  </div>
+                  {booking.invoice && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-semibold">Balance:</span>
+                      <span className={`font-bold ${
+                        (() => {
+                          const total = booking.invoice?.total || 0;
+                          const deposit = booking.depositAmount || 0;
+                          const paid = booking.paidAmount || 0;
+                          const balance = total - deposit - paid;
+                          return balance > 0 ? 'text-red-700' : 'text-emerald-700';
+                        })()
+                      }`}>
+                        ₱{(() => {
+                          const total = booking.invoice?.total || 0;
+                          const deposit = booking.depositAmount || 0;
+                          const paid = booking.paidAmount || 0;
+                          const balance = total - deposit - paid;
+                          return Math.max(0, balance).toLocaleString('en-PH');
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-emerald-200 flex flex-wrap gap-2">
+                  {booking.paymentStatus !== 'paid' && (
+                    <button
+                      onClick={() => {
+                        setSelectedBookingForPayment(booking);
+                        setPaymentModalOpen(true);
+                      }}
+                      className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                    >
+                      Update Payment
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View for This Week */}
+          <div className="hidden lg:block rounded-2xl border-2 border-emerald-200 bg-emerald-50 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead className="bg-emerald-100 border-b border-emerald-200">
+                  <tr>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Booking</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Customer</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Date & Time</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Total</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Deposit</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Paid</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Balance</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Status</th>
+                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-emerald-200">
+                  {thisWeekBookings.map((booking) => {
+                    const total = booking.invoice?.total || 0;
+                    const deposit = booking.depositAmount || 0;
+                    const paid = booking.paidAmount || 0;
+                    const balance = total - deposit - paid;
+                    return (
+                      <tr key={booking.id} className="hover:bg-emerald-100/50">
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-medium text-slate-900">{booking.bookingId}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">{getCustomerName(booking)}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">
+                          {format(parseISO(booking.slot.date), 'MMM d')} {formatTime12Hour(booking.slot.time)}
+                        </td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-emerald-700">₱{deposit.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{paid.toLocaleString('en-PH')}</td>
+                        <td className={`px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                          ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                        </td>
+                        <td className="px-4 xl:px-6 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            paymentStatusColors[booking.paymentStatus || 'unpaid']
+                          }`}>
+                            {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                          </span>
+                        </td>
+                        <td className="px-4 xl:px-6 py-3">
+                          {booking.paymentStatus !== 'paid' && (
+                            <button
+                              onClick={() => {
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
+                              }}
+                              className="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                            >
+                              Update
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* All Other Bookings - Mobile Card View */}
       <div className="lg:hidden space-y-3">
         {filteredBookings.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-xs sm:text-sm text-slate-500">
@@ -874,11 +1271,40 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         </span>
                         {getPaymentMethodBadge(booking.depositPaymentMethod)}
                       </div>
+                      {booking.paymentStatus !== 'paid' && (
+                        <button
+                          onClick={async () => {
+                            const amount = prompt('Update deposit amount (₱):', String(booking.depositAmount || 0));
+                            if (!amount || isNaN(Number(amount))) return;
+                            const method = prompt('Payment method (CASH/GCASH/PNB):', booking.depositPaymentMethod || 'CASH');
+                            if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
+                              alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
+                              return;
+                            }
+                            const res = await fetch(`/api/bookings/${booking.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                action: 'update_deposit',
+                                depositAmount: Number(amount),
+                                depositPaymentMethod: method.toUpperCase() as 'PNB' | 'CASH' | 'GCASH',
+                              }),
+                            });
+                            if (res.ok) window.location.reload();
+                          }}
+                          className="text-xs text-slate-400 hover:text-slate-600 underline"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    booking.paymentStatus !== 'paid' && (
                       <button
                         onClick={async () => {
-                          const amount = prompt('Update deposit amount (₱):', String(booking.depositAmount || 0));
+                          const amount = prompt('Enter deposit amount (₱):');
                           if (!amount || isNaN(Number(amount))) return;
-                          const method = prompt('Payment method (CASH/GCASH/PNB):', booking.depositPaymentMethod || 'CASH');
+                          const method = prompt('Payment method (CASH/GCASH/PNB):', 'CASH');
                           if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
                             alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
                             return;
@@ -896,34 +1322,9 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         }}
                         className="text-xs text-slate-400 hover:text-slate-600 underline"
                       >
-                        Edit
+                        Add DP
                       </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={async () => {
-                        const amount = prompt('Enter deposit amount (₱):');
-                        if (!amount || isNaN(Number(amount))) return;
-                        const method = prompt('Payment method (CASH/GCASH/PNB):', 'CASH');
-                        if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
-                          alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
-                          return;
-                        }
-                        const res = await fetch(`/api/bookings/${booking.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            action: 'update_deposit',
-                            depositAmount: Number(amount),
-                            depositPaymentMethod: method.toUpperCase() as 'PNB' | 'CASH' | 'GCASH',
-                          }),
-                        });
-                        if (res.ok) window.location.reload();
-                      }}
-                      className="text-xs text-slate-400 hover:text-slate-600 underline"
-                    >
-                      Add DP
-                    </button>
+                    )
                   )}
                 </div>
                 {booking.invoice && (

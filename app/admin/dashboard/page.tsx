@@ -802,22 +802,9 @@ function AdminDashboardContent() {
         </button>
       </div>
 
-      {/* Action buttons below subtab - only for calendar view */}
+      {/* Action buttons below subtab - only for calendar view (simplified, with Release Slots) */}
       {bookingsView === 'calendar' && (
         <div className="mb-4 sm:mb-6 flex flex-wrap gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
-              const end = format(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0), 'yyyy-MM-dd');
-              setBlockDefaults({ start, end });
-              setBlockModalOpen(true);
-            }}
-            className="rounded-full border border-rose-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-rose-600 hover:border-rose-600 touch-manipulation"
-          >
-            <span className="hidden sm:inline">Block entire month</span>
-            <span className="sm:hidden">Block month</span>
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -840,27 +827,11 @@ function AdminDashboardContent() {
           </button>
           <button
             type="button"
-            onClick={handleSyncSheets}
-            className="rounded-full border border-slate-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold hover:border-slate-900 touch-manipulation"
-          >
-            <span className="hidden sm:inline">Sync Google Sheet</span>
-            <span className="sm:hidden">Sync</span>
-          </button>
-          <button
-            type="button"
             onClick={() => setReleaseSlotsModalOpen(true)}
             className="rounded-full border border-amber-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-amber-700 hover:border-amber-600 hover:bg-amber-50 touch-manipulation"
           >
             <span className="hidden sm:inline">Release Slots</span>
             <span className="sm:hidden">Release</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setRecoverBookingModalOpen(true)}
-            className="rounded-full border border-blue-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-blue-700 hover:border-blue-600 hover:bg-blue-50 touch-manipulation"
-          >
-            <span className="hidden sm:inline">Recover Booking</span>
-            <span className="sm:hidden">Recover</span>
           </button>
         </div>
       )}
@@ -1020,17 +991,13 @@ function AdminDashboardContent() {
                     const bookingForSlot = bookingsWithSlots.find((b) => {
                       // Check if this slot is the primary slot for this booking
                       if (b.slotId === slot.id) {
-                        // If slot is confirmed, show booking regardless of booking status (slot status is source of truth)
-                        if (slot.status === 'confirmed') return true;
-                        // Otherwise, only show confirmed bookings
-                        return b.status === 'confirmed';
+                        // Always show the booking details for this slot (pending or confirmed)
+                        return true;
                       }
                       // Check if this slot is a linked slot (for mani-pedi, home service with multiple people, etc.)
                       if (b.linkedSlotIds && b.linkedSlotIds.includes(slot.id)) {
-                        // If slot is confirmed, show booking regardless of booking status
-                        if (slot.status === 'confirmed') return true;
-                        // Otherwise, only show confirmed bookings
-                        return b.status === 'confirmed';
+                        // Always show the booking details for this linked slot as well
+                        return true;
                       }
                       return false;
                     });
