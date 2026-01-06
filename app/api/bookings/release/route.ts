@@ -14,7 +14,7 @@ export async function GET() {
     const slots = await listSlots();
     
     // Enrich bookings with slot information
-    const bookingsWithSlots: BookingWithSlot[] = eligibleBookings
+    const bookingsWithSlots = eligibleBookings
       .map(booking => {
         const slot = slots.find(s => s.id === booking.slotId);
         if (!slot) {
