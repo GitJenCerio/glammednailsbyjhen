@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getEligibleBookingsForRelease, manuallyReleaseBookings } from '@/lib/services/bookingService';
 import { listSlots } from '@/lib/services/slotService';
-import type { BookingWithSlot } from '@/lib/types';
+import type { BookingWithSlot, Slot } from '@/lib/types';
 
 /**
  * GET: Get bookings eligible for manual release
