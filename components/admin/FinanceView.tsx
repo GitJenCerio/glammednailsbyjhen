@@ -889,7 +889,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       {todayBookings.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-            <span>Today's Bookings</span>
+            <span>Today&apos;s Bookings</span>
             <span className="text-sm font-normal text-slate-500">({todayBookings.length})</span>
           </h2>
           
@@ -1045,7 +1045,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       {thisWeekBookings.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-            <span>This Week's Bookings</span>
+            <span>This Week&apos;s Bookings</span>
             <span className="text-sm font-normal text-slate-500">({thisWeekBookings.length})</span>
           </h2>
           
