@@ -1160,7 +1160,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                       total: recalculatedTotal, // Use recalculated total
                       notes,
                       squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
-                      createdAt: booking.invoice.createdAt, // Preserve original creation date
+                      createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date or use current date
                       updatedAt: new Date().toISOString(),
                     };
 
