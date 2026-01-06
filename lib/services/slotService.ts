@@ -127,6 +127,49 @@ export async function updateSlot(id: string, data: Partial<Slot>, blocks: Blocke
 }
 
 export async function deleteSlot(id: string) {
+  // Check if slot exists
+  const slotDoc = await slotCollection.doc(id).get();
+  if (!slotDoc.exists) {
+    throw new Error('Slot not found.');
+  }
+
+  // Check for active bookings (not cancelled) that use this slot
+  const { adminDb } = await import('../firebaseAdmin');
+  const bookingsCollection = adminDb.collection('bookings');
+  
+  // Check if this slot is used in any active booking
+  const bookingsWithSlot = await bookingsCollection
+    .where('slotId', '==', id)
+    .get();
+  
+  // Also check if this slot is used as a linked slot
+  const bookingsWithLinkedSlot = await bookingsCollection
+    .where('linkedSlotIds', 'array-contains', id)
+    .get();
+  
+  // Also check if this slot is used as a paired slot
+  const bookingsWithPairedSlot = await bookingsCollection
+    .where('pairedSlotId', '==', id)
+    .get();
+
+  // Combine all bookings that use this slot
+  const allBookings = [
+    ...bookingsWithSlot.docs,
+    ...bookingsWithLinkedSlot.docs,
+    ...bookingsWithPairedSlot.docs,
+  ];
+
+  // Filter to only active bookings (not cancelled)
+  const activeBookings = allBookings.filter((doc) => {
+    const data = doc.data();
+    return data.status !== 'cancelled';
+  });
+
+  if (activeBookings.length > 0) {
+    throw new Error('Cannot delete slot: This slot has active bookings. Please cancel the bookings first.');
+  }
+
+  // Safe to delete
   await slotCollection.doc(id).delete();
 }
 

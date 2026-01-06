@@ -1336,11 +1336,17 @@ export async function manuallyReleaseBookings(bookingIds: string[]) {
         const bookingRef = bookingsCollection.doc(bookingId);
         const bookingSnap = await bookingRef.get();
         
-        if (!bookingSnap.exists) return;
+        if (!bookingSnap.exists) {
+          console.warn(`Booking ${bookingId} not found, skipping release`);
+          return;
+        }
         const data = bookingSnap.data()!;
         
         // Only release bookings that are still in pending_form status
-        if (data.status !== 'pending_form') return;
+        if (data.status !== 'pending_form') {
+          console.warn(`Booking ${bookingId} is not in pending_form status (${data.status}), skipping release`);
+          return;
+        }
 
         await adminDb.runTransaction(async (transaction) => {
           const slotRef = slotsCollection.doc(data.slotId);
@@ -1361,19 +1367,31 @@ export async function manuallyReleaseBookings(bookingIds: string[]) {
 
           transaction.delete(bookingRef);
 
-          if (slotSnap.exists && slotSnap.data()?.status === 'pending') {
-            transaction.update(slotRef, {
-              status: 'available',
-              updatedAt: Timestamp.now().toDate().toISOString(),
-            });
-          }
-          linkedRefs.forEach((ref, index) => {
-            const snap = linkedSnaps[index];
-            if (snap?.exists && snap.data()?.status === 'pending') {
-              transaction.update(ref, {
+          // Release the main slot - update to available if it exists and is not already available
+          // This works for all nail techs regardless of which one the slot belongs to
+          if (slotSnap.exists) {
+            const slotStatus = slotSnap.data()?.status;
+            // Release slot if it's not already available (could be pending, confirmed, blocked, etc.)
+            if (slotStatus && slotStatus !== 'available') {
+              transaction.update(slotRef, {
                 status: 'available',
                 updatedAt: Timestamp.now().toDate().toISOString(),
               });
+            }
+          }
+
+          // Release linked slots - update to available if they exist and are not already available
+          linkedRefs.forEach((ref, index) => {
+            const snap = linkedSnaps[index];
+            if (snap?.exists) {
+              const slotStatus = snap.data()?.status;
+              // Release slot if it's not already available
+              if (slotStatus && slotStatus !== 'available') {
+                transaction.update(ref, {
+                  status: 'available',
+                  updatedAt: Timestamp.now().toDate().toISOString(),
+                });
+              }
             }
           });
         });

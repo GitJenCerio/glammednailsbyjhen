@@ -45,8 +45,8 @@ function canSlotAccommodateService(
   const requiredSlots = getRequiredSlotCount(serviceType);
   if (requiredSlots === 1) return true;
 
-  // Get all slots for this date
-  const slotsForDate = allSlots.filter((s) => s.date === slot.date);
+  // Get all slots for this date and same nail tech
+  const slotsForDate = allSlots.filter((s) => s.date === slot.date && s.nailTechId === slot.nailTechId);
 
   let referenceSlot = slot;
   // Consecutive means: available slots with no booked slots in between
@@ -564,8 +564,8 @@ export default function BookingPage() {
     let referenceSlot = selectedSlot;
     let errorMessage: string | null = null;
 
-    // Get all slots for this date to help with debugging
-    const slotsForDate = slots.filter((s) => s.date === selectedSlot.date);
+    // Get all slots for this date and same nail tech (only check slots for the chosen nail tech)
+    const slotsForDate = slots.filter((s) => s.date === selectedSlot.date && s.nailTechId === selectedSlot.nailTechId);
 
     // Check for consecutive slots starting from the selected slot
     // Consecutive means: available slots with no booked slots in between
@@ -631,7 +631,7 @@ export default function BookingPage() {
           break;
         }
         const availableTimes = slotsForDate
-          .filter((s) => s.status === 'available')
+          .filter((s) => s.status === 'available' && s.nailTechId === selectedSlot.nailTechId)
           .map((s) => formatTime12Hour(s.time))
           .join(', ');
         errorMessage = `This service requires ${requiredSlots} consecutive available slots starting from ${formatTime12Hour(selectedSlot.time)}, but there aren't enough slots available after this time. Available slots on this date: ${availableTimes || 'none'}. Please select a different time or date.`;

@@ -160,8 +160,21 @@ export function ReleaseSlotsModal({ open, onClose, onRelease }: ReleaseSlotsModa
                 {eligibleBookings.map((booking) => {
                   const isSelected = selectedBookingIds.has(booking.id);
                   const slot = booking.slot;
-                  const slotDate = slot ? format(parseISO(slot.date), 'MMM d, yyyy') : 'N/A';
-                  const slotTime = slot ? formatTime12Hour(slot.time) : 'N/A';
+                  // Safely parse date - check if it's a valid date string
+                  let slotDate = 'N/A';
+                  if (slot && slot.date && slot.date !== 'N/A' && slot.date.trim() !== '') {
+                    try {
+                      const parsedDate = parseISO(slot.date);
+                      // Check if the parsed date is valid
+                      if (parsedDate instanceof Date && !Number.isNaN(parsedDate.getTime())) {
+                        slotDate = format(parsedDate, 'MMM d, yyyy');
+                      }
+                    } catch (e) {
+                      // If parsing fails, use 'N/A'
+                      slotDate = 'N/A';
+                    }
+                  }
+                  const slotTime = slot && slot.time && slot.time !== 'N/A' ? formatTime12Hour(slot.time) : 'N/A';
                   
                   return (
                     <label

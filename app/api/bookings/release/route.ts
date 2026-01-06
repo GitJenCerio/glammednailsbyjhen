@@ -14,24 +14,27 @@ export async function GET() {
     const slots = await listSlots();
     
     // Enrich bookings with slot information
-    const bookingsWithSlots: BookingWithSlot[] = eligibleBookings.map(booking => {
-      const slot = slots.find(s => s.id === booking.slotId);
-      if (!slot) {
-        // If slot not found, return booking without slot (shouldn't happen but handle gracefully)
-        return { ...booking, slot: { id: booking.slotId, date: 'N/A', time: 'N/A', status: 'available', createdAt: '', updatedAt: '' } } as BookingWithSlot;
-      }
-      
-      const linkedSlots = (booking.linkedSlotIds || [])
-        .map(id => slots.find(s => s.id === id))
-        .filter((s): s is typeof s & { id: string } => s !== undefined);
-      
-      return {
-        ...booking,
-        slot,
-        linkedSlots: linkedSlots.length > 0 ? linkedSlots : undefined,
-        pairedSlot: linkedSlots[0],
-      };
-    });
+    const bookingsWithSlots: BookingWithSlot[] = eligibleBookings
+      .map(booking => {
+        const slot = slots.find(s => s.id === booking.slotId);
+        if (!slot) {
+          // If slot not found, skip this booking (shouldn't happen but handle gracefully)
+          // Return null to filter it out
+          return null;
+        }
+        
+        const linkedSlots = (booking.linkedSlotIds || [])
+          .map(id => slots.find(s => s.id === id))
+          .filter((s): s is typeof s & { id: string } => s !== undefined);
+        
+        return {
+          ...booking,
+          slot,
+          linkedSlots: linkedSlots.length > 0 ? linkedSlots : undefined,
+          pairedSlot: linkedSlots[0],
+        };
+      })
+      .filter((booking): booking is BookingWithSlot => booking !== null);
     
     return NextResponse.json({ bookings: bookingsWithSlots });
   } catch (error: any) {
