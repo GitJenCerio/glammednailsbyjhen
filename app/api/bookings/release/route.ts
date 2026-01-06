@@ -14,7 +14,7 @@ export async function GET() {
     const slots = await listSlots();
     
     // Enrich bookings with slot information
-    const bookingsWithSlots = eligibleBookings
+    const bookingsWithSlots: BookingWithSlot[] = eligibleBookings
       .map(booking => {
         const slot = slots.find(s => s.id === booking.slotId);
         if (!slot) {
@@ -25,14 +25,16 @@ export async function GET() {
         
         const linkedSlots = (booking.linkedSlotIds || [])
           .map(id => slots.find(s => s.id === id))
-          .filter((s): s is typeof s & { id: string } => s !== undefined);
+          .filter((s): s is Slot => s !== undefined);
         
-        return {
+        const result: BookingWithSlot = {
           ...booking,
           slot,
           linkedSlots: linkedSlots.length > 0 ? linkedSlots : undefined,
           pairedSlot: linkedSlots[0],
         };
+        
+        return result;
       })
       .filter((booking): booking is BookingWithSlot => booking !== null);
     
