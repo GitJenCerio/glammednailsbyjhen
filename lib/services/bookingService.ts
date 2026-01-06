@@ -234,10 +234,64 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
       if (linkedSlot.nailTechId !== slot.nailTechId) {
         throw new Error('Consecutive slots must belong to the same nail tech.');
       }
-      const expectedNextTime = getNextSlotTime(previousSlot.time);
-      if (!expectedNextTime || linkedSlot.time !== expectedNextTime) {
+      
+      // Check if slots are consecutive in the time sequence
+      // We allow skipping over times that don't have slots created
+      // The frontend already validated that these are consecutive (no booked slots between them)
+      // Here we just verify the linked slot comes after the previous one in the time sequence
+      const { SLOT_TIMES } = await import('../constants/slots');
+      const previousTime = previousSlot.time.trim();
+      const linkedTime = linkedSlot.time.trim();
+      
+      const previousIndex = SLOT_TIMES.indexOf(previousTime as any);
+      const linkedIndex = SLOT_TIMES.indexOf(linkedTime as any);
+      
+      if (previousIndex === -1) {
+        throw new Error(`Previous slot time ${previousTime} is not a valid slot time.`);
+      }
+      
+      if (linkedIndex === -1) {
+        throw new Error(`Linked slot time ${linkedTime} is not a valid slot time.`);
+      }
+      
+      if (linkedIndex <= previousIndex) {
+        // Linked slot is not after the previous slot - not consecutive
         throw new Error('Selected slots are not consecutive.');
       }
+      
+      // Verify the linked slot is reachable from the previous slot by following the time sequence
+      // (allowing for gaps where slots don't exist at intermediate times)
+      // We iterate through times after previousSlot.time and verify linkedTime is encountered
+      let currentCheckTime = previousTime;
+      let foundLinkedSlot = false;
+      
+      while (!foundLinkedSlot) {
+        const nextTime = getNextSlotTime(currentCheckTime);
+        if (!nextTime) {
+          // No more times in sequence - linked slot is not reachable
+          throw new Error('Selected slots are not consecutive.');
+        }
+        
+        const nextTimeTrimmed = nextTime.trim();
+        
+        if (nextTimeTrimmed === linkedTime) {
+          // Found the linked slot as the next time in sequence - it's consecutive
+          foundLinkedSlot = true;
+          break;
+        }
+        
+        // Check if we've passed the linked slot time
+        const nextIndex = SLOT_TIMES.indexOf(nextTimeTrimmed as any);
+        if (nextIndex > linkedIndex) {
+          // We've passed the linked slot time - it's not in the correct sequence
+          throw new Error('Selected slots are not consecutive.');
+        }
+        
+        // Continue to next time - the linked slot might be at a later time
+        // (skipping over times where slots don't exist)
+        currentCheckTime = nextTimeTrimmed;
+      }
+      
       if (slotIsBlocked(linkedSlot, blocks)) {
         throw new Error('One of the consecutive slots is blocked.');
       }

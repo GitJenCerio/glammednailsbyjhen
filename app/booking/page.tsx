@@ -45,52 +45,64 @@ function canSlotAccommodateService(
   const requiredSlots = getRequiredSlotCount(serviceType);
   if (requiredSlots === 1) return true;
 
-  // Get all slots for this date and same nail tech
-  const slotsForDate = allSlots.filter((s) => s.date === slot.date && s.nailTechId === slot.nailTechId);
+  // Get all slots for this date and same nail tech, sorted by time
+  const slotsForDate = allSlots
+    .filter((s) => s.date === slot.date && s.nailTechId === slot.nailTechId)
+    .sort((a, b) => a.time.localeCompare(b.time));
 
   let referenceSlot = slot;
-  // Consecutive means: available slots with no booked slots in between
+  // Consecutive means: available slots with no booked/blocked slots in between
   // We skip over slot times that don't exist in the schedule at all
   for (let step = 1; step < requiredSlots; step += 1) {
     let nextSlot: Slot | null = null;
-    let currentCheckTime = referenceSlot.time;
-    let foundBookedSlot = false;
+    let currentCheckTime = referenceSlot.time.trim();
     
-    // Keep looking for the next available slot, checking for booked slots in between
+    // Keep looking for the next available slot in sequence
     while (!nextSlot) {
       const nextTime = getNextSlotTime(currentCheckTime);
-      if (!nextTime) return false; // No more slot times
+      if (!nextTime) {
+        // No more slot times in the sequence
+        return false;
+      }
       
-      // Check if a slot exists at this time
+      // Check if a slot exists at this time (normalize time strings for comparison)
+      const normalizedNextTime = nextTime.trim();
       const slotAtTime = slotsForDate.find(
-        (candidate) => candidate.time === nextTime
+        (candidate) => candidate.time.trim() === normalizedNextTime
       );
       
       if (slotAtTime) {
-        // Slot exists - check if blocked
+        // Slot exists at this time
+        // Check if blocked
         const isBlocked = blockedDates.some(
           (block) => slotAtTime.date >= block.startDate && slotAtTime.date <= block.endDate
         );
-        if (isBlocked) return false;
+        if (isBlocked) {
+          // Blocked slot breaks consecutiveness
+          return false;
+        }
         
-        // If it's booked (not available), there's a gap
-        if (slotAtTime.status !== 'available') {
-          foundBookedSlot = true;
-          // Continue checking - maybe there are more available slots after this booked one
-        } else {
-          // Found an available slot
+        // Check status
+        if (slotAtTime.status === 'available') {
+          // Found the next available slot - this is consecutive
           nextSlot = slotAtTime;
-          // If we found a booked slot before this, that's a gap
-          if (foundBookedSlot) return false;
           break;
+        } else {
+          // Slot exists but is not available (pending, confirmed, blocked, etc.)
+          // This breaks consecutiveness - there's a gap
+          return false;
         }
       }
       // Slot doesn't exist at this time - skip it (not a gap, just not created)
+      // Continue to next time in sequence
       
-      currentCheckTime = nextTime;
+      currentCheckTime = normalizedNextTime;
     }
     
-    if (!nextSlot) return false;
+    if (!nextSlot) {
+      // Couldn't find the next available slot
+      return false;
+    }
     referenceSlot = nextSlot;
   }
   return true;
@@ -379,12 +391,12 @@ function SlotModal({
               />
             </div>
           )}
-          {requiresMultipleSlots && missingLinkedSlots && (
+          {requiresMultipleSlots && missingLinkedSlots && serviceMessage && (serviceMessage.includes('requires') || serviceMessage.includes('consecutive')) && (
             <div className="rounded-2xl border-2 border-rose-400 bg-rose-200 px-4 py-3 text-sm text-rose-800">
               <p>This service requires <strong>{requiredSlots} consecutive slots</strong>. Please select a different time or date where {requiredSlots} consecutive slots are available.</p>
             </div>
           )}
-          {serviceMessage && !missingLinkedSlots && (
+          {serviceMessage && !missingLinkedSlots && !(serviceMessage.includes('requires') && serviceMessage.includes('consecutive') && serviceMessage.includes('Please select')) && (
             <div className="rounded-xl sm:rounded-2xl border-2 border-blue-400 bg-blue-100 px-3 sm:px-4 py-2.5 sm:py-3">
               <p className="text-xs sm:text-sm font-semibold text-blue-900 mb-1">📅 Slot Information</p>
               <p className="text-[10px] sm:text-xs text-blue-900 leading-relaxed">
@@ -565,29 +577,35 @@ export default function BookingPage() {
     let errorMessage: string | null = null;
 
     // Get all slots for this date and same nail tech (only check slots for the chosen nail tech)
-    const slotsForDate = slots.filter((s) => s.date === selectedSlot.date && s.nailTechId === selectedSlot.nailTechId);
+    // Sort by time to ensure consistent ordering
+    const slotsForDate = slots
+      .filter((s) => s.date === selectedSlot.date && s.nailTechId === selectedSlot.nailTechId)
+      .sort((a, b) => a.time.localeCompare(b.time));
 
     // Check for consecutive slots starting from the selected slot
-    // Consecutive means: available slots with no booked slots in between
+    // Consecutive means: available slots with no booked/blocked slots in between
     // We skip over slot times that don't exist in the schedule at all
     for (let step = 1; step < requiredSlots; step += 1) {
-      // Find the next slot that exists in the schedule, checking all times in sequence
       let nextSlotAny: Slot | null = null;
-      let currentCheckTime = referenceSlot.time;
-      let foundBookedSlot = false;
-      let bookedSlotTime: string | null = null;
+      let currentCheckTime = referenceSlot.time.trim();
       
-      // Keep looking for the next available slot, checking for booked slots in between
+      // Keep looking for the next available slot in sequence
       while (!nextSlotAny) {
         const nextTime = getNextSlotTime(currentCheckTime);
         if (!nextTime) {
           // No more slot times in the predefined sequence
+          const availableTimes = slotsForDate
+            .filter((s) => s.status === 'available' && s.nailTechId === selectedSlot.nailTechId)
+            .map((s) => formatTime12Hour(s.time))
+            .join(', ');
+          errorMessage = `This service requires ${requiredSlots} consecutive available slots starting from ${formatTime12Hour(selectedSlot.time)}, but there aren't enough slots available after this time. Available slots on this date: ${availableTimes || 'none'}. Please select a different time or date.`;
           break;
         }
         
-        // Check if a slot exists at this time
+        // Check if a slot exists at this time (normalize time strings for comparison)
+        const normalizedNextTime = nextTime.trim();
         const slotAtTime = slotsForDate.find(
-          (candidate) => candidate.time === nextTime
+          (candidate) => candidate.time.trim() === normalizedNextTime
         );
         
         if (slotAtTime) {
@@ -602,39 +620,26 @@ export default function BookingPage() {
             break;
           }
           
-          // If it's booked (not available), there's a gap
-          if (slotAtTime.status !== 'available') {
-            foundBookedSlot = true;
-            bookedSlotTime = nextTime;
-            // Continue checking - maybe there are more available slots after this booked one
-          } else {
-            // Found an available slot
+          // Check status
+          if (slotAtTime.status === 'available') {
+            // Found the next available slot - this is consecutive
             nextSlotAny = slotAtTime;
-            // If we found a booked slot before this, that's a problem
-            if (foundBookedSlot) {
-              errorMessage = `This service requires ${requiredSlots} consecutive slots, but there is a booked slot at ${formatTime12Hour(bookedSlotTime!)} between the slots. There is a gap in the consecutive slots. Please select a different time or date.`;
-              nextSlotAny = null; // Reset so we break out
-              break;
-            }
+            break;
+          } else {
+            // Slot exists but is not available (pending, confirmed, blocked, etc.)
+            // This breaks consecutiveness - there's a gap
+            errorMessage = `This service requires ${requiredSlots} consecutive slots, but there is a ${slotAtTime.status} slot at ${formatTime12Hour(nextTime)} between the slots. There is a gap in the consecutive slots. Please select a different time or date.`;
             break;
           }
         }
         // Slot doesn't exist at this time - skip it (not a gap, just not created)
+        // Continue to next time in sequence
         
-        currentCheckTime = nextTime;
+        currentCheckTime = normalizedNextTime;
       }
 
-      // If we couldn't find the next available slot
+      // If we couldn't find the next available slot, break with error
       if (!nextSlotAny) {
-        if (foundBookedSlot && bookedSlotTime) {
-          // We already set the error message above
-          break;
-        }
-        const availableTimes = slotsForDate
-          .filter((s) => s.status === 'available' && s.nailTechId === selectedSlot.nailTechId)
-          .map((s) => formatTime12Hour(s.time))
-          .join(', ');
-        errorMessage = `This service requires ${requiredSlots} consecutive available slots starting from ${formatTime12Hour(selectedSlot.time)}, but there aren't enough slots available after this time. Available slots on this date: ${availableTimes || 'none'}. Please select a different time or date.`;
         break;
       }
 
@@ -648,8 +653,8 @@ export default function BookingPage() {
       return;
     }
 
+    // Successfully found all required consecutive slots - clear any error messages
     setLinkedSlots(collected);
-    const lastSlot = collected[collected.length - 1];
     const serviceLabel =
       serviceOptions.find((option) => option.value === selectedService)?.label ?? 'This service';
     
@@ -784,7 +789,8 @@ export default function BookingPage() {
       }).filter((id): id is string => id !== null);
 
       if (requiredSlots > 1 && linkedSlotIds.length !== requiredSlots - 1) {
-        setServiceMessage('This service requires consecutive slots. Please choose another time or date.');
+        // Re-validate slots after refresh - they might have changed
+        // The useEffect will automatically update serviceMessage with the correct validation
         setLinkedSlots([]);
         setIsBooking(false);
         return;
