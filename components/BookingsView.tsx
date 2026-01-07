@@ -6,7 +6,7 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import type { Booking, Slot, BookingWithSlot, NailTech } from '@/lib/types';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { PaymentModal } from '@/components/admin/modals/PaymentModal';
-import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline } from 'react-icons/io5';
+import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical } from 'react-icons/io5';
 
 type FilterPeriod = 'all' | 'today' | 'week' | 'month';
 type StatusFilter = 'all' | 'upcoming' | 'done';
@@ -225,12 +225,17 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       return 'Done';
     }
 
+    // If booking is already confirmed, show "Confirmed" instead of "Awaiting DP"
+    if (booking.status === 'confirmed' && booking.paymentStatus === 'unpaid' && deposit === 0) {
+      return 'Confirmed';
+    }
+
     if (booking.paymentStatus === 'unpaid' && deposit === 0) {
       return 'Awaiting DP';
     }
 
     // Invoice exists and there is still balance to pay
-    return 'Invoice generated';
+    return 'Invoiced';
   }, [getFinanceSummary]);
 
   // Filter bookings by period, status, and month
@@ -365,7 +370,16 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       // Exclude today's bookings (they're shown in the Today section)
       if (appointmentDate >= today && appointmentDate < tomorrow) return false;
       // Include rest of the week
-      return appointmentDate >= startOfWeek && appointmentDate < endOfWeek;
+      if (!(appointmentDate >= startOfWeek && appointmentDate < endOfWeek)) return false;
+      
+      // Exclude cancelled bookings
+      if (booking.status === 'cancelled') return false;
+      
+      // Exclude done bookings
+      const stage = getBookingStageLabel(booking);
+      if (stage === 'Done') return false;
+      
+      return true;
     });
 
     // Apply status filter
@@ -639,14 +653,28 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
         <div className="space-y-2 text-xs sm:text-sm">
           <div className="flex justify-between items-start gap-2">
             <span className="text-slate-500 flex-shrink-0">Service:</span>
-            <span className="font-medium text-slate-900 text-right break-words">{booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}</span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <span className="font-medium text-slate-900 text-right break-words">{booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}</span>
+              {booking.serviceLocation && (
+                <span
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap flex-shrink-0 ${
+                    booking.serviceLocation === 'homebased_studio'
+                      ? 'bg-indigo-100 text-indigo-800'
+                      : 'bg-teal-100 text-teal-800'
+                  }`}
+                  title={booking.serviceLocation === 'homebased_studio' ? 'Studio St' : 'Home Service'}
+                >
+                  {booking.serviceLocation === 'homebased_studio' ? 'ST' : 'HS'}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex justify-between items-start gap-2">
             <span className="text-slate-500 flex-shrink-0">Contact:</span>
             <span className="font-medium text-slate-600 text-right break-all">{getCustomerPhone(booking)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-500">Client Type:</span>
+            <span className="text-slate-500">Type:</span>
             {clientType ? (
               <span
                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${
@@ -677,7 +705,11 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
               {onMakeQuotation && (
                 <button
                   onClick={() => onMakeQuotation(booking.id)}
-                  className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-rose-700"
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
+                    booking.invoice
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
                 >
                   {booking.invoice ? 'Requote' : 'Quote'}
                 </button>
@@ -717,48 +749,62 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     
     return (
       <tr key={booking.id} className="hover:bg-slate-100 transition-colors border-b border-slate-200">
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
-          <span className="text-[11px] md:text-xs xl:text-sm font-semibold text-slate-900">{booking.bookingId}</span>
+        <td className="px-3 py-3 align-middle">
+          <span className="text-xs font-semibold text-slate-900 whitespace-nowrap">{booking.bookingId}</span>
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
+        <td className="px-2 py-3 align-middle text-center w-[32px]">
           {(booking.dateChanged || booking.timeChanged) && (
             <span
-              className="text-[11px] md:text-xs xl:text-sm"
+              className="text-sm inline-block"
               title={booking.validationWarnings?.join('; ') || 'Date or time was changed'}
             >
               ⚠️
             </span>
           )}
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
+        <td className="px-3 py-3 align-middle">
           {booking.slot ? (
-            <div>
-              <div className="text-[11px] md:text-xs xl:text-sm text-slate-900">
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-900 whitespace-nowrap">
                 {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
-              </div>
-              <div className="text-[10px] md:text-[11px] xl:text-xs text-slate-500">
+              </span>
+              <span className="text-[11px] text-slate-500 whitespace-nowrap">
                 {getTimeRange(booking)}
-              </div>
+              </span>
             </div>
           ) : (
-            <span className="text-[11px] md:text-xs xl:text-sm text-slate-400">N/A</span>
+            <span className="text-xs text-slate-400">N/A</span>
           )}
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
-          <span className="text-[11px] md:text-xs xl:text-sm text-slate-700">{getCustomerName(booking)}</span>
+        <td className="px-3 py-3 align-middle">
+          <span className="text-xs text-slate-700 truncate block max-w-full">{getCustomerName(booking)}</span>
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
-          <span className="text-[11px] md:text-xs xl:text-sm text-slate-700">
-            {booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}
-          </span>
+        <td className="px-3 py-3 align-middle">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-700 whitespace-nowrap">
+              {booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}
+            </span>
+            {booking.serviceLocation && (
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
+                  booking.serviceLocation === 'homebased_studio'
+                    ? 'bg-indigo-100 text-indigo-800'
+                    : 'bg-teal-100 text-teal-800'
+                }`}
+                title={booking.serviceLocation === 'homebased_studio' ? 'Studio St' : 'Home Service'}
+              >
+                {booking.serviceLocation === 'homebased_studio' ? 'ST' : 'HS'}
+              </span>
+            )}
+          </div>
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
-          <span className="text-[11px] md:text-xs xl:text-sm text-slate-600">{getCustomerPhone(booking)}</span>
+        <td className="px-3 py-3 align-middle">
+          <span className="text-xs text-slate-600 whitespace-nowrap">{getCustomerPhone(booking)}</span>
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
+        <td className="px-3 py-3 align-middle">
           {clientType ? (
             <span
-              className={`inline-flex items-center px-1.5 md:px-2 xl:px-2 py-0.5 rounded-full text-[10px] md:text-[11px] xl:text-xs font-semibold ${
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
                 clientType === 'repeat'
                   ? 'bg-purple-100 text-purple-800'
                   : 'bg-blue-100 text-blue-800'
@@ -767,33 +813,20 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
               {clientType === 'repeat' ? 'Repeat' : 'New'}
             </span>
           ) : (
-            <span className="text-[11px] md:text-xs xl:text-sm text-slate-400">N/A</span>
+            <span className="text-xs text-slate-400">N/A</span>
           )}
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap text-center">
-          {booking.customerData && Object.keys(booking.customerData).length > 0 ? (
-            <button
-              onClick={() => setResponseModalBooking(booking)}
-              className="inline-flex items-center justify-center rounded-full border-2 border-slate-300 bg-white px-1.5 md:px-2 xl:px-2 py-0.5 md:py-1 text-[10px] md:text-[11px] xl:text-xs text-slate-700 hover:bg-slate-50"
-              title="View form response"
-            >
-              <IoEyeOutline className="w-3 h-3" />
-            </button>
-          ) : (
-            <span className="text-[10px] md:text-[11px] xl:text-xs text-slate-400">No form</span>
-          )}
-        </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
+        <td className="px-3 py-3 align-middle">
           <span
-            className={`inline-flex items-center px-1.5 md:px-2 xl:px-2.5 py-0.5 rounded-full text-[10px] md:text-[11px] xl:text-xs font-semibold border ${
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
               statusColors[booking.status] || 'bg-gray-100 text-gray-800 border-gray-200'
             }`}
           >
             {stageLabel}
           </span>
         </td>
-        <td className="px-2 md:px-3 xl:px-6 py-2 md:py-2.5 xl:py-4 whitespace-nowrap">
-          <div className="flex flex-wrap gap-2 items-center">
+        <td className="px-1 py-3 whitespace-nowrap text-center align-middle w-full">
+          <div className="flex justify-center items-center w-full">
             {!isDone && (
               <>
                 {(onMakeQuotation || onReschedule || onCancel || (booking.customerData && Object.keys(booking.customerData).length > 0)) && (
@@ -821,11 +854,10 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                           });
                         }
                       }}
-                      className="rounded-full border-2 border-slate-300 bg-white px-2 md:px-2.5 xl:px-3 py-1 md:py-1.5 text-[10px] md:text-[11px] xl:text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-0.5 md:gap-1"
+                      className="inline-flex items-center justify-center rounded-full border-2 border-slate-300 bg-white px-1.5 py-1 text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1 min-w-[32px]"
+                      aria-label="Actions menu"
                     >
-                      <span className="hidden md:inline">Actions</span>
-                      <span className="md:hidden">Act</span>
-                      <IoChevronDown className={`w-2.5 md:w-3 h-2.5 md:h-3 transition-transform ${openDropdownId === `desktop-${booking.id}` ? 'rotate-180' : ''}`} />
+                      <IoEllipsisVertical className="w-4 h-4 flex-shrink-0" />
                     </button>
                     {openDropdownId === `desktop-${booking.id}` && dropdownPosition && typeof window !== 'undefined' && createPortal(
                       <div 
@@ -1044,21 +1076,31 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
           </div>
 
           {/* Tablet & Desktop Table View for Today */}
-          <div className="hidden md:block rounded-2xl border-2 border-blue-200 bg-blue-50 shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed xl:min-w-[900px]">
+          <div className="hidden md:block rounded-2xl border-2 border-blue-200 bg-blue-50 shadow-sm overflow-hidden">
+            <div className="w-full">
+              <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '3%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '7%' }} />
+                </colgroup>
                 <thead className="bg-blue-100 border-b border-blue-200">
                   <tr>
-                    <th className="w-[9%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Booking ID</th>
-                    <th className="w-[3%] px-1 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
-                    <th className="w-[16%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Date & Time</th>
-                    <th className="w-[16%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Customer Name</th>
-                    <th className="w-[12%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Service</th>
-                    <th className="w-[12%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Contact</th>
-                    <th className="w-[10%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Client Type</th>
-                    <th className="w-[7%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-center text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Form</th>
-                    <th className="w-[8%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Status</th>
-                    <th className="w-[7%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Actions</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Booking ID</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle w-[32px]"></th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle whitespace-nowrap">Date & Time</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle whitespace-nowrap">Customer Name</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Service</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Contact</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle whitespace-nowrap">Type</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Status</th>
+                    <th className="px-1 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-blue-200">
@@ -1084,21 +1126,31 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
           </div>
 
           {/* Tablet & Desktop Table View for This Week */}
-          <div className="hidden md:block rounded-2xl border-2 border-emerald-200 bg-emerald-50 shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed xl:min-w-[900px]">
+          <div className="hidden md:block rounded-2xl border-2 border-emerald-200 bg-emerald-50 shadow-sm overflow-hidden">
+            <div className="w-full">
+              <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '3%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '7%' }} />
+                </colgroup>
                 <thead className="bg-emerald-100 border-b border-emerald-200">
                   <tr>
-                    <th className="w-[9%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Booking ID</th>
-                    <th className="w-[3%] px-1 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
-                    <th className="w-[16%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Date & Time</th>
-                    <th className="w-[16%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Customer Name</th>
-                    <th className="w-[12%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Service</th>
-                    <th className="w-[12%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Contact</th>
-                    <th className="w-[10%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Client Type</th>
-                    <th className="w-[7%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-center text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Form</th>
-                    <th className="w-[8%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Status</th>
-                    <th className="w-[7%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-700">Actions</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Booking ID</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle w-[32px]"></th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle whitespace-nowrap">Date & Time</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle whitespace-nowrap">Customer Name</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Service</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Contact</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle whitespace-nowrap">Type</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle">Status</th>
+                    <th className="px-1 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-700 align-middle"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-emerald-200">
@@ -1124,21 +1176,31 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
           </div>
 
           {/* Tablet & Desktop Table View for All Bookings */}
-          <div className="hidden md:block rounded-2xl border-2 border-slate-300 bg-white shadow-lg shadow-slate-200/50">
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed xl:min-w-[900px]">
+          <div className="hidden md:block rounded-2xl border-2 border-slate-300 bg-white shadow-lg shadow-slate-200/50 overflow-hidden">
+            <div className="w-full">
+              <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '3%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '7%' }} />
+                </colgroup>
                 <thead className="bg-slate-100 border-b-2 border-slate-300">
                   <tr>
-                    <th className="w-[9%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Booking ID</th>
-                    <th className="w-[3%] px-1 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600"></th>
-                    <th className="w-[18%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Date & Time</th>
-                    <th className="w-[18%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left whitespace-nowrap text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Customer Name</th>
-                    <th className="w-[14%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Service</th>
-                    <th className="w-[14%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Contact</th>
-                    <th className="w-[10%] px-2 md:px-3 xl:px-4 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Client Type</th>
-                    <th className="w-[5%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-center text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Form</th>
-                    <th className="w-[5%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Status</th>
-                    <th className="w-[4%] px-1.5 md:px-2 xl:px-3 py-2 md:py-2.5 xl:py-4 text-left text-[11px] md:text-xs xl:text-sm font-semibold uppercase tracking-wider text-slate-600">Actions</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle">Booking ID</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle w-[32px]"></th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle whitespace-nowrap">Date & Time</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle whitespace-nowrap">Customer Name</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle">Service</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle">Contact</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle whitespace-nowrap">Type</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle">Status</th>
+                    <th className="px-1 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300">

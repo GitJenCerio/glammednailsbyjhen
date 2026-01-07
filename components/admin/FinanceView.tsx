@@ -14,14 +14,15 @@ type FinanceViewProps = {
   nailTechs?: NailTech[];
   selectedNailTechId?: string | null;
   onNailTechChange?: (nailTechId: string | null) => void;
+  onMakeQuotation?: (bookingId: string) => void;
 };
 
 type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 
 const paymentStatusLabels: Record<PaymentStatus, string> = {
   unpaid: 'Unpaid',
-  partial: 'Partial Paid',
-  paid: 'Fully Paid',
+  partial: 'Partial',
+  paid: 'Paid',
   refunded: 'Refunded',
 };
 
@@ -32,7 +33,7 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
   refunded: 'bg-gray-100 text-gray-800 border-gray-200',
 };
 
-export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange }: FinanceViewProps) {
+export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onMakeQuotation }: FinanceViewProps) {
   const [viewMode, setViewMode] = useState<'revenue' | 'payments'>('revenue'); // 'revenue' = by service date, 'payments' = by payment date
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -926,14 +927,19 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Deposit (DP):</span>
-                    {booking.depositAmount ? (
-                      <span className="font-semibold text-emerald-700">
-                        ₱{booking.depositAmount.toLocaleString('en-PH')}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">No DP</span>
-                    )}
+                    <span className="text-slate-500">Paid Amount:</span>
+                    {(() => {
+                      const deposit = booking.depositAmount || 0;
+                      const paid = booking.paidAmount || 0;
+                      const totalPaid = deposit + paid;
+                      return totalPaid > 0 ? (
+                        <span className="font-semibold text-emerald-700">
+                          ₱{totalPaid.toLocaleString('en-PH')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">₱0</span>
+                      );
+                    })()}
                   </div>
                   {booking.invoice && (
                     <div className="flex justify-between">
@@ -943,7 +949,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           const total = booking.invoice?.total || 0;
                           const deposit = booking.depositAmount || 0;
                           const paid = booking.paidAmount || 0;
-                          const balance = total - deposit - paid;
+                          const totalPaid = deposit + paid;
+                          const balance = total - totalPaid;
                           return balance > 0 ? 'text-red-700' : 'text-emerald-700';
                         })()
                       }`}>
@@ -951,7 +958,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           const total = booking.invoice?.total || 0;
                           const deposit = booking.depositAmount || 0;
                           const paid = booking.paidAmount || 0;
-                          const balance = total - deposit - paid;
+                          const totalPaid = deposit + paid;
+                          const balance = total - totalPaid;
                           return Math.max(0, balance).toLocaleString('en-PH');
                         })()}
                       </span>
@@ -959,16 +967,39 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   )}
                 </div>
                 <div className="mt-3 pt-3 border-t border-blue-200 flex flex-wrap gap-2">
-                  {booking.paymentStatus !== 'paid' && (
+                  {booking.paymentStatus === 'paid' ? (
                     <button
-                      onClick={() => {
-                        setSelectedBookingForPayment(booking);
-                        setPaymentModalOpen(true);
-                      }}
-                      className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                      onClick={() => handleUpdatePayment(booking.id, 'refunded')}
+                      className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
                     >
-                      Update Payment
+                      Refund
                     </button>
+                  ) : (
+                    <>
+                      {onMakeQuotation && (
+                        <button
+                          onClick={() => onMakeQuotation(booking.id)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
+                            booking.invoice
+                              ? 'bg-rose-600 hover:bg-rose-700'
+                              : 'bg-green-600 hover:bg-green-700'
+                          }`}
+                        >
+                          {booking.invoice ? 'Requote' : 'Quote'}
+                        </button>
+                      )}
+                      {booking.invoice && (
+                        <button
+                          onClick={() => {
+                            setSelectedBookingForPayment(booking);
+                            setPaymentModalOpen(true);
+                          }}
+                          className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                        >
+                          Update Payment
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -985,7 +1016,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Customer</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 whitespace-nowrap">Date & Time</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Total</th>
-                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Deposit</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Paid</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Balance</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Status</th>
@@ -997,7 +1027,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     const total = booking.invoice?.total || 0;
                     const deposit = booking.depositAmount || 0;
                     const paid = booking.paidAmount || 0;
-                    const balance = total - deposit - paid;
+                    const totalPaid = deposit + paid;
+                    const balance = total - totalPaid;
                     return (
                       <tr key={booking.id} className="hover:bg-blue-100/50">
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-medium text-slate-900">{booking.bookingId}</td>
@@ -1006,8 +1037,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           {format(parseISO(booking.slot.date), 'MMM d')} {formatTime12Hour(booking.slot.time)}
                         </td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
-                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-emerald-700">₱{deposit.toLocaleString('en-PH')}</td>
-                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{paid.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{totalPaid.toLocaleString('en-PH')}</td>
                         <td className={`px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                           ₱{Math.max(0, balance).toLocaleString('en-PH')}
                         </td>
@@ -1019,7 +1049,25 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           </span>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
-                          {booking.paymentStatus !== 'paid' && (
+                          {booking.paymentStatus === 'paid' ? (
+                            <button
+                              onClick={() => handleUpdatePayment(booking.id, 'refunded')}
+                              className="rounded-full border-2 border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Refund
+                            </button>
+                          ) : onMakeQuotation ? (
+                            <button
+                              onClick={() => onMakeQuotation(booking.id)}
+                              className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${
+                                booking.invoice
+                                  ? 'bg-rose-600 hover:bg-rose-700'
+                                  : 'bg-green-600 hover:bg-green-700'
+                              }`}
+                            >
+                              {booking.invoice ? 'Requote' : 'Quote'}
+                            </button>
+                          ) : (
                             <button
                               onClick={() => {
                                 setSelectedBookingForPayment(booking);
@@ -1082,14 +1130,19 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Deposit (DP):</span>
-                    {booking.depositAmount ? (
-                      <span className="font-semibold text-emerald-700">
-                        ₱{booking.depositAmount.toLocaleString('en-PH')}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">No DP</span>
-                    )}
+                    <span className="text-slate-500">Paid Amount:</span>
+                    {(() => {
+                      const deposit = booking.depositAmount || 0;
+                      const paid = booking.paidAmount || 0;
+                      const totalPaid = deposit + paid;
+                      return totalPaid > 0 ? (
+                        <span className="font-semibold text-emerald-700">
+                          ₱{totalPaid.toLocaleString('en-PH')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">₱0</span>
+                      );
+                    })()}
                   </div>
                   {booking.invoice && (
                     <div className="flex justify-between">
@@ -1099,7 +1152,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           const total = booking.invoice?.total || 0;
                           const deposit = booking.depositAmount || 0;
                           const paid = booking.paidAmount || 0;
-                          const balance = total - deposit - paid;
+                          const totalPaid = deposit + paid;
+                          const balance = total - totalPaid;
                           return balance > 0 ? 'text-red-700' : 'text-emerald-700';
                         })()
                       }`}>
@@ -1107,7 +1161,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           const total = booking.invoice?.total || 0;
                           const deposit = booking.depositAmount || 0;
                           const paid = booking.paidAmount || 0;
-                          const balance = total - deposit - paid;
+                          const totalPaid = deposit + paid;
+                          const balance = total - totalPaid;
                           return Math.max(0, balance).toLocaleString('en-PH');
                         })()}
                       </span>
@@ -1115,16 +1170,39 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   )}
                 </div>
                 <div className="mt-3 pt-3 border-t border-emerald-200 flex flex-wrap gap-2">
-                  {booking.paymentStatus !== 'paid' && (
+                  {booking.paymentStatus === 'paid' ? (
                     <button
-                      onClick={() => {
-                        setSelectedBookingForPayment(booking);
-                        setPaymentModalOpen(true);
-                      }}
-                      className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                      onClick={() => handleUpdatePayment(booking.id, 'refunded')}
+                      className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
                     >
-                      Update Payment
+                      Refund
                     </button>
+                  ) : (
+                    <>
+                      {onMakeQuotation && (
+                        <button
+                          onClick={() => onMakeQuotation(booking.id)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
+                            booking.invoice
+                              ? 'bg-rose-600 hover:bg-rose-700'
+                              : 'bg-green-600 hover:bg-green-700'
+                          }`}
+                        >
+                          {booking.invoice ? 'Requote' : 'Quote'}
+                        </button>
+                      )}
+                      {booking.invoice && (
+                        <button
+                          onClick={() => {
+                            setSelectedBookingForPayment(booking);
+                            setPaymentModalOpen(true);
+                          }}
+                          className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                        >
+                          Update Payment
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1141,7 +1219,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Customer</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Date & Time</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Total</th>
-                    <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Deposit</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Paid</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Balance</th>
                     <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700">Status</th>
@@ -1153,7 +1230,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     const total = booking.invoice?.total || 0;
                     const deposit = booking.depositAmount || 0;
                     const paid = booking.paidAmount || 0;
-                    const balance = total - deposit - paid;
+                    const totalPaid = deposit + paid;
+                    const balance = total - totalPaid;
                     return (
                       <tr key={booking.id} className="hover:bg-emerald-100/50">
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-medium text-slate-900">{booking.bookingId}</td>
@@ -1162,8 +1240,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           {format(parseISO(booking.slot.date), 'MMM d')} {formatTime12Hour(booking.slot.time)}
                         </td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
-                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-emerald-700">₱{deposit.toLocaleString('en-PH')}</td>
-                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{paid.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{totalPaid.toLocaleString('en-PH')}</td>
                         <td className={`px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                           ₱{Math.max(0, balance).toLocaleString('en-PH')}
                         </td>
@@ -1175,7 +1252,25 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           </span>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
-                          {booking.paymentStatus !== 'paid' && (
+                          {booking.paymentStatus === 'paid' ? (
+                            <button
+                              onClick={() => handleUpdatePayment(booking.id, 'refunded')}
+                              className="rounded-full border-2 border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Refund
+                            </button>
+                          ) : onMakeQuotation ? (
+                            <button
+                              onClick={() => onMakeQuotation(booking.id)}
+                              className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${
+                                booking.invoice
+                                  ? 'bg-rose-600 hover:bg-rose-700'
+                                  : 'bg-green-600 hover:bg-green-700'
+                              }`}
+                            >
+                              {booking.invoice ? 'Requote' : 'Quote'}
+                            </button>
+                          ) : (
                             <button
                               onClick={() => {
                                 setSelectedBookingForPayment(booking);
@@ -1262,70 +1357,19 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Deposit (DP):</span>
-                  {booking.depositAmount ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-emerald-700">
-                          ₱{booking.depositAmount.toLocaleString('en-PH')}
-                        </span>
-                        {getPaymentMethodBadge(booking.depositPaymentMethod)}
-                      </div>
-                      {booking.paymentStatus !== 'paid' && (
-                        <button
-                          onClick={async () => {
-                            const amount = prompt('Update deposit amount (₱):', String(booking.depositAmount || 0));
-                            if (!amount || isNaN(Number(amount))) return;
-                            const method = prompt('Payment method (CASH/GCASH/PNB):', booking.depositPaymentMethod || 'CASH');
-                            if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
-                              alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
-                              return;
-                            }
-                            const res = await fetch(`/api/bookings/${booking.id}`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                action: 'update_deposit',
-                                depositAmount: Number(amount),
-                                depositPaymentMethod: method.toUpperCase() as 'PNB' | 'CASH' | 'GCASH',
-                              }),
-                            });
-                            if (res.ok) window.location.reload();
-                          }}
-                          className="text-xs text-slate-400 hover:text-slate-600 underline"
-                        >
-                          Edit
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    booking.paymentStatus !== 'paid' && (
-                      <button
-                        onClick={async () => {
-                          const amount = prompt('Enter deposit amount (₱):');
-                          if (!amount || isNaN(Number(amount))) return;
-                          const method = prompt('Payment method (CASH/GCASH/PNB):', 'CASH');
-                          if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
-                            alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
-                            return;
-                          }
-                          const res = await fetch(`/api/bookings/${booking.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              action: 'update_deposit',
-                              depositAmount: Number(amount),
-                              depositPaymentMethod: method.toUpperCase() as 'PNB' | 'CASH' | 'GCASH',
-                            }),
-                          });
-                          if (res.ok) window.location.reload();
-                        }}
-                        className="text-xs text-slate-400 hover:text-slate-600 underline"
-                      >
-                        Add DP
-                      </button>
-                    )
-                  )}
+                  <span className="text-slate-500">Paid Amount:</span>
+                  {(() => {
+                    const deposit = booking.depositAmount || 0;
+                    const paid = booking.paidAmount || 0;
+                    const totalPaid = deposit + paid;
+                    return totalPaid > 0 ? (
+                      <span className="font-semibold text-emerald-700">
+                        ₱{totalPaid.toLocaleString('en-PH')}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">₱0</span>
+                    );
+                  })()}
                 </div>
                 {booking.invoice && (
                   <div className="flex justify-between">
@@ -1334,36 +1378,19 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       const total = booking.invoice?.total || 0;
                       const deposit = booking.depositAmount || 0;
                       const paid = booking.paidAmount || 0;
-                      const balance = total - deposit - paid;
+                      const totalPaid = deposit + paid;
+                      const balance = total - totalPaid;
                       return balance > 0 ? 'text-red-700' : 'text-emerald-700';
                     })()}`}>
                       ₱{(() => {
                         const total = booking.invoice?.total || 0;
                         const deposit = booking.depositAmount || 0;
                         const paid = booking.paidAmount || 0;
-                        const balance = total - deposit - paid;
+                        const totalPaid = deposit + paid;
+                        const balance = total - totalPaid;
                         return Math.max(0, balance).toLocaleString('en-PH');
                       })()}
                     </span>
-                  </div>
-                )}
-                {!booking.invoice && booking.depositAmount && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-semibold">Deposit Paid:</span>
-                    <span className="font-bold text-emerald-700">
-                      ₱{booking.depositAmount.toLocaleString('en-PH')}
-                    </span>
-                  </div>
-                )}
-                {typeof booking.paidAmount === 'number' && booking.paidAmount > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Amount Paid (after DP):</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-600">
-                        ₱{booking.paidAmount.toLocaleString('en-PH')}
-                      </span>
-                      {getPaymentMethodBadge(booking.paidPaymentMethod)}
-                    </div>
                   </div>
                 )}
                 {booking.paymentStatus === 'paid' && booking.tipAmount && booking.tipAmount > 0 && (
@@ -1376,32 +1403,39 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                 )}
               </div>
               <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2">
-                {booking.paymentStatus !== 'paid' && (
-                  <>
-                    <button
-                      onClick={() => handleUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
-                      className="rounded-full border-2 border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 touch-manipulation active:scale-[0.98] hover:bg-orange-50"
-                    >
-                      Partial
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedBookingForPayment(booking);
-                        setPaymentModalOpen(true);
-                      }}
-                      className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
-                    >
-                      Paid
-                    </button>
-                  </>
-                )}
-                {booking.paymentStatus === 'paid' && (
+                {booking.paymentStatus === 'paid' ? (
                   <button
                     onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                     className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
                   >
                     Refund
                   </button>
+                ) : (
+                  <>
+                    {onMakeQuotation && (
+                      <button
+                        onClick={() => onMakeQuotation(booking.id)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
+                          booking.invoice
+                            ? 'bg-rose-600 hover:bg-rose-700'
+                            : 'bg-green-600 hover:bg-green-700'
+                        }`}
+                      >
+                        {booking.invoice ? 'Requote' : 'Quote'}
+                      </button>
+                    )}
+                    {booking.invoice && (
+                      <button
+                        onClick={() => {
+                          setSelectedBookingForPayment(booking);
+                          setPaymentModalOpen(true);
+                        }}
+                        className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
+                      >
+                        Update Payment
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1428,10 +1462,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   Total Amount
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  Deposit (DP)
-                </th>
-                <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  Amount Paid
+                  Paid Amount
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Balance
@@ -1503,77 +1534,18 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       )}
                     </td>
                     <td className="px-4 xl:px-6 py-3">
-                      {booking.depositAmount ? (
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs xl:text-sm font-semibold text-emerald-700">
-                              ₱{booking.depositAmount.toLocaleString('en-PH')}
-                            </span>
-                            {getPaymentMethodBadge(booking.depositPaymentMethod)}
-                            <button
-                              onClick={async () => {
-                                const amount = prompt('Update deposit amount (₱):', String(booking.depositAmount || 0));
-                                if (!amount || isNaN(Number(amount))) return;
-                                const method = prompt('Payment method (CASH/GCASH/PNB):', booking.depositPaymentMethod || 'CASH');
-                                if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
-                                  alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
-                                  return;
-                                }
-                                const res = await fetch(`/api/bookings/${booking.id}`, {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    action: 'update_deposit',
-                                    depositAmount: Number(amount),
-                                    depositPaymentMethod: method.toUpperCase() as 'PNB' | 'CASH' | 'GCASH',
-                                  }),
-                                });
-                                if (res.ok) window.location.reload();
-                              }}
-                              className="ml-2 text-xs text-slate-400 hover:text-slate-600 underline"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={async () => {
-                            const amount = prompt('Enter deposit amount (₱):');
-                            if (!amount || isNaN(Number(amount))) return;
-                            const method = prompt('Payment method (CASH/GCASH/PNB):', 'CASH');
-                            if (!method || !['CASH', 'GCASH', 'PNB'].includes(method.toUpperCase())) {
-                              alert('Invalid payment method. Please use CASH, GCASH, or PNB.');
-                              return;
-                            }
-                            const res = await fetch(`/api/bookings/${booking.id}`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                action: 'update_deposit',
-                                depositAmount: Number(amount),
-                                depositPaymentMethod: method.toUpperCase() as 'PNB' | 'CASH' | 'GCASH',
-                              }),
-                            });
-                            if (res.ok) window.location.reload();
-                          }}
-                          className="text-xs text-slate-400 hover:text-slate-600 underline"
-                        >
-                          Add DP
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 xl:px-6 py-3">
-                      {typeof booking.paidAmount === 'number' && booking.paidAmount > 0 ? (
-                        <div className="flex items-center gap-2 flex-wrap">
+                      {(() => {
+                        const deposit = booking.depositAmount || 0;
+                        const paid = booking.paidAmount || 0;
+                        const totalPaid = deposit + paid;
+                        return totalPaid > 0 ? (
                           <span className="text-xs xl:text-sm font-semibold text-slate-900">
-                            ₱{booking.paidAmount.toLocaleString('en-PH')}
+                            ₱{totalPaid.toLocaleString('en-PH')}
                           </span>
-                          {getPaymentMethodBadge(booking.paidPaymentMethod)}
-                        </div>
-                      ) : (
-                        <span className="text-xs xl:text-sm text-slate-400">—</span>
-                      )}
+                        ) : (
+                          <span className="text-xs xl:text-sm text-slate-400">—</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 xl:px-6 py-3">
                       {booking.invoice ? (
@@ -1583,14 +1555,16 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                               const total = booking.invoice?.total || 0;
                               const deposit = booking.depositAmount || 0;
                               const paid = booking.paidAmount || 0;
-                              const balance = total - deposit - paid;
+                              const totalPaid = deposit + paid;
+                              const balance = total - totalPaid;
                               return balance > 0 ? 'text-red-700' : 'text-emerald-700';
                             })()}`}>
                               ₱{(() => {
                                 const total = booking.invoice?.total || 0;
                                 const deposit = booking.depositAmount || 0;
                                 const paid = booking.paidAmount || 0;
-                                const balance = total - deposit - paid;
+                                const totalPaid = deposit + paid;
+                                const balance = total - totalPaid;
                                 return Math.max(0, balance).toLocaleString('en-PH');
                               })()}
                             </span>

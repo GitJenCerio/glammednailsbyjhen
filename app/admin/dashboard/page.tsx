@@ -1301,6 +1301,7 @@ function AdminDashboardContent() {
               nailTechs={nailTechs}
               selectedNailTechId={selectedNailTechId}
               onNailTechChange={(id) => setSelectedNailTechId(id)}
+              onMakeQuotation={handleMakeQuotation}
             />
           ) : activeSection === 'customers' ? (
             <div className="space-y-4 sm:space-y-6">
