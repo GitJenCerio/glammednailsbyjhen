@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import type { Booking, BookingWithSlot, PaymentStatus, Customer, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { PaymentModal } from './modals/PaymentModal';
-import { IoEllipsisVertical } from 'react-icons/io5';
+import { IoEllipsisVertical, IoCreateOutline } from 'react-icons/io5';
 
 type FinanceViewProps = {
   bookings: Booking[];
@@ -1038,8 +1038,26 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         </td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{totalPaid.toLocaleString('en-PH')}</td>
-                        <td className={`px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                          ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                        <td className="px-4 xl:px-6 py-3">
+                          {booking.invoice ? (
+                            <button
+                              onClick={() => {
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
+                              }}
+                              className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
+                                balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                              }`}
+                              title="Click to update payment"
+                            >
+                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                              <IoCreateOutline className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span className={`text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 xl:px-6 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
@@ -1241,8 +1259,26 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         </td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{totalPaid.toLocaleString('en-PH')}</td>
-                        <td className={`px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                          ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                        <td className="px-4 xl:px-6 py-3">
+                          {booking.invoice ? (
+                            <button
+                              onClick={() => {
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
+                              }}
+                              className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
+                                balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                              }`}
+                              title="Click to update payment"
+                            >
+                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                              <IoCreateOutline className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span className={`text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 xl:px-6 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
@@ -1551,23 +1587,28 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       {booking.invoice ? (
                         <>
                           <div>
-                            <span className={`text-xs xl:text-sm font-bold ${(() => {
+                            {(() => {
                               const total = booking.invoice?.total || 0;
                               const deposit = booking.depositAmount || 0;
                               const paid = booking.paidAmount || 0;
                               const totalPaid = deposit + paid;
                               const balance = total - totalPaid;
-                              return balance > 0 ? 'text-red-700' : 'text-emerald-700';
-                            })()}`}>
-                              ₱{(() => {
-                                const total = booking.invoice?.total || 0;
-                                const deposit = booking.depositAmount || 0;
-                                const paid = booking.paidAmount || 0;
-                                const totalPaid = deposit + paid;
-                                const balance = total - totalPaid;
-                                return Math.max(0, balance).toLocaleString('en-PH');
-                              })()}
-                            </span>
+                              return (
+                                <button
+                                  onClick={() => {
+                                    setSelectedBookingForPayment(booking);
+                                    setPaymentModalOpen(true);
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 text-xs xl:text-sm font-bold hover:underline cursor-pointer ${
+                                    balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                                  }`}
+                                  title="Click to update payment"
+                                >
+                                  ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                                  <IoCreateOutline className="w-3.5 h-3.5" />
+                                </button>
+                              );
+                            })()}
                             {booking.paymentStatus === 'paid' && booking.tipAmount && booking.tipAmount > 0 && (
                               <p className="text-xs text-emerald-700 mt-1 font-semibold">
                                 Tip: ₱{booking.tipAmount.toLocaleString('en-PH')}
