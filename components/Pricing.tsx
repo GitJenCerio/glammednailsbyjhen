@@ -184,7 +184,7 @@ export default function Pricing() {
               </div>
               <a
                 href="/booking"
-                className="block w-full text-center px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto text-xs sm:text-sm md:text-base"
+                className="block w-full text-center px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 mt-auto text-xs sm:text-sm md:text-base whitespace-nowrap"
               >
                 Book Now
               </a>

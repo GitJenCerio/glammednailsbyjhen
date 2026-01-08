@@ -43,7 +43,7 @@ export default function Header() {
       animate={{ y: 0 }}
       className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md"
     >
-      <nav className="px-2 sm:px-6 md:px-8 lg:px-16 xl:px-32 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px]">
+      <nav className="px-2 sm:px-4 md:px-8 lg:px-16 xl:px-32 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px] overflow-x-hidden">
         {/* Mobile Menu Button - Left */}
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -100,13 +100,13 @@ export default function Header() {
         </div>
 
         {/* Mobile Logo - Centered */}
-        <Link href="/" className="lg:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[60vw] sm:max-w-[50vw]">
+        <Link href="/" className="lg:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[35vw] sm:max-w-[30vw]">
           <Image 
             src="/logo.png" 
             alt="glammednailsbyjhen logo" 
             width={200}
             height={56}
-            className="h-10 sm:h-12 md:h-14 w-auto max-w-full"
+            className="h-9 sm:h-11 md:h-14 w-auto max-w-full"
             priority
           />
         </Link>
@@ -122,7 +122,7 @@ export default function Header() {
         {/* Mobile Book Button - Right */}
         <Link
           href="/booking"
-          className="lg:hidden px-4 sm:px-5 py-1.5 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs sm:text-sm flex-shrink-0 ml-2 sm:ml-4"
+          className="lg:hidden px-2.5 py-1.5 sm:px-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-[10px] sm:text-xs whitespace-nowrap flex-shrink-0 z-10 relative"
         >
           Book
         </Link>

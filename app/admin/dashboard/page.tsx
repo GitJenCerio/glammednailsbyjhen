@@ -1024,21 +1024,23 @@ function AdminDashboardContent() {
                     </div>
                   )}
                   {selectedSlots.map((slot) => {
-                    // Find booking for this slot - check both direct slotId match AND linked slots
-                    // This handles mani-pedi bookings where one booking uses multiple slots
-                    const bookingForSlot = bookingsWithSlots.find((b) => {
-                      // Check if this slot is the primary slot for this booking
-                      if (b.slotId === slot.id) {
-                        // Always show the booking details for this slot (pending or confirmed)
-                        return true;
-                      }
-                      // Check if this slot is a linked slot (for mani-pedi, home service with multiple people, etc.)
-                      if (b.linkedSlotIds && b.linkedSlotIds.includes(slot.id)) {
-                        // Always show the booking details for this linked slot as well
-                        return true;
-                      }
-                      return false;
-                    });
+                    // Only show bookings for slots that are not available
+                    // Available slots should not display any booking information
+                    const bookingForSlot = slot.status === 'available' 
+                      ? null 
+                      : bookingsWithSlots.find((b) => {
+                          // Check if this slot is the primary slot for this booking
+                          if (b.slotId === slot.id) {
+                            // Always show the booking details for this slot (pending or confirmed)
+                            return true;
+                          }
+                          // Check if this slot is a linked slot (for mani-pedi, home service with multiple people, etc.)
+                          if (b.linkedSlotIds && b.linkedSlotIds.includes(slot.id)) {
+                            // Always show the booking details for this linked slot as well
+                            return true;
+                          }
+                          return false;
+                        });
                     const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
                     // Sort nail techs by name for consistent color assignment
                     const sortedTechIds = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);

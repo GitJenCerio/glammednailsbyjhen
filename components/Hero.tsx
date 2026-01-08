@@ -61,7 +61,7 @@ export default function Hero() {
           >
             <a
               href="/booking"
-              className="px-2.5 py-1 text-[10px] sm:px-6 sm:py-3 sm:text-base bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300"
+              className="px-3 py-1.5 text-[11px] sm:px-6 sm:py-3 sm:text-base bg-black text-white font-semibold border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 whitespace-nowrap"
             >
               Book Now
             </a>
