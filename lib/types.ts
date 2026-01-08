@@ -137,3 +137,25 @@ export interface AnalyticsEvent {
   createdAt: string;
 }
 
+export type NotificationType = 
+  | 'booking_created' 
+  | 'booking_pending' 
+  | 'booking_confirmed' 
+  | 'booking_cancelled'
+  | 'slot_added' 
+  | 'slot_removed' 
+  | 'slot_updated';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  relatedId?: string; // bookingId, slotId, etc.
+  relatedType?: 'booking' | 'slot';
+  section?: string; // section to navigate to (e.g., 'bookings', 'overview')
+  createdAt: string;
+  updatedAt: string;
+}
+

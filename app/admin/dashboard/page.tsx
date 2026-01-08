@@ -32,8 +32,20 @@ import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
 import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
 import { NailTechManager } from '@/components/admin/NailTechManager';
-import type { Customer, NailTech } from '@/lib/types';
+import type { Customer, NailTech, Notification } from '@/lib/types';
 import { IoPerson } from 'react-icons/io5';
+import { AdminHeader } from '@/components/admin/AdminHeader';
+import { 
+  subscribeToNotifications, 
+  markNotificationAsRead, 
+  markAllNotificationsAsRead,
+  notifySlotAdded,
+  notifySlotRemoved,
+  notifySlotUpdated,
+  notifyBookingConfirmed,
+  notifyBookingCancelled,
+  notifyBookingPending
+} from '@/lib/services/notificationService';
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: IoStatsChart },
@@ -95,6 +107,7 @@ function AdminDashboardContent() {
   const [selectedNailTechId, setSelectedNailTechId] = useState<string | null>(null);
   const [nailTechs, setNailTechs] = useState<NailTech[]>([]);
   const [responseModalBooking, setResponseModalBooking] = useState<Booking | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const pendingBookingsCount = useMemo(
     () => bookings.filter((booking) => 
       booking.status === 'pending_payment' && 
@@ -241,6 +254,49 @@ function AdminDashboardContent() {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Subscribe to notifications
+  useEffect(() => {
+    const unsubscribe = subscribeToNotifications((newNotifications) => {
+      setNotifications(newNotifications);
+    }, 50);
+
+    return () => unsubscribe();
+  }, []);
+
+  const unreadNotificationsCount = useMemo(
+    () => notifications.filter(n => !n.read).length,
+    [notifications]
+  );
+
+  const handleNotificationClick = (notification: Notification) => {
+    // Mark as read
+    markNotificationAsRead(notification.id);
+    
+    // Navigate to relevant section
+    if (notification.section) {
+      setActiveSection(notification.section as AdminSection);
+    }
+    
+    // If it's a booking notification, try to select the booking
+    if (notification.relatedType === 'booking' && notification.relatedId) {
+      setSelectedBookingId(notification.relatedId);
+    }
+    
+    // If it's a slot notification, try to select the date
+    if (notification.relatedType === 'slot' && notification.relatedId) {
+      const slot = slots.find(s => s.id === notification.relatedId);
+      if (slot) {
+        setSelectedDate(slot.date);
+        setActiveSection('bookings');
+        setBookingsView('calendar');
+      }
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    await markAllNotificationsAsRead();
+  };
 
   // Sync state with URL params - only when URL actually changes
   useEffect(() => {
@@ -527,8 +583,21 @@ function AdminDashboardContent() {
       }
       throw new Error(errorMessage);
     }
+    const savedSlot = await res.json();
     setEditingSlot(null);
     await loadData();
+    
+    // Create notification for slot added/updated
+    try {
+      if (editingSlot) {
+        await notifySlotUpdated(savedSlot.id || editingSlot.id, payload.date, formatTime12Hour(payload.time));
+      } else {
+        await notifySlotAdded(savedSlot.id, payload.date, formatTime12Hour(payload.time));
+      }
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+    }
+    
     setToast('Slot saved.');
   }
 
@@ -562,6 +631,13 @@ function AdminDashboardContent() {
       
       // Force reload data with cache busting
       await loadData();
+      
+      // Create notification for slot removed
+      try {
+        await notifySlotRemoved(slotToDelete.id, slotToDelete.date, formatTime12Hour(slotToDelete.time));
+      } catch (error) {
+        console.error('Failed to create notification:', error);
+      }
       
       setToast('Slot deleted.');
       setDeleteSlotModalOpen(false);
@@ -649,6 +725,18 @@ function AdminDashboardContent() {
       // Re-select the booking after refresh to ensure UI updates
       setSelectedBookingId(id);
       
+      // Create notification for booking confirmed
+      try {
+        const booking = bookings.find(b => b.id === id);
+        const customer = booking ? customers.find(c => c.id === booking.customerId) : null;
+        const customerName = customer?.name || 'Unknown Customer';
+        if (booking) {
+          await notifyBookingConfirmed(booking.id, customerName);
+        }
+      } catch (error) {
+        console.error('Failed to create notification:', error);
+      }
+      
       setToast(depositAmount ? `Booking confirmed. Deposit: ₱${depositAmount.toLocaleString('en-PH')}` : 'Booking confirmed.');
     } catch (error: any) {
       console.error('Failed to confirm booking:', error);
@@ -669,6 +757,19 @@ function AdminDashboardContent() {
       return;
     }
     await loadData();
+    
+    // Create notification for booking cancelled
+    try {
+      const booking = bookings.find(b => b.id === id);
+      const customer = booking ? customers.find(c => c.id === booking.customerId) : null;
+      const customerName = customer?.name || 'Unknown Customer';
+      if (booking) {
+        await notifyBookingCancelled(booking.id, customerName);
+      }
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+    }
+    
     setToast('Booking cancelled.');
     setSelectedBookingId(null);
   }
@@ -1107,29 +1208,22 @@ function AdminDashboardContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pt-[56px] lg:pt-0">
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 inset-x-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Admin</p>
-          <p className="text-sm font-semibold text-slate-900">glammednailsbyjhen</p>
-        </div>
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-lg hover:bg-slate-100"
-          aria-label="Toggle menu"
-        >
-          {mobileMenuOpen ? (
-            <IoClose className="w-6 h-6" />
-          ) : (
-            <IoMenu className="w-6 h-6" />
-          )}
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-50">
+      {/* Permanent Admin Header */}
+      <AdminHeader
+        notifications={notifications}
+        unreadCount={unreadNotificationsCount}
+        onNotificationClick={handleNotificationClick}
+        onMarkAllRead={handleMarkAllNotificationsRead}
+        onLogout={handleLogout}
+        sidebarCollapsed={sidebarCollapsed}
+        mobileMenuOpen={mobileMenuOpen}
+        onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+      />
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed top-[56px] inset-x-0 z-30 bg-white border-b border-slate-200 px-4 py-4">
+        <div className="lg:hidden fixed top-14 inset-x-0 z-30 bg-white border-b border-slate-200 px-4 py-4 shadow-lg max-h-[calc(100vh-3.5rem)] overflow-y-auto">
           <nav className="space-y-2">
             {navItems.map((item) => (
               <button
@@ -1169,8 +1263,8 @@ function AdminDashboardContent() {
         </div>
       )}
 
-      <div className="flex min-h-screen">
-        <aside className={`hidden sm:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ${
+      <div className="flex min-h-screen pt-14 sm:pt-16">
+        <aside className={`hidden sm:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 pt-14 sm:pt-16 ${
           sidebarCollapsed ? 'w-14 sm:w-16 px-1.5 sm:px-2 py-4 sm:py-6' : 'w-40 sm:w-48 md:w-52 lg:w-56 xl:w-72 px-2 sm:px-3 md:px-4 lg:px-6 py-4 sm:py-6 md:py-7 lg:py-8'
         }`}>
           <div className="mb-8 flex items-center justify-between gap-2">
