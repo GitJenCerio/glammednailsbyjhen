@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl } from '@/lib/services/bookingService';
+import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl, splitRescheduleBooking } from '@/lib/services/bookingService';
 import type { Invoice, PaymentStatus } from '@/lib/types';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
@@ -76,6 +76,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: 'New slot ID required.' }, { status: 400 });
     }
     await rescheduleBooking(params.id, newSlotId, linkedSlotIds);
+    return NextResponse.json({ success: true });
+  }
+
+  if (body?.action === 'split_reschedule') {
+    const { slot1Id, slot2Id, nailTech1Id, nailTech2Id } = body;
+    if (!slot1Id || !slot2Id || !nailTech1Id || !nailTech2Id) {
+      return NextResponse.json({ error: 'All slot IDs and nail tech IDs are required.' }, { status: 400 });
+    }
+    await splitRescheduleBooking(params.id, slot1Id, slot2Id, nailTech1Id, nailTech2Id);
     return NextResponse.json({ success: true });
   }
 

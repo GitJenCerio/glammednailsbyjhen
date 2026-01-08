@@ -1395,6 +1395,223 @@ export async function rescheduleBooking(bookingId: string, newSlotId: string, li
 }
 
 /**
+ * Split reschedule a mani_pedi booking into 2 separate bookings
+ * Creates 2 new bookings (one for Mani, one for Pedi) with separate slots and invoices
+ * Cancels the original booking
+ */
+export async function splitRescheduleBooking(
+  bookingId: string,
+  slot1Id: string,
+  slot2Id: string,
+  nailTech1Id: string,
+  nailTech2Id: string
+) {
+  // Get original booking first (outside transaction for validation)
+  const booking = await getBookingById(bookingId);
+  if (!booking) throw new Error('Booking not found.');
+
+  // Only allow split for mani_pedi bookings
+  if (booking.serviceType !== 'mani_pedi' && (!booking.linkedSlotIds || booking.linkedSlotIds.length === 0)) {
+    throw new Error('This booking cannot be split. Only Mani + Pedi bookings can be split.');
+  }
+
+  // Generate new booking IDs before transaction
+  const nextNumber1 = await getNextBookingNumber();
+  const bookingId1 = `GN-${nextNumber1.toString().padStart(5, '0')}`;
+  const nextNumber2 = nextNumber1 + 1;
+  const bookingId2 = `GN-${nextNumber2.toString().padStart(5, '0')}`;
+
+  await adminDb.runTransaction(async (transaction) => {
+    // Get original booking
+    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists) throw new Error('Booking not found.');
+
+    // Get new slots
+    const slot1Ref = slotsCollection.doc(slot1Id);
+    const slot2Ref = slotsCollection.doc(slot2Id);
+    const slot1Snap = await transaction.get(slot1Ref);
+    const slot2Snap = await transaction.get(slot2Ref);
+
+    if (!slot1Snap.exists) throw new Error('Slot 1 not found.');
+    if (!slot2Snap.exists) throw new Error('Slot 2 not found.');
+
+    const slot1 = docToSlot(slot1Snap.id, slot1Snap.data()!);
+    const slot2 = docToSlot(slot2Snap.id, slot2Snap.data()!);
+
+    if (slot1.status !== 'available') throw new Error('Slot 1 is not available.');
+    if (slot2.status !== 'available') throw new Error('Slot 2 is not available.');
+
+    // Verify nail techs match slots
+    if (slot1.nailTechId !== nailTech1Id) throw new Error('Slot 1 nail tech mismatch.');
+    if (slot2.nailTechId !== nailTech2Id) throw new Error('Slot 2 nail tech mismatch.');
+
+    // Get old slots to release
+    const oldSlotRef = slotsCollection.doc(booking.slotId);
+    const oldSlotSnap = await transaction.get(oldSlotRef);
+    if (!oldSlotSnap.exists) throw new Error('Old slot not found.');
+
+    const oldLinkedSlotIds = booking.linkedSlotIds?.length
+      ? booking.linkedSlotIds
+      : booking.pairedSlotId
+        ? [booking.pairedSlotId]
+        : [];
+
+    const oldLinkedRefs: FirebaseFirestore.DocumentReference[] = [];
+    for (const linkedId of oldLinkedSlotIds) {
+      oldLinkedRefs.push(slotsCollection.doc(linkedId));
+    }
+
+    // Split invoice if exists
+    let invoice1: Invoice | undefined;
+    let invoice2: Invoice | undefined;
+    if (booking.invoice) {
+      // Split invoice items proportionally
+      // For simplicity, split total in half, but you could split by item
+      const total = booking.invoice.total;
+      const halfTotal = Math.round(total / 2);
+      
+      // Create separate invoices for each service
+      invoice1 = {
+        items: [
+          {
+            id: '1',
+            description: 'Manicure',
+            unitPrice: halfTotal,
+            quantity: 1,
+          },
+        ],
+        total: halfTotal,
+        notes: booking.invoice.notes ? `Split from ${booking.bookingId} - ${booking.invoice.notes}` : `Split from ${booking.bookingId}`,
+        createdAt: Timestamp.now().toDate().toISOString(),
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      };
+
+      invoice2 = {
+        items: [
+          {
+            id: '1',
+            description: 'Pedicure',
+            unitPrice: total - halfTotal,
+            quantity: 1,
+          },
+        ],
+        total: total - halfTotal,
+        notes: booking.invoice.notes ? `Split from ${booking.bookingId} - ${booking.invoice.notes}` : `Split from ${booking.bookingId}`,
+        createdAt: Timestamp.now().toDate().toISOString(),
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      };
+    }
+
+    // Split deposit and payment if exists
+    const depositAmount = booking.depositAmount || 0;
+    const paidAmount = booking.paidAmount || 0;
+    const halfDeposit = Math.round(depositAmount / 2);
+    const halfPaid = Math.round(paidAmount / 2);
+
+    const now = Timestamp.now().toDate().toISOString();
+
+    // Create booking 1 (Manicure)
+    const booking1Data: any = {
+      slotId: slot1Id,
+      bookingId: bookingId1,
+      customerId: booking.customerId,
+      nailTechId: nailTech1Id,
+      status: booking.status,
+      serviceType: 'manicure',
+      clientType: booking.clientType,
+      serviceLocation: booking.serviceLocation,
+      customerData: booking.customerData,
+      customerDataOrder: booking.customerDataOrder,
+      paymentStatus: booking.paymentStatus,
+      paidAmount: halfPaid,
+      depositAmount: halfDeposit,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Only include optional fields if they exist
+    if (invoice1) booking1Data.invoice = invoice1;
+    if (booking.assistantName) booking1Data.assistantName = booking.assistantName;
+    if (booking.assistantCommissionRate !== undefined) booking1Data.assistantCommissionRate = booking.assistantCommissionRate;
+    if (booking.formResponseId) booking1Data.formResponseId = booking.formResponseId;
+    if (booking.tipAmount) booking1Data.tipAmount = Math.round((booking.tipAmount || 0) / 2);
+    if (booking.depositDate) booking1Data.depositDate = booking.depositDate;
+    if (booking.paidDate) booking1Data.paidDate = booking.paidDate;
+    if (booking.tipDate) booking1Data.tipDate = booking.tipDate;
+    if (booking.depositPaymentMethod) booking1Data.depositPaymentMethod = booking.depositPaymentMethod;
+    if (booking.paidPaymentMethod) booking1Data.paidPaymentMethod = booking.paidPaymentMethod;
+
+    const booking1Ref = bookingsCollection.doc();
+    transaction.set(booking1Ref, booking1Data);
+
+    // Create booking 2 (Pedicure)
+    const booking2Data: any = {
+      slotId: slot2Id,
+      bookingId: bookingId2,
+      customerId: booking.customerId,
+      nailTechId: nailTech2Id,
+      status: booking.status,
+      serviceType: 'pedicure',
+      clientType: booking.clientType,
+      serviceLocation: booking.serviceLocation,
+      customerData: booking.customerData,
+      customerDataOrder: booking.customerDataOrder,
+      paymentStatus: booking.paymentStatus,
+      paidAmount: paidAmount - halfPaid,
+      depositAmount: depositAmount - halfDeposit,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Only include optional fields if they exist
+    if (invoice2) booking2Data.invoice = invoice2;
+    if (booking.assistantName) booking2Data.assistantName = booking.assistantName;
+    if (booking.assistantCommissionRate !== undefined) booking2Data.assistantCommissionRate = booking.assistantCommissionRate;
+    if (booking.formResponseId) booking2Data.formResponseId = booking.formResponseId;
+    if (booking.tipAmount) booking2Data.tipAmount = (booking.tipAmount || 0) - Math.round((booking.tipAmount || 0) / 2);
+    if (booking.depositDate) booking2Data.depositDate = booking.depositDate;
+    if (booking.paidDate) booking2Data.paidDate = booking.paidDate;
+    if (booking.tipDate) booking2Data.tipDate = booking.tipDate;
+    if (booking.depositPaymentMethod) booking2Data.depositPaymentMethod = booking.depositPaymentMethod;
+    if (booking.paidPaymentMethod) booking2Data.paidPaymentMethod = booking.paidPaymentMethod;
+
+    const booking2Ref = bookingsCollection.doc();
+    transaction.set(booking2Ref, booking2Data);
+
+    // Release old slots
+    transaction.update(oldSlotRef, {
+      status: 'available',
+      updatedAt: now,
+    });
+
+    oldLinkedRefs.forEach((ref) => {
+      transaction.update(ref, {
+        status: 'available',
+        updatedAt: now,
+      });
+    });
+
+    // Reserve new slots
+    transaction.update(slot1Ref, {
+      status: booking.status === 'confirmed' ? 'confirmed' : 'pending',
+      updatedAt: now,
+    });
+
+    transaction.update(slot2Ref, {
+      status: booking.status === 'confirmed' ? 'confirmed' : 'pending',
+      updatedAt: now,
+    });
+
+    // Cancel original booking
+    transaction.update(bookingRef, {
+      status: 'cancelled',
+      updatedAt: now,
+    });
+  });
+}
+
+/**
  * Get bookings eligible for manual release
  * Returns bookings that are:
  * - 2+ hours old from creation time

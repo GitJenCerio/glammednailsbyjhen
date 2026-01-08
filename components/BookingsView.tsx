@@ -22,6 +22,7 @@ interface BookingsViewProps {
   onNailTechChange?: (nailTechId: string | null) => void;
   onCancel?: (bookingId: string) => void;
   onReschedule?: (bookingId: string) => void;
+  onSplitReschedule?: (bookingId: string) => void;
   onMakeQuotation?: (bookingId: string) => void;
   onConfirm?: (bookingId: string) => void;
   onUpdatePayment?: (bookingId: string, paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded', paidAmount?: number, tipAmount?: number) => void;
@@ -48,7 +49,7 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingsView({ bookings, slots, selectedDate, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onCancel, onReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
+export function BookingsView({ bookings, slots, selectedDate, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onCancel, onReschedule, onSplitReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
@@ -722,6 +723,15 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                   Resched
                 </button>
               )}
+              {onSplitReschedule && (booking.serviceType === 'mani_pedi' || (booking.linkedSlotIds && booking.linkedSlotIds.length > 0)) && (
+                <button
+                  onClick={() => onSplitReschedule(booking.id)}
+                  className="rounded-full border-2 border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 touch-manipulation active:scale-[0.98] hover:bg-purple-100"
+                  title="Split reschedule into 2 separate bookings"
+                >
+                  Split Resched
+                </button>
+              )}
               {onCancel && (
                 <button
                   onClick={() => {
@@ -913,6 +923,20 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                             >
                               <IoCalendarOutline className="w-4 h-4" />
                               Reschedule
+                            </button>
+                          )}
+                          {onSplitReschedule && (booking.serviceType === 'mani_pedi' || (booking.linkedSlotIds && booking.linkedSlotIds.length > 0)) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSplitReschedule(booking.id);
+                                setOpenDropdownId(null);
+                                setDropdownPosition(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-purple-700 hover:bg-purple-50 flex items-center gap-2"
+                            >
+                              <IoCalendarOutline className="w-4 h-4" />
+                              Split Reschedule
                             </button>
                           )}
                           {onCancel && (

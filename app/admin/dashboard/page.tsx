@@ -23,6 +23,7 @@ import { BookingsView } from '@/components/BookingsView';
 import { ServicesManager } from '@/components/admin/ServicesManager';
 import { QuotationModal } from '@/components/admin/modals/QuotationModal';
 import { RescheduleModal } from '@/components/admin/modals/RescheduleModal';
+import { SplitRescheduleModal } from '@/components/admin/modals/SplitRescheduleModal';
 import { ReleaseSlotsModal } from '@/components/admin/modals/ReleaseSlotsModal';
 import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingModal';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
@@ -82,6 +83,8 @@ function AdminDashboardContent() {
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
+  const [splitRescheduleModalOpen, setSplitRescheduleModalOpen] = useState(false);
+  const [splitReschedulingBookingId, setSplitReschedulingBookingId] = useState<string | null>(null);
   const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
   const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -682,6 +685,11 @@ function AdminDashboardContent() {
     setRescheduleModalOpen(true);
   }
 
+  function handleSplitRescheduleBooking(id: string) {
+    setSplitReschedulingBookingId(id);
+    setSplitRescheduleModalOpen(true);
+  }
+
   async function handleRescheduleConfirm(bookingId: string, newSlotId: string, linkedSlotIds?: string[]) {
     const res = await fetch(`/api/bookings/${bookingId}`, {
       method: 'PATCH',
@@ -701,6 +709,35 @@ function AdminDashboardContent() {
     setToast('Booking rescheduled successfully.');
     setRescheduleModalOpen(false);
     setReschedulingBookingId(null);
+  }
+
+  async function handleSplitRescheduleConfirm(
+    bookingId: string,
+    slot1Id: string,
+    slot2Id: string,
+    nailTech1Id: string,
+    nailTech2Id: string
+  ) {
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'split_reschedule',
+        slot1Id,
+        slot2Id,
+        nailTech1Id,
+        nailTech2Id,
+      }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      setToast(`Error: ${error.error || 'Failed to split reschedule booking'}`);
+      return;
+    }
+    await loadData();
+    setToast('Booking split and rescheduled successfully. Two separate bookings created.');
+    setSplitRescheduleModalOpen(false);
+    setSplitReschedulingBookingId(null);
   }
 
   function handleMakeQuotation(id: string) {
@@ -860,6 +897,7 @@ function AdminDashboardContent() {
           onNailTechChange={setSelectedNailTechId}
           onCancel={handleCancelBooking}
           onReschedule={handleRescheduleBooking}
+          onSplitReschedule={handleSplitRescheduleBooking}
           onMakeQuotation={handleMakeQuotation}
           onConfirm={handleConfirmBooking}
           onUpdatePayment={async (bookingId, paymentStatus, paidAmount, tipAmount) => {
@@ -1440,6 +1478,21 @@ function AdminDashboardContent() {
             setReschedulingBookingId(null);
           }}
           onReschedule={handleRescheduleConfirm}
+        />
+      )}
+
+      {splitRescheduleModalOpen && splitReschedulingBookingId && (
+        <SplitRescheduleModal
+          open={splitRescheduleModalOpen}
+          booking={bookings.find(b => b.id === splitReschedulingBookingId) || null}
+          slots={slots}
+          blockedDates={blockedDates}
+          nailTechs={nailTechs}
+          onClose={() => {
+            setSplitRescheduleModalOpen(false);
+            setSplitReschedulingBookingId(null);
+          }}
+          onSplitReschedule={handleSplitRescheduleConfirm}
         />
       )}
 

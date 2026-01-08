@@ -298,52 +298,7 @@ export function ServicesManager() {
           <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
             <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Hero services</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Most-booked sets & add-ons</h2>
-                <p className="text-sm text-slate-500">Updates automatically whenever you edit the TSV price sheet.</p>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-semibold text-slate-900">{serviceMenu.length}</p>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Highlight cards</p>
-              </div>
-            </header>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              {serviceMenu.map((service) => (
-                <div
-                  key={service.title}
-                  className="rounded-2xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-all duration-200"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{service.duration}</p>
-                      <h3 className="text-xl font-semibold text-slate-900">{service.title}</h3>
-                    </div>
-                    <p className="text-lg font-bold text-rose-600">
-                      {priceMap[service.sheetKey.toLowerCase()]?.displayPrice ?? 'Set price in TSV'}
-                    </p>
-                  </div>
-                  <ul className="mt-3 space-y-1 text-sm text-slate-500">
-                    {service.includes.map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
-            <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Full catalog</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Everything listed in the TSV</h2>
-                <p className="text-sm text-slate-500">
-                  Use this when replying to custom pricing questions or designing inspo quotes.
-                </p>
               </div>
               <div className="text-right">
                 <p className="text-3xl font-semibold text-slate-900">{priceSheet.length}</p>
@@ -389,15 +344,8 @@ export function ServicesManager() {
           <div className="space-y-6 lg:col-span-5">
             <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50 space-y-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Quick add inspo items</h3>
-                <p className="text-sm text-slate-500">
-                  Search directly from the TSV or tap a most-used preset to add it to the current quote.
-                </p>
-              </div>
-
-              <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Search TSV services
+                  Search services
                 </label>
                 <input
                   type="text"
@@ -432,40 +380,10 @@ export function ServicesManager() {
                   </div>
                 )}
               </div>
-
-              <div>
-                <p className="mb-2 text-xs uppercase tracking-[0.3em] text-slate-400">Most used</p>
-                <ul className="space-y-3">
-                  {popularSheetKeys.map((key) => {
-                    const row = priceMap[key.toLowerCase()];
-                    return (
-                      <li
-                        key={key}
-                        className={`rounded-2xl border-2 p-4 transition-all ${
-                          row?.unitPrice 
-                            ? 'border-slate-300 bg-white cursor-pointer hover:border-slate-400 hover:shadow-md shadow-sm' 
-                            : 'border-slate-200 opacity-50 cursor-not-allowed bg-slate-50'
-                        }`}
-                        onClick={() => addQuoteItemFromRow(row?.name ?? key, row)}
-                      >
-                        <div className="flex items-center justify-between gap-4">
-                          <p className="font-medium text-slate-900">{row?.name ?? key}</p>
-                          <span className="text-sm font-semibold text-rose-600">
-                            {row?.unitPrice ? `₱${row.unitPrice.toLocaleString('en-PH')}` : 'Set price in TSV'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {row?.unitPrice ? 'Tap to add to quotation' : 'Update TSV to enable'}
-                        </p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
             </div>
 
             <div className="rounded-3xl border-2 border-slate-300 bg-white p-6 shadow-lg shadow-slate-200/50">
-              <h4 className="text-lg font-semibold text-slate-900 mb-3">Custom line item</h4>
+              <h4 className="text-lg font-semibold text-slate-900 mb-3">Custom item</h4>
               <div className="space-y-3">
                 <input
                   type="text"
