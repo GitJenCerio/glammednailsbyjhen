@@ -78,7 +78,6 @@ function AdminDashboardContent() {
     viewFromUrl === 'calendar' || viewFromUrl === 'list' ? viewFromUrl : 'calendar'
   );
   const [bookingFilterPeriod, setBookingFilterPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [filterPeriod, setFilterPeriod] = useState<'all' | 'day' | 'week' | 'month'>('day');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
@@ -475,36 +474,30 @@ function AdminDashboardContent() {
     return bookingsWithSlots;
   }, [bookingsWithSlots, bookingFilterPeriod]);
 
-  // Filter by booking creation date (for booking status overview)
+  // Filter by selected date and nail tech (for booking status overview - shows bookings matching the displayed slots)
   const filteredBookingsForOverview = useMemo(() => {
-    let result = bookingsWithSlots;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (filterPeriod === 'day') {
-      const todayStart = startOfDay(today);
-      const todayEnd = endOfDay(today);
-      result = result.filter((b) => {
-        const bookingDate = new Date(b.createdAt);
-        return isWithinInterval(bookingDate, { start: todayStart, end: todayEnd });
-      });
-    } else if (filterPeriod === 'week') {
-      const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-      const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-      result = result.filter((b) => {
-        const bookingDate = new Date(b.createdAt);
-        return isWithinInterval(bookingDate, { start: weekStart, end: weekEnd });
-      });
-    } else if (filterPeriod === 'month') {
-      const monthStart = startOfMonth(today);
-      const monthEnd = endOfMonth(today);
-      result = result.filter((b) => {
-        const bookingDate = new Date(b.createdAt);
-        return isWithinInterval(bookingDate, { start: monthStart, end: monthEnd });
-      });
-    }
-    return result;
-  }, [bookingsWithSlots, filterPeriod]);
+    if (!selectedDate) return [];
+    
+    // Get the slot IDs that are displayed for the selected date
+    const displayedSlotIds = new Set(selectedSlots.map(slot => slot.id));
+    
+    // Filter bookings to only show those that match the displayed slots
+    return bookingsWithSlots.filter((b) => {
+      if (!b.slot) return false;
+      
+      // Check if the booking's primary slot is in the displayed slots
+      if (displayedSlotIds.has(b.slot.id)) {
+        return true;
+      }
+      
+      // Check if any of the booking's linked slots are in the displayed slots
+      if (b.linkedSlotIds && b.linkedSlotIds.some(id => displayedSlotIds.has(id))) {
+        return true;
+      }
+      
+      return false;
+    });
+  }, [bookingsWithSlots, selectedSlots, selectedDate]);
 
   const selectedBooking =
     bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? bookingsWithSlots[0] ?? null;
@@ -1070,53 +1063,6 @@ function AdminDashboardContent() {
           {/* Bookings status overview below */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr,1fr]">
             <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
-              {/* Filter buttons - filter by booking creation date */}
-              <div className="mb-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFilterPeriod('day')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-                    filterPeriod === 'day'
-                      ? 'bg-black text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterPeriod('week')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-                    filterPeriod === 'week'
-                      ? 'bg-black text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Week
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterPeriod('month')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-                    filterPeriod === 'month'
-                      ? 'bg-black text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Month
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterPeriod('all')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition touch-manipulation ${
-                    filterPeriod === 'all'
-                      ? 'bg-black text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  All
-                </button>
-              </div>
               <BookingList
                 bookings={filteredBookingsForOverview}
                 onSelect={(booking) => setSelectedBookingId(booking.id)}
