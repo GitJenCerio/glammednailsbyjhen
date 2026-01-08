@@ -80,8 +80,8 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     const list: BookingWithSlot[] = [];
     let filteredBookings = bookings;
     
-    // Filter bookings by selected nail tech if one is selected
-    if (localSelectedNailTechId) {
+    // Filter bookings by selected nail tech only if nail tech filter is active
+    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
       filteredBookings = bookings.filter((booking) => booking.nailTechId === localSelectedNailTechId);
     }
     
@@ -89,18 +89,18 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       const slot = slots.find((candidate) => candidate.id === booking.slotId);
       if (!slot) return;
       
-      // Also filter by selected nail tech for slots (double-check)
-      if (localSelectedNailTechId && slot.nailTechId !== localSelectedNailTechId) return;
+      // Also filter by selected nail tech for slots (double-check) - only if nail tech filter is active
+      if (activeFilterField === 'nailTech' && localSelectedNailTechId && slot.nailTechId !== localSelectedNailTechId) return;
       
       const linkedSlots = (booking.linkedSlotIds ?? [])
         .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
         .filter((value): value is Slot => Boolean(value))
-        .filter((linkedSlot) => !localSelectedNailTechId || linkedSlot.nailTechId === localSelectedNailTechId);
+        .filter((linkedSlot) => !(activeFilterField === 'nailTech' && localSelectedNailTechId) || linkedSlot.nailTechId === localSelectedNailTechId);
       const pairedSlot = linkedSlots[0];
       list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
-  }, [bookings, slots, localSelectedNailTechId]);
+  }, [bookings, slots, localSelectedNailTechId, activeFilterField]);
 
   const getClientTypeFromForm = (customerData: Record<string, string> | undefined): 'repeat' | 'new' | null => {
     if (!customerData) return null;
@@ -335,8 +335,8 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       });
     }
 
-    // Apply nail tech filter
-    if (localSelectedNailTechId) {
+    // Apply nail tech filter only if nail tech filter is active
+    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
       result = result.filter((booking) => booking.nailTechId === localSelectedNailTechId);
     }
 
@@ -346,7 +346,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       if (dateCompare !== 0) return dateCompare;
       return a.slot.time.localeCompare(b.slot.time);
     });
-  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, getBookingStageLabel]);
+  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel]);
   
   // Calculate this week's bookings (excluding today's bookings to avoid duplicates)
   const thisWeekBookings = useMemo(() => {
@@ -394,8 +394,8 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       });
     }
 
-    // Apply nail tech filter
-    if (localSelectedNailTechId) {
+    // Apply nail tech filter only if nail tech filter is active
+    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
       result = result.filter((booking) => booking.nailTechId === localSelectedNailTechId);
     }
 
@@ -405,7 +405,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       if (dateCompare !== 0) return dateCompare;
       return a.slot.time.localeCompare(b.slot.time);
     });
-  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, getBookingStageLabel]);
+  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel]);
 
   const getCustomerName = (booking: BookingWithSlot): string => {
     // Priority 1: Get customer name from form data (for bookings with submitted forms)
@@ -638,8 +638,40 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
             </div>
             <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
             {booking.slot && (
-              <div className="text-xs text-slate-500 mt-1">
-                {format(parseISO(booking.slot.date), 'MMM d, yyyy')} · {getTimeRange(booking)}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-slate-500">
+                  {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
+                </span>
+                {booking.nailTechId && (() => {
+                  const tech = nailTechs.find(t => t.id === booking.nailTechId);
+                  if (!tech) return null;
+                  
+                  // Use muted colors similar to Type badges - assign colors based on tech index
+                  const techIds = nailTechs.sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
+                  const techIndex = techIds.indexOf(tech.id);
+                  const mutedColors = [
+                    { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300' },
+                    { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
+                    { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-300' },
+                    { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' },
+                    { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
+                    { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
+                    { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
+                    { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300' },
+                  ];
+                  const color = mutedColors[techIndex % mutedColors.length];
+                  
+                  return (
+                    <span
+                      className={`inline-flex items-center px-1 py-0.5 rounded-full text-[8px] font-semibold border ${color.bg} ${color.text} ${color.border}`}
+                    >
+                      Ms. {tech.name}
+                    </span>
+                  );
+                })()}
+                <span className="text-xs text-slate-500">
+                  {getTimeRange(booking)}
+                </span>
               </div>
             )}
           </div>
@@ -774,10 +806,39 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
         </td>
         <td className="px-3 py-3 align-middle">
           {booking.slot ? (
-            <div className="flex flex-col">
-              <span className="text-xs text-slate-900 whitespace-nowrap">
-                {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
-              </span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-900 whitespace-nowrap">
+                  {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
+                </span>
+                {booking.nailTechId && (() => {
+                  const tech = nailTechs.find(t => t.id === booking.nailTechId);
+                  if (!tech) return null;
+                  
+                  // Use muted colors similar to Type badges - assign colors based on tech index
+                  const techIds = nailTechs.sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
+                  const techIndex = techIds.indexOf(tech.id);
+                  const mutedColors = [
+                    { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300' },
+                    { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
+                    { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-300' },
+                    { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' },
+                    { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
+                    { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
+                    { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
+                    { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300' },
+                  ];
+                  const color = mutedColors[techIndex % mutedColors.length];
+                  
+                  return (
+                    <span
+                      className={`inline-flex items-center px-1 py-0.5 rounded-full text-[8px] font-semibold border ${color.bg} ${color.text} ${color.border}`}
+                    >
+                      Ms. {tech.name}
+                    </span>
+                  );
+                })()}
+              </div>
               <span className="text-[11px] text-slate-500 whitespace-nowrap">
                 {getTimeRange(booking)}
               </span>
