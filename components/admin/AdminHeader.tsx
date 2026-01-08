@@ -59,7 +59,7 @@ export function AdminHeader({
   return (
     <header className={`fixed top-0 ${leftPosition} right-0 z-50 bg-white border-b border-slate-200 shadow-sm`}>
       <div className="px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3 md:gap-4">
-        {/* Left side: Mobile Menu Button */}
+        {/* Left side: Menu Button (mobile only) */}
         {onMobileMenuToggle && (
           <button
             onClick={onMobileMenuToggle}
