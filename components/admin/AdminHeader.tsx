@@ -13,6 +13,9 @@ interface AdminHeaderProps {
   onNotificationClick: (notification: Notification) => void;
   onMarkAllRead: () => void;
   onLogout: () => void;
+  sidebarCollapsed?: boolean;
+  mobileMenuOpen?: boolean;
+  onMobileMenuToggle?: () => void;
 }
 
 export function AdminHeader({
