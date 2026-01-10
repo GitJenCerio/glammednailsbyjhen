@@ -95,8 +95,8 @@ export function NotificationBell({
           <IoNotificationsOutline className="w-6 h-6 text-slate-500" />
         )}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
+          <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs font-bold flex items-center justify-center shadow-lg border-2 border-white">
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>

@@ -107,6 +107,15 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     );
   };
 
+  // Helper to get effective payment status: if paid but no invoice, show as partial
+  const getEffectivePaymentStatus = (booking: Booking): PaymentStatus => {
+    const hasPayment = (booking.depositAmount && booking.depositAmount > 0) || (booking.paidAmount && booking.paidAmount > 0);
+    if (!booking.invoice && hasPayment) {
+      return 'partial';
+    }
+    return booking.paymentStatus || 'unpaid';
+  };
+
   const getCustomerName = (booking: Booking) => {
     // 1) Always prefer the name the client typed in the form (per booking)
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
@@ -220,9 +229,11 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
   const filteredBookings = useMemo(() => {
     let filtered = bookingsWithSlots.filter((booking) => {
-      if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
-      // Include bookings with invoices OR bookings with deposits (partial payments) OR confirmed bookings (even with 0 payment)
-      if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
+      const effectivePaymentStatus = getEffectivePaymentStatus(booking);
+      
+      if (filterStatus !== 'all' && effectivePaymentStatus !== filterStatus) return false;
+      // Include bookings with invoices OR bookings with deposits/paid amounts (partial payments) OR confirmed bookings (even with 0 payment)
+      if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed') return false;
       
       // For payment tracking view, only show bookings that have payments OR confirmed bookings
       if (viewMode === 'payments') {
@@ -544,14 +555,15 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
   // Calculate today's bookings
   const todayBookings = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    return bookingsWithSlots
-      .filter((booking) => {
-        if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      return bookingsWithSlots
+        .filter((booking) => {
+          const effectivePaymentStatus = getEffectivePaymentStatus(booking);
+          if (filterStatus !== 'all' && effectivePaymentStatus !== filterStatus) return false;
         if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
         const appointmentDate = parseISO(booking.slot.date);
         return appointmentDate >= today && appointmentDate < tomorrow;
@@ -583,8 +595,9 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     
     return bookingsWithSlots
       .filter((booking) => {
-        if (filterStatus !== 'all' && booking.paymentStatus !== filterStatus) return false;
-        if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
+        const effectivePaymentStatus = getEffectivePaymentStatus(booking);
+        if (filterStatus !== 'all' && effectivePaymentStatus !== filterStatus) return false;
+        if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed') return false;
         const appointmentDate = parseISO(booking.slot.date);
         // Exclude today's bookings (they're shown in the Today section)
         if (appointmentDate >= today && appointmentDate < tomorrow) return false;
@@ -907,10 +920,10 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   </div>
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
-                      paymentStatusColors[booking.paymentStatus || 'unpaid']
+                      paymentStatusColors[getEffectivePaymentStatus(booking)]
                     }`}
                   >
-                    {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                    {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs sm:text-sm">
@@ -967,7 +980,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   )}
                 </div>
                 <div className="mt-3 pt-3 border-t border-blue-200 flex flex-wrap gap-2">
-                  {booking.paymentStatus === 'paid' ? (
+                  {booking.invoice && booking.paymentStatus === 'paid' ? (
                     <button
                       onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                       className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
@@ -1037,37 +1050,43 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           {format(parseISO(booking.slot.date), 'MMM d')} {formatTime12Hour(booking.slot.time)}
                         </td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
-                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{totalPaid.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">
+                      <button
+                        onClick={() => {
+                          setSelectedBookingForPayment(booking);
+                          setPaymentModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer text-slate-700"
+                        title="Click to update payment"
+                      >
+                        ₱{totalPaid.toLocaleString('en-PH')}
+                        <IoCreateOutline className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                         <td className="px-4 xl:px-6 py-3">
-                          {booking.invoice ? (
-                            <button
-                              onClick={() => {
-                                setSelectedBookingForPayment(booking);
-                                setPaymentModalOpen(true);
-                              }}
-                              className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
-                                balance > 0 ? 'text-red-700' : 'text-emerald-700'
-                              }`}
-                              title="Click to update payment"
-                            >
-                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                              <IoCreateOutline className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <span className={`text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                            </span>
-                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedBookingForPayment(booking);
+                              setPaymentModalOpen(true);
+                            }}
+                            className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
+                              balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                            }`}
+                            title="Click to update payment"
+                          >
+                            ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                            <IoCreateOutline className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            paymentStatusColors[booking.paymentStatus || 'unpaid']
+                            paymentStatusColors[getEffectivePaymentStatus(booking)]
                           }`}>
-                            {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                            {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
                           </span>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
-                          {booking.paymentStatus === 'paid' ? (
+                          {booking.invoice && booking.paymentStatus === 'paid' ? (
                             <button
                               onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                               className="rounded-full border-2 border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
@@ -1128,10 +1147,10 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   </div>
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
-                      paymentStatusColors[booking.paymentStatus || 'unpaid']
+                      paymentStatusColors[getEffectivePaymentStatus(booking)]
                     }`}
                   >
-                    {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                    {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs sm:text-sm">
@@ -1188,7 +1207,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   )}
                 </div>
                 <div className="mt-3 pt-3 border-t border-emerald-200 flex flex-wrap gap-2">
-                  {booking.paymentStatus === 'paid' ? (
+                  {booking.invoice && booking.paymentStatus === 'paid' ? (
                     <button
                       onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                       className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
@@ -1258,37 +1277,43 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                           {format(parseISO(booking.slot.date), 'MMM d')} {formatTime12Hour(booking.slot.time)}
                         </td>
                         <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-900">₱{total.toLocaleString('en-PH')}</td>
-                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">₱{totalPaid.toLocaleString('en-PH')}</td>
+                        <td className="px-4 xl:px-6 py-3 text-xs sm:text-sm text-slate-700">
+                      <button
+                        onClick={() => {
+                          setSelectedBookingForPayment(booking);
+                          setPaymentModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer text-slate-700"
+                        title="Click to update payment"
+                      >
+                        ₱{totalPaid.toLocaleString('en-PH')}
+                        <IoCreateOutline className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                         <td className="px-4 xl:px-6 py-3">
-                          {booking.invoice ? (
-                            <button
-                              onClick={() => {
-                                setSelectedBookingForPayment(booking);
-                                setPaymentModalOpen(true);
-                              }}
-                              className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
-                                balance > 0 ? 'text-red-700' : 'text-emerald-700'
-                              }`}
-                              title="Click to update payment"
-                            >
-                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                              <IoCreateOutline className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <span className={`text-xs sm:text-sm font-semibold ${balance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                            </span>
-                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedBookingForPayment(booking);
+                              setPaymentModalOpen(true);
+                            }}
+                            className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
+                              balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                            }`}
+                            title="Click to update payment"
+                          >
+                            ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                            <IoCreateOutline className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            paymentStatusColors[booking.paymentStatus || 'unpaid']
+                            paymentStatusColors[getEffectivePaymentStatus(booking)]
                           }`}>
-                            {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                            {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
                           </span>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
-                          {booking.paymentStatus === 'paid' ? (
+                          {booking.invoice && booking.paymentStatus === 'paid' ? (
                             <button
                               onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                               className="rounded-full border-2 border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
@@ -1439,7 +1464,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                 )}
               </div>
               <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2">
-                {booking.paymentStatus === 'paid' ? (
+                          {booking.invoice && booking.paymentStatus === 'paid' ? (
                   <button
                     onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                     className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
@@ -1575,59 +1600,62 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         const paid = booking.paidAmount || 0;
                         const totalPaid = deposit + paid;
                         return totalPaid > 0 ? (
-                          <span className="text-xs xl:text-sm font-semibold text-slate-900">
+                          <button
+                            onClick={() => {
+                              setSelectedBookingForPayment(booking);
+                              setPaymentModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 text-xs xl:text-sm font-semibold hover:underline cursor-pointer text-slate-900"
+                            title="Click to update payment"
+                          >
                             ₱{totalPaid.toLocaleString('en-PH')}
-                          </span>
+                            <IoCreateOutline className="w-3.5 h-3.5" />
+                          </button>
                         ) : (
-                          <span className="text-xs xl:text-sm text-slate-400">—</span>
+                          <button
+                            onClick={() => {
+                              setSelectedBookingForPayment(booking);
+                              setPaymentModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 text-xs xl:text-sm font-semibold hover:underline cursor-pointer text-slate-400"
+                            title="Click to update payment"
+                          >
+                            —
+                            <IoCreateOutline className="w-3.5 h-3.5" />
+                          </button>
                         );
                       })()}
                     </td>
                     <td className="px-4 xl:px-6 py-3">
-                      {booking.invoice ? (
-                        <>
+                      {(() => {
+                        const total = booking.invoice?.total || 0;
+                        const deposit = booking.depositAmount || 0;
+                        const paid = booking.paidAmount || 0;
+                        const totalPaid = deposit + paid;
+                        const balance = total - totalPaid;
+                        return (
                           <div>
-                            {(() => {
-                              const total = booking.invoice?.total || 0;
-                              const deposit = booking.depositAmount || 0;
-                              const paid = booking.paidAmount || 0;
-                              const totalPaid = deposit + paid;
-                              const balance = total - totalPaid;
-                              return (
-                                <button
-                                  onClick={() => {
-                                    setSelectedBookingForPayment(booking);
-                                    setPaymentModalOpen(true);
-                                  }}
-                                  className={`inline-flex items-center gap-1.5 text-xs xl:text-sm font-bold hover:underline cursor-pointer ${
-                                    balance > 0 ? 'text-red-700' : 'text-emerald-700'
-                                  }`}
-                                  title="Click to update payment"
-                                >
-                                  ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                                  <IoCreateOutline className="w-3.5 h-3.5" />
-                                </button>
-                              );
-                            })()}
+                            <button
+                              onClick={() => {
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
+                              }}
+                              className={`inline-flex items-center gap-1.5 text-xs xl:text-sm font-bold hover:underline cursor-pointer ${
+                                balance > 0 ? 'text-red-700' : 'text-emerald-700'
+                              }`}
+                              title="Click to update payment"
+                            >
+                              ₱{Math.max(0, balance).toLocaleString('en-PH')}
+                              <IoCreateOutline className="w-3.5 h-3.5" />
+                            </button>
                             {booking.paymentStatus === 'paid' && booking.tipAmount && booking.tipAmount > 0 && (
                               <p className="text-xs text-emerald-700 mt-1 font-semibold">
                                 Tip: ₱{booking.tipAmount.toLocaleString('en-PH')}
                               </p>
                             )}
                           </div>
-                        </>
-                      ) : booking.depositAmount ? (
-                        <div className="space-y-0.5">
-                          <span className="text-xs xl:text-sm font-bold text-emerald-700">
-                            ₱0
-                          </span>
-                          <p className="text-[10px] xl:text-xs text-slate-500">
-                            DP only: ₱{booking.depositAmount.toLocaleString('en-PH')}
-                          </p>
-                        </div>
-                      ) : (
-                        <span className="text-xs xl:text-sm text-slate-400">—</span>
-                      )}
+                        );
+                      })()}
                     </td>
                     <td className="px-4 xl:px-6 py-3">
                       {booking.invoice?.total ? (() => {
@@ -1647,10 +1675,10 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     <td className="px-4 xl:px-6 py-3">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                          paymentStatusColors[booking.paymentStatus || 'unpaid']
+                          paymentStatusColors[getEffectivePaymentStatus(booking)]
                         }`}
                       >
-                        {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                        {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
                       </span>
                     </td>
                     <td className="px-4 xl:px-6 py-3">
@@ -1689,17 +1717,17 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                                   className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
                                 >
                                   Mark as Paid
-                                </button>
-                              </>
-                            )}
-                            {booking.paymentStatus === 'paid' && (
+                              </button>
+                            </>
+                          )}
+                            {booking.invoice && booking.paymentStatus === 'paid' ? (
                               <button
                                 onClick={() => handleUpdatePayment(booking.id, 'refunded')}
                                 className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
                               >
                                 Refund
                               </button>
-                            )}
+                            ) : null}
                           </div>
                         )}
                       </div>

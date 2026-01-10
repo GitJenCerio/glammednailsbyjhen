@@ -1191,19 +1191,21 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
     updateData.status = 'pending_payment';
   }
   
-  // Always set payment status based on deposit amount (separate from booking status)
-  // unpaid: no deposit, partial: has deposit, paid: fully paid (set via updatePaymentStatus)
+  // Always set payment status based on deposit amount OR paid amount (separate from booking status)
+  // unpaid: no deposit/paid amount, partial: has deposit or paid amount, paid: fully paid (set via updatePaymentStatus)
   const hasDeposit = currentBooking?.depositAmount && currentBooking.depositAmount > 0;
+  const hasPaidAmount = currentBooking?.paidAmount && currentBooking.paidAmount > 0;
+  const hasPayment = hasDeposit || hasPaidAmount;
   const isFullyPaid = currentBooking?.paymentStatus === 'paid';
   
   if (isFullyPaid) {
     // Preserve paid status if already fully paid
     updateData.paymentStatus = 'paid';
-  } else if (hasDeposit) {
-    // Has deposit but not fully paid = partial
+  } else if (hasPayment) {
+    // Has deposit or paid amount but not fully paid = partial
     updateData.paymentStatus = 'partial';
   } else {
-    // No deposit = unpaid
+    // No deposit or paid amount = unpaid
     updateData.paymentStatus = 'unpaid';
   }
   
@@ -1377,8 +1379,10 @@ export async function rescheduleBooking(bookingId: string, newSlotId: string, li
     });
 
     // Update booking
+    // Update nailTechId from the new slot
     const updateData: any = {
       slotId: newSlotId,
+      nailTechId: newSlot.nailTechId, // Update nail tech from the new slot
       updatedAt: Timestamp.now().toDate().toISOString(),
     };
 
@@ -1389,6 +1393,10 @@ export async function rescheduleBooking(bookingId: string, newSlotId: string, li
       updateData.pairedSlotId = null;
       updateData.linkedSlotIds = [];
     }
+
+    // Preserve payment-related fields - don't overwrite them during reschedule
+    // Payment status, amounts, dates, and methods should remain unchanged
+    // unless explicitly updated elsewhere
 
     transaction.update(bookingRef, updateData);
   });

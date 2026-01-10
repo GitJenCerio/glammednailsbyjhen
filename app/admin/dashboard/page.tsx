@@ -323,6 +323,13 @@ function AdminDashboardContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Clear nail tech filter when switching to finance section
+  useEffect(() => {
+    if (activeSection === 'finance') {
+      setSelectedNailTechId(null);
+    }
+  }, [activeSection]);
+
   // Update URL when activeSection changes (user action, not from URL sync)
   useEffect(() => {
     if (isUpdatingFromUrl.current) {
@@ -410,28 +417,32 @@ function AdminDashboardContent() {
       setCustomers(customersRes.customers || []);
       setNailTechs(nailTechsRes.nailTechs || []);
       
-      // Default to Ms. Jhen (Owner) - all existing calendar data belongs to her
+      // Default to Ms. Jhen (Owner) for calendar/bookings section only - all existing calendar data belongs to her
+      // Don't set default for finance section, show all bookings by default
       if (!selectedNailTechId && nailTechsRes.nailTechs && nailTechsRes.nailTechs.length > 0) {
-        // First try to find Ms. Jhen by name (case insensitive)
-        let defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
-          tech.name.toLowerCase().includes('jhen') && 
-          tech.status === 'Active'
-        );
-        
-        // If not found, try any Owner with Active status
-        if (!defaultTech) {
-          defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
-            tech.role === 'Owner' && tech.status === 'Active'
+        // Only set default if we're in bookings/calendar section, not finance
+        if (activeSection === 'bookings' || activeSection === 'overview') {
+          // First try to find Ms. Jhen by name (case insensitive)
+          let defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
+            tech.name.toLowerCase().includes('jhen') && 
+            tech.status === 'Active'
           );
-        }
-        
-        // If still not found, get first active tech
-        if (!defaultTech) {
-          defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => tech.status === 'Active') || nailTechsRes.nailTechs[0];
-        }
-        
-        if (defaultTech) {
-          setSelectedNailTechId(defaultTech.id);
+          
+          // If not found, try any Owner with Active status
+          if (!defaultTech) {
+            defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
+              tech.role === 'Owner' && tech.status === 'Active'
+            );
+          }
+          
+          // If still not found, get first active tech
+          if (!defaultTech) {
+            defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => tech.status === 'Active') || nailTechsRes.nailTechs[0];
+          }
+          
+          if (defaultTech) {
+            setSelectedNailTechId(defaultTech.id);
+          }
         }
       }
     } catch (error) {
@@ -1504,6 +1515,7 @@ function AdminDashboardContent() {
           slotLabel={
             selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
           }
+          nailTechs={nailTechs}
           onClose={() => setQuotationModalOpen(false)}
           onSendInvoice={handleSendInvoice}
         />

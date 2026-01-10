@@ -6,7 +6,7 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import type { Booking, Slot, BookingWithSlot, NailTech } from '@/lib/types';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { PaymentModal } from '@/components/admin/modals/PaymentModal';
-import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical } from 'react-icons/io5';
+import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical, IoCashOutline } from 'react-icons/io5';
 
 type FilterPeriod = 'all' | 'today' | 'week' | 'month';
 type StatusFilter = 'all' | 'upcoming' | 'done';
@@ -776,6 +776,22 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                   Cancel
                 </button>
               )}
+              {onUpdatePayment && booking.invoice && (() => {
+                const { balance } = getFinanceSummary(booking);
+                const isAwaitingPayment = (booking.paymentStatus === 'unpaid' || booking.paymentStatus === 'partial') && balance > 0;
+                return isAwaitingPayment ? (
+                  <button
+                    onClick={() => {
+                      setSelectedBookingForPayment(booking);
+                      setPaymentModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border-2 border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 touch-manipulation active:scale-[0.98] hover:bg-emerald-100"
+                  >
+                    <IoCashOutline className="w-3.5 h-3.5" />
+                    <span>Payment</span>
+                  </button>
+                ) : null;
+              })()}
             </div>
           )}
         </div>
@@ -1016,6 +1032,25 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               Cancel
                             </button>
                           )}
+                          {onUpdatePayment && booking.invoice && (() => {
+                            const { balance } = getFinanceSummary(booking);
+                            const isAwaitingPayment = (booking.paymentStatus === 'unpaid' || booking.paymentStatus === 'partial') && balance > 0;
+                            return isAwaitingPayment ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBookingForPayment(booking);
+                                  setPaymentModalOpen(true);
+                                  setOpenDropdownId(null);
+                                  setDropdownPosition(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2"
+                              >
+                                <IoCashOutline className="w-4 h-4" />
+                                Update Payment
+                              </button>
+                            ) : null;
+                          })()}
                         </div>
                       </div>,
                       document.body
@@ -1337,6 +1372,10 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
               totalPaid,
               tipAmount,
             );
+
+            // Close modal after successful payment update
+            setPaymentModalOpen(false);
+            setSelectedBookingForPayment(null);
           }}
         />
       )}

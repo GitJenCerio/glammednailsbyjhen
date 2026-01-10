@@ -4,13 +4,14 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import html2canvas from 'html2canvas';
-import type { Booking, BookingWithSlot } from '@/lib/types';
+import type { Booking, BookingWithSlot, NailTech } from '@/lib/types';
 import { format } from 'date-fns';
 
 type QuoteItem = {
   id: string;
   description: string;
-  unitPrice: number;
+  unitPrice: number; // Discounted price (if discount applies)
+  originalPrice?: number; // Original price before discount (optional, for display)
   quantity: number;
 };
 
@@ -31,11 +32,12 @@ const PRICE_SHEET_TSV_URL =
 type QuotationModalProps = {
   booking: Booking | BookingWithSlot | null;
   slotLabel?: string;
+  nailTechs?: NailTech[];
   onClose: () => void;
   onSendInvoice?: (bookingId: string, invoiceData: { items: QuoteItem[]; total: number; notes: string }) => Promise<void>;
 };
 
-export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: QuotationModalProps) {
+export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, onSendInvoice }: QuotationModalProps) {
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [customLabel, setCustomLabel] = useState('');
   const [customPrice, setCustomPrice] = useState('');
@@ -125,18 +127,45 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
       .finally(() => setSheetLoading(false));
   }, []);
 
-  const servicesTotal = useMemo(
+  // Get nail tech discount rate (must be defined before useMemo hooks that use it)
+  const nailTech = useMemo(() => {
+    if (!booking?.nailTechId || !nailTechs.length) return null;
+    return nailTechs.find(tech => tech.id === booking.nailTechId) || null;
+  }, [booking?.nailTechId, nailTechs]);
+
+  const discountRate = nailTech?.discount || 0; // e.g., 15 for 15% discount
+
+  // Calculate subtotal from original prices (before discount)
+  const servicesSubtotal = useMemo(
     () => quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     [quoteItems],
   );
 
-  const total = useMemo(
-    () => servicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0),
-    [servicesTotal, hasSqueezeFee],
+  // Calculate subtotal including squeeze-in fee (before discount)
+  const subtotalBeforeDiscount = useMemo(
+    () => servicesSubtotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0),
+    [servicesSubtotal, hasSqueezeFee],
   );
 
+  // Calculate discount amount
+  const discountAmount = useMemo(() => {
+    if (discountRate <= 0 || discountRate >= 100) return 0;
+    return Math.round(subtotalBeforeDiscount * (discountRate / 100));
+  }, [subtotalBeforeDiscount, discountRate]);
+
+  // Final total after discount
+  const total = useMemo(
+    () => subtotalBeforeDiscount - discountAmount,
+    [subtotalBeforeDiscount, discountAmount],
+  );
+
+  // For backwards compatibility, servicesTotal is the same as servicesSubtotal
+  const servicesTotal = servicesSubtotal;
+
   const depositAmount = booking?.depositAmount || 0;
-  const balanceDue = total - depositAmount;
+  const paidAmount = booking?.paidAmount || 0;
+  const totalPaid = depositAmount + paidAmount;
+  const balanceDue = total - totalPaid;
 
   const filteredSearchResults = useMemo(() => {
     if (!searchTerm.trim()) return [];
@@ -151,12 +180,17 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
     return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || 'Customer';
   };
 
-
   const addQuoteItemFromRow = (label: string, row?: PriceSheetRow | null) => {
     if (!row || row.unitPrice === null) return;
+    const originalPrice = row.unitPrice ?? 0;
     setQuoteItems((prev) => [
       ...prev,
-      { id: generateId(), description: label, unitPrice: row.unitPrice ?? 0, quantity: 1 },
+      { 
+        id: generateId(), 
+        description: label, 
+        unitPrice: originalPrice, // Store original price, discount applied at total level
+        quantity: 1 
+      },
     ]);
   };
 
@@ -170,7 +204,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
       {
         id: generateId(),
         description: customLabel.trim(),
-        unitPrice: priceValue,
+        unitPrice: priceValue, // Store original price, discount applied at total level
         quantity: qtyValue,
       },
     ]);
@@ -665,14 +699,20 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
 
       // Recalculate total to ensure it's correct before saving
       const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-      const recalculatedTotal = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+      const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+      const recalculatedDiscountAmount = discountRate > 0 && discountRate < 100 
+        ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) 
+        : 0;
+      const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
       
       // Save invoice to booking (squeeze-in fee is included in total, not as a separate item)
       const invoiceData = {
         items: quoteItems,
-        total: recalculatedTotal, // Use recalculated total to ensure accuracy
+        total: recalculatedTotal, // Use recalculated total to ensure accuracy (includes discount)
         notes,
         squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined, // Store squeeze-in fee separately for reference
+        discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined, // Store discount rate for reference
+        discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined, // Store discount amount for reference
         createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date if editing
         updatedAt: new Date().toISOString(),
       };
@@ -844,6 +884,11 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                   ))}
                 </div>
               )}
+              {discountRate > 0 && discountRate < 100 && nailTech && (
+                <p className="text-xs text-emerald-600 mt-2 font-medium">
+                  💰 {nailTech.name ? `Ms. ${nailTech.name}` : 'Nail Tech'} Discount: {discountRate}% will be applied to total
+                </p>
+              )}
             </div>
 
             <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-4 shadow-lg shadow-slate-200/50">
@@ -971,11 +1016,16 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                 </div>
                 <div className="mt-2 pt-2 border-t border-slate-200 space-y-0.5">
                   <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">
-                    Services Subtotal: ₱{servicesTotal.toLocaleString('en-PH')}
+                    Services Subtotal: ₱{servicesSubtotal.toLocaleString('en-PH')}
                   </p>
                   {hasSqueezeFee && (
                     <p className="text-xs sm:text-sm font-semibold text-purple-700 leading-snug">
                       Squeeze-in Fee: ₱{SQUEEZE_IN_FEE.toLocaleString('en-PH')}
+                    </p>
+                  )}
+                  {discountAmount > 0 && (
+                    <p className="text-xs sm:text-sm font-semibold text-emerald-600 leading-snug">
+                      {discountRate}% Discount: -₱{discountAmount.toLocaleString('en-PH')}
                     </p>
                   )}
                   <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">
@@ -984,6 +1034,11 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                   {depositAmount > 0 && (
                     <p className="text-xs sm:text-sm font-semibold text-emerald-700 leading-snug">
                       Deposit Paid: -₱{depositAmount.toLocaleString('en-PH')}
+                    </p>
+                  )}
+                  {paidAmount > 0 && (
+                    <p className="text-xs sm:text-sm font-semibold text-emerald-700 leading-snug">
+                      Amount Paid: -₱{paidAmount.toLocaleString('en-PH')}
                     </p>
                   )}
                   <p
@@ -1046,7 +1101,7 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-xs sm:text-sm leading-snug">Services Subtotal:</span>
                   <span className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">
-                    ₱{servicesTotal.toLocaleString('en-PH')}
+                    ₱{servicesSubtotal.toLocaleString('en-PH')}
                   </span>
                 </div>
                 {hasSqueezeFee && (
@@ -1056,6 +1111,16 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                     </span>
                     <span className="text-sm sm:text-base font-semibold text-purple-700 leading-snug">
                       ₱{SQUEEZE_IN_FEE.toLocaleString('en-PH')}
+                    </span>
+                  </div>
+                )}
+                {discountAmount > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-xs sm:text-sm text-emerald-600 leading-snug">
+                      {discountRate}% Discount:
+                    </span>
+                    <span className="text-sm sm:text-base font-semibold text-emerald-600 leading-snug">
+                      -₱{discountAmount.toLocaleString('en-PH')}
                     </span>
                   </div>
                 )}
@@ -1070,6 +1135,14 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                     <span className="text-[11px] sm:text-xs text-slate-600 leading-tight">Deposit Paid:</span>
                     <span className="text-[11px] sm:text-xs font-semibold text-emerald-700 leading-tight">
                       -₱{depositAmount.toLocaleString('en-PH')}
+                    </span>
+                  </div>
+                )}
+                {paidAmount > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] sm:text-xs text-slate-600 leading-tight">Amount Paid:</span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-emerald-700 leading-tight">
+                      -₱{paidAmount.toLocaleString('en-PH')}
                     </span>
                   </div>
                 )}
@@ -1153,13 +1226,19 @@ export function QuotationModal({ booking, slotLabel, onClose, onSendInvoice }: Q
                     
                     // Recalculate total to ensure it's correct
                     const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-                    const recalculatedTotal = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+                    const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+                    const recalculatedDiscountAmount = discountRate > 0 && discountRate < 100 
+                      ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) 
+                      : 0;
+                    const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
                     
                     const invoiceData = {
                       items: quoteItems,
-                      total: recalculatedTotal, // Use recalculated total
+                      total: recalculatedTotal, // Use recalculated total (includes discount)
                       notes,
                       squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
+                      discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined, // Store discount rate for reference
+                      discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined, // Store discount amount for reference
                       createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date or use current date
                       updatedAt: new Date().toISOString(),
                     };
