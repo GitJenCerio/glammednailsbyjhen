@@ -8,3 +8,9 @@ export function getNextSlotTime(time: string): string | null {
   return SLOT_TIMES[index + 1];
 }
 
+export function getPreviousSlotTime(time: string): string | null {
+  const index = SLOT_TIMES.indexOf(time as SlotTime);
+  if (index === -1 || index === 0) return null;
+  return SLOT_TIMES[index - 1];
+}
+

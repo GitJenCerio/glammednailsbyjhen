@@ -477,11 +477,21 @@ function AdminDashboardContent() {
   }, [selectedCustomerId]);
 
   const selectedSlots = useMemo(() => {
+    // PRIORITIZE ALL SLOTS: Include all slot statuses (available, pending, confirmed, blocked)
+    // This ensures confirmed slots are always visible
     let filteredSlots = slots.filter((slot) => slot.date === selectedDate);
     if (selectedNailTechId) {
       filteredSlots = filteredSlots.filter((slot) => slot.nailTechId === selectedNailTechId);
     }
-    return filteredSlots;
+    
+    // Log for debugging: check if confirmed slots are being filtered out
+    const confirmedSlots = filteredSlots.filter(s => s.status === 'confirmed');
+    if (confirmedSlots.length > 0) {
+      console.log(`Found ${confirmedSlots.length} confirmed slot(s) for ${selectedDate}:`, confirmedSlots.map(s => ({ id: s.id, time: s.time, status: s.status })));
+    }
+    
+    // Sort slots by time to ensure consistent display order
+    return filteredSlots.sort((a, b) => a.time.localeCompare(b.time));
   }, [slots, selectedDate, selectedNailTechId]);
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
@@ -1129,11 +1139,9 @@ function AdminDashboardContent() {
                     </div>
                   )}
                   {selectedSlots.map((slot) => {
-                    // Only show bookings for slots that are not available
-                    // Available slots should not display any booking information
-                    const bookingForSlot = slot.status === 'available' 
-                      ? null 
-                      : bookingsWithSlots.find((b) => {
+                    // Find booking for this slot - check bookings regardless of slot status
+                    // This prevents hiding bookings if slot status is incorrectly set to 'available'
+                    const bookingForSlot = bookingsWithSlots.find((b) => {
                           // Check if this slot is the primary slot for this booking
                           if (b.slotId === slot.id) {
                             // Always show the booking details for this slot (pending or confirmed)
@@ -1146,6 +1154,11 @@ function AdminDashboardContent() {
                           }
                           return false;
                         });
+                    
+                    // Log warning if slot status is 'available' but has a booking (data inconsistency)
+                    if (slot.status === 'available' && bookingForSlot) {
+                      console.warn(`Slot ${slot.id} has status 'available' but booking ${bookingForSlot.bookingId} exists. This may indicate slot status was not updated when booking was confirmed.`);
+                    }
                     const customerForBooking = bookingForSlot ? customers.find((c) => c.id === bookingForSlot.customerId) : null;
                     // Sort nail techs by name for consistent color assignment
                     const sortedTechIds = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);

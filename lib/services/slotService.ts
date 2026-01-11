@@ -196,6 +196,22 @@ export async function deleteExpiredSlots() {
   }
 }
 
+export async function getSlotById(slotId: string): Promise<Slot | null> {
+  const doc = await slotCollection.doc(slotId).get();
+  if (!doc.exists) return null;
+  
+  const data = doc.data()!;
+  const defaultNailTech = await getDefaultNailTech();
+  
+  // Handle backward compatibility: assign default nail tech if missing
+  if (!data.nailTechId && defaultNailTech) {
+    await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+    return docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id });
+  }
+  
+  return docToSlot(doc.id, data);
+}
+
 export async function getSlotsByDate(date: string, nailTechId?: string): Promise<Slot[]> {
   let snapshot;
   if (nailTechId) {

@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
 import { listBlockedDates } from '@/lib/services/blockService';
-import { deleteSlot, updateSlot } from '@/lib/services/slotService';
+import { deleteSlot, updateSlot, getSlotById } from '@/lib/services/slotService';
 
 // Prevent caching in production
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+export async function GET(_request: Request, { params }: { params: { id: string } }) {
+  try {
+    const slot = await getSlotById(params.id);
+    if (!slot) {
+      return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
+    }
+    return NextResponse.json({ slot });
+  } catch (error: any) {
+    console.error('Error fetching slot:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch slot' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {

@@ -74,6 +74,76 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
   const [responseModalBooking, setResponseModalBooking] = useState<BookingWithSlot | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<BookingWithSlot | null>(null);
+  const [missingSlots, setMissingSlots] = useState<Map<string, Slot>>(new Map());
+  const [restoringSlots, setRestoringSlots] = useState(false);
+
+  // Automatically fetch missing slots for confirmed bookings
+  useEffect(() => {
+    const fetchMissingSlots = async () => {
+      // Find confirmed bookings with missing slots
+      const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
+      const existingSlotIds = new Set(slots.map(s => s.id));
+      
+      // Check which slots we've already tried to fetch (stored in missingSlots)
+      const alreadyFetched = new Set(missingSlots.keys());
+      
+      const bookingsWithMissingSlots = confirmedBookings.filter(
+        booking => !existingSlotIds.has(booking.slotId) && !alreadyFetched.has(booking.slotId)
+      );
+
+      if (bookingsWithMissingSlots.length === 0) return;
+
+      setRestoringSlots(true);
+      const newSlots = new Map(missingSlots);
+
+      for (const booking of bookingsWithMissingSlots) {
+        try {
+          // Try to fetch the slot directly from Firebase
+          const response = await fetch(`/api/slots/${booking.slotId}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.slot) {
+              newSlots.set(booking.slotId, data.slot);
+              console.log(`✅ Restored slot ${booking.slotId} (${data.slot.date} ${data.slot.time}) for confirmed booking ${booking.bookingId}`);
+            }
+          } else if (response.status === 404) {
+            // Slot doesn't exist - try to recover it using the booking recovery endpoint
+            try {
+              const recoverResponse = await fetch('/api/bookings/recover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId: booking.bookingId }),
+              });
+              
+              if (recoverResponse.ok) {
+                const recoverData = await recoverResponse.json();
+                if (recoverData.slot) {
+                  newSlots.set(booking.slotId, recoverData.slot);
+                  console.log(`✅ ${recoverData.action === 'created' ? 'Created' : 'Found'} slot ${booking.slotId} (${recoverData.slot.date} ${recoverData.slot.time}) for confirmed booking ${booking.bookingId}`);
+                }
+              } else {
+                const errorData = await recoverResponse.json().catch(() => ({}));
+                console.warn(`❌ Cannot recover slot for booking ${booking.bookingId}: ${errorData.error || 'Unknown error'}`);
+              }
+            } catch (e) {
+              console.warn(`Failed to recover booking ${booking.bookingId}:`, e);
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch slot ${booking.slotId} for booking ${booking.bookingId}:`, error);
+        }
+      }
+
+      if (newSlots.size > missingSlots.size) {
+        setMissingSlots(newSlots);
+        console.log(`Restored ${newSlots.size - missingSlots.size} missing slot(s) for confirmed bookings`);
+      }
+      setRestoringSlots(false);
+    };
+
+    fetchMissingSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookings, slots]); // Removed missingSlots from deps to prevent infinite loops
 
   // Combine bookings with slots and filter by nail tech
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
@@ -85,22 +155,33 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       filteredBookings = bookings.filter((booking) => booking.nailTechId === localSelectedNailTechId);
     }
     
+    // Combine regular slots with restored missing slots
+    const allSlots = [...slots, ...Array.from(missingSlots.values())];
+    
     filteredBookings.forEach((booking) => {
-      const slot = slots.find((candidate) => candidate.id === booking.slotId);
-      if (!slot) return;
+      // Find the slot for this booking (check both regular slots and restored missing slots)
+      const slot = allSlots.find((candidate) => candidate.id === booking.slotId);
+      
+      if (!slot) {
+        // Slot is still missing - log warning for confirmed bookings
+        if (booking.status === 'confirmed') {
+          console.warn(`Confirmed booking ${booking.bookingId} (${booking.id}) references missing slot ${booking.slotId}. Slot not found in Firebase.`);
+        }
+        return; // Skip bookings with missing slots
+      }
       
       // Also filter by selected nail tech for slots (double-check) - only if nail tech filter is active
       if (activeFilterField === 'nailTech' && localSelectedNailTechId && slot.nailTechId !== localSelectedNailTechId) return;
       
       const linkedSlots = (booking.linkedSlotIds ?? [])
-        .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
+        .map((linkedId) => allSlots.find((candidate) => candidate.id === linkedId))
         .filter((value): value is Slot => Boolean(value))
         .filter((linkedSlot) => !(activeFilterField === 'nailTech' && localSelectedNailTechId) || linkedSlot.nailTechId === localSelectedNailTechId);
       const pairedSlot = linkedSlots[0];
       list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
-  }, [bookings, slots, localSelectedNailTechId, activeFilterField]);
+  }, [bookings, slots, missingSlots, localSelectedNailTechId, activeFilterField]);
 
   const getClientTypeFromForm = (customerData: Record<string, string> | undefined): 'repeat' | 'new' | null => {
     if (!customerData) return null;
@@ -246,6 +327,15 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     // Base date filtering (All / Today / This Week / This Month)
     if (filterPeriod === 'all') {
       result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+      
+      // Apply month filter if selected (for "all" period)
+      if (monthFilter !== 'all') {
+        result = result.filter((booking) => {
+          if (!booking.slot) return false;
+          const appointmentDate = parseISO(booking.slot.date);
+          return appointmentDate.getMonth() + 1 === monthFilter; // getMonth() returns 0-11
+        });
+      }
     } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -297,17 +387,13 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       });
     }
 
-    // Sort by date and time (most recent first for 'all', otherwise ascending)
+    // Sort by date and time (ascending - earliest first)
     return result.sort((a, b) => {
       if (!a.slot || !b.slot) return 0;
-      const dateCompare =
-        filterPeriod === 'all'
-          ? b.slot.date.localeCompare(a.slot.date)
-          : a.slot.date.localeCompare(b.slot.date);
+      const dateCompare = a.slot.date.localeCompare(b.slot.date);
       if (dateCompare !== 0) return dateCompare;
-      return filterPeriod === 'all'
-        ? b.slot.time.localeCompare(a.slot.time)
-        : a.slot.time.localeCompare(b.slot.time);
+      // Ascending order: earlier times first
+      return a.slot.time.localeCompare(b.slot.time);
     });
   }, [bookingsWithSlots, filterPeriod, statusFilter, monthFilter, getBookingStageLabel]);
 
@@ -617,6 +703,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     }
     return formatTime(booking.slot.time);
   };
+
 
   // Helper function to render booking card (mobile)
   const renderBookingCard = (booking: BookingWithSlot, borderColor: string, bgColor: string) => {
@@ -1179,6 +1266,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
               </div>
             </div>
           )}
+
         </div>
       </div>
 
