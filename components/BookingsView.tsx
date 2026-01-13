@@ -6,7 +6,8 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import type { Booking, Slot, BookingWithSlot, NailTech } from '@/lib/types';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { PaymentModal } from '@/components/admin/modals/PaymentModal';
-import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical, IoCashOutline, IoSearchOutline, IoClose } from 'react-icons/io5';
+import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical, IoCashOutline, IoSearchOutline, IoClose, IoSparkles } from 'react-icons/io5';
+import { ChangeServiceTypeModal } from '@/components/admin/modals/ChangeServiceTypeModal';
 
 type FilterPeriod = 'all' | 'today' | 'week' | 'month';
 type StatusFilter = 'all' | 'upcoming' | 'done';
@@ -26,6 +27,7 @@ interface BookingsViewProps {
   onMakeQuotation?: (bookingId: string) => void;
   onConfirm?: (bookingId: string) => void;
   onUpdatePayment?: (bookingId: string, paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded', paidAmount?: number, tipAmount?: number) => void;
+  onServiceTypeChange?: () => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -49,7 +51,7 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingsView({ bookings, slots, selectedDate, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onCancel, onReschedule, onSplitReschedule, onMakeQuotation, onConfirm, onUpdatePayment }: BookingsViewProps) {
+export function BookingsView({ bookings, slots, selectedDate, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onCancel, onReschedule, onSplitReschedule, onMakeQuotation, onConfirm, onUpdatePayment, onServiceTypeChange }: BookingsViewProps) {
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
@@ -77,6 +79,8 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<BookingWithSlot | null>(null);
   const [missingSlots, setMissingSlots] = useState<Map<string, Slot>>(new Map());
   const [restoringSlots, setRestoringSlots] = useState(false);
+  const [serviceTypeModalOpen, setServiceTypeModalOpen] = useState(false);
+  const [selectedBookingForServiceChange, setSelectedBookingForServiceChange] = useState<BookingWithSlot | null>(null);
 
   // Automatically fetch missing slots for confirmed bookings
   useEffect(() => {
@@ -984,6 +988,21 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                         </button>
                       ) : null;
                     })()}
+                    {booking.status !== 'cancelled' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedBookingForServiceChange(booking);
+                          setServiceTypeModalOpen(true);
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoSparkles className="w-4 h-4" />
+                        Change Service
+                      </button>
+                    )}
                     {onCancel && (
                       <button
                         onClick={(e) => {
@@ -1247,6 +1266,21 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               </button>
                             ) : null;
                           })()}
+                          {booking.status !== 'cancelled' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBookingForServiceChange(booking);
+                                setServiceTypeModalOpen(true);
+                                setOpenDropdownId(null);
+                                setDropdownPosition(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                            >
+                              <IoSparkles className="w-4 h-4" />
+                              Change Service
+                            </button>
+                          )}
                           {onCancel && (
                             <button
                               onClick={(e) => {
@@ -1610,6 +1644,40 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
             // Close modal after successful payment update
             setPaymentModalOpen(false);
             setSelectedBookingForPayment(null);
+          }}
+        />
+      )}
+      {serviceTypeModalOpen && selectedBookingForServiceChange && (
+        <ChangeServiceTypeModal
+          open={serviceTypeModalOpen}
+          booking={selectedBookingForServiceChange}
+          slots={slots}
+          onClose={() => {
+            setServiceTypeModalOpen(false);
+            setSelectedBookingForServiceChange(null);
+          }}
+          onConfirm={async (newServiceType) => {
+            try {
+              const response = await fetch(`/api/bookings/${selectedBookingForServiceChange.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'update_service_type',
+                  serviceType: newServiceType,
+                }),
+              });
+
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to update service type');
+              }
+
+              if (onServiceTypeChange) {
+                onServiceTypeChange();
+              }
+            } catch (error: any) {
+              throw error;
+            }
           }}
         />
       )}

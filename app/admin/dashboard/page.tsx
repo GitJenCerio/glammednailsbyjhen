@@ -1008,6 +1008,7 @@ function AdminDashboardContent() {
           selectedDate={selectedDate}
           customers={customers}
           nailTechs={nailTechs}
+          onServiceTypeChange={loadData}
           selectedNailTechId={selectedNailTechId}
           onNailTechChange={setSelectedNailTechId}
           onCancel={handleCancelBooking}

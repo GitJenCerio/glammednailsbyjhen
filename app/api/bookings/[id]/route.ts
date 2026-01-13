@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl, splitRescheduleBooking } from '@/lib/services/bookingService';
-import type { Invoice, PaymentStatus } from '@/lib/types';
+import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl, splitRescheduleBooking, updateServiceType } from '@/lib/services/bookingService';
+import type { Invoice, PaymentStatus, ServiceType } from '@/lib/types';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const url = new URL(request.url);
@@ -86,6 +86,20 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
     await splitRescheduleBooking(params.id, slot1Id, slot2Id, nailTech1Id, nailTech2Id);
     return NextResponse.json({ success: true });
+  }
+
+  if (body?.action === 'update_service_type') {
+    const newServiceType: ServiceType = body.serviceType;
+    if (!newServiceType) {
+      return NextResponse.json({ error: 'Service type is required.' }, { status: 400 });
+    }
+    try {
+      await updateServiceType(params.id, newServiceType);
+      return NextResponse.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating service type:', error);
+      return NextResponse.json({ error: error.message ?? 'Failed to update service type' }, { status: 500 });
+    }
   }
 
   if (!body?.status) {

@@ -1163,6 +1163,170 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
   // Email functionality disabled
 }
 
+export async function updateServiceType(bookingId: string, newServiceType: ServiceType): Promise<void> {
+  await adminDb.runTransaction(async (transaction) => {
+    // ALL READS FIRST
+    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists) throw new Error('Booking not found.');
+    const booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
+
+    if (booking.serviceType === newServiceType) {
+      return; // No change needed
+    }
+
+    const currentRequiredSlots = getRequiredSlotCount(booking.serviceType);
+    const newRequiredSlots = getRequiredSlotCount(newServiceType);
+
+    // Get current slots
+    const currentSlotRef = slotsCollection.doc(booking.slotId);
+    const currentSlotSnap = await transaction.get(currentSlotRef);
+    if (!currentSlotSnap.exists) throw new Error('Current slot not found.');
+    const currentSlot = docToSlot(currentSlotSnap.id, currentSlotSnap.data()!);
+
+    const currentLinkedSlotIds = booking.linkedSlotIds?.length
+      ? booking.linkedSlotIds
+      : booking.pairedSlotId
+        ? [booking.pairedSlotId]
+        : [];
+
+    // Get all current linked slots
+    const currentLinkedRefs: FirebaseFirestore.DocumentReference[] = [];
+    const currentLinkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+    for (const linkedId of currentLinkedSlotIds) {
+      const ref = slotsCollection.doc(linkedId);
+      currentLinkedRefs.push(ref);
+      currentLinkedSnaps.push(await transaction.get(ref));
+    }
+
+    const blocks = await listBlockedDates();
+    const { SLOT_TIMES } = await import('../constants/slots');
+    const getNextSlotTime = (await import('../constants/slots')).getNextSlotTime;
+
+    // NOW ALL WRITES
+    if (newRequiredSlots > currentRequiredSlots) {
+      // Need more slots - find consecutive available slots
+      const slotsNeeded = newRequiredSlots - currentRequiredSlots;
+      const lastSlot = currentLinkedSlotIds.length > 0
+        ? docToSlot(currentLinkedSnaps[currentLinkedSnaps.length - 1].id, currentLinkedSnaps[currentLinkedSnaps.length - 1].data()!)
+        : currentSlot;
+
+      const newLinkedSlotIds: string[] = [];
+      const newLinkedRefs: FirebaseFirestore.DocumentReference[] = [];
+      let previousSlot = lastSlot;
+
+      for (let i = 0; i < slotsNeeded; i++) {
+        // Find next available consecutive slot
+        let foundSlot = false;
+        let currentCheckTime = previousSlot.time.trim();
+        const currentCheckDate = previousSlot.date;
+
+        let attempts = 0;
+        const maxAttempts = 50; // Increased to allow skipping over more slots
+        
+        while (!foundSlot && attempts < maxAttempts) {
+          attempts++;
+          const nextTime = getNextSlotTime(currentCheckTime);
+          if (!nextTime) {
+            throw new Error(`Cannot find ${slotsNeeded} consecutive available slot(s) after the current booking. The service requires more slots than are available in the schedule.`);
+          }
+
+          // Query for slot at this time and date
+          const slotQuery = slotsCollection
+            .where('date', '==', currentCheckDate)
+            .where('time', '==', nextTime.trim())
+            .where('nailTechId', '==', currentSlot.nailTechId)
+            .limit(1);
+
+          const slotDocs = await transaction.get(slotQuery);
+          
+          if (!slotDocs.empty) {
+            const slotDoc = slotDocs.docs[0];
+            const slot = docToSlot(slotDoc.id, slotDoc.data());
+            
+            if (slot.status === 'available' && !slotIsBlocked(slot, blocks)) {
+              // Found available slot
+              const slotRef = slotsCollection.doc(slot.id);
+              transaction.update(slotRef, {
+                status: booking.status === 'confirmed' ? 'confirmed' : 'pending',
+                updatedAt: Timestamp.now().toDate().toISOString(),
+              });
+              
+              newLinkedSlotIds.push(slot.id);
+              newLinkedRefs.push(slotRef);
+              previousSlot = slot;
+              foundSlot = true;
+            } else {
+              // Slot exists but is not available (booked/blocked) - this breaks consecutiveness
+              const formattedDate = format(parseISO(currentCheckDate), 'MMM d, yyyy');
+              throw new Error(`Cannot change service type: Slot at ${nextTime} on ${formattedDate} is already booked or blocked. Slots must be consecutive with no bookings in between.`);
+            }
+          } else {
+            // Slot doesn't exist at this time - continue to next time
+            currentCheckTime = nextTime.trim();
+            continue;
+          }
+        }
+        
+        if (!foundSlot) {
+          throw new Error(`Cannot find ${slotsNeeded} consecutive available slot(s) after the current booking. Please ensure there are enough available slots in the schedule.`);
+        }
+      }
+
+      // Update booking with new linked slots
+      const allLinkedSlotIds = [...currentLinkedSlotIds, ...newLinkedSlotIds];
+      transaction.update(bookingRef, {
+        serviceType: newServiceType,
+        linkedSlotIds: allLinkedSlotIds,
+        pairedSlotId: allLinkedSlotIds.length > 0 ? allLinkedSlotIds[0] : null,
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      });
+    } else if (newRequiredSlots < currentRequiredSlots) {
+      // Need fewer slots - release extra slots
+      const slotsToRelease = currentRequiredSlots - newRequiredSlots;
+      const slotsToKeep = currentLinkedSlotIds.slice(0, currentLinkedSlotIds.length - slotsToRelease);
+      const slotsToReleaseIds = currentLinkedSlotIds.slice(-slotsToRelease);
+
+      // Release the extra slots
+      for (const slotId of slotsToReleaseIds) {
+        const slotRef = slotsCollection.doc(slotId);
+        const slotSnap = await transaction.get(slotRef);
+        if (slotSnap.exists) {
+          const slotData = slotSnap.data()!;
+          if (slotData.status === 'pending' || slotData.status === 'confirmed') {
+            transaction.update(slotRef, {
+              status: 'available',
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            });
+          }
+        }
+      }
+
+      // Update booking
+      const updateData: any = {
+        serviceType: newServiceType,
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      };
+
+      if (slotsToKeep.length > 0) {
+        updateData.linkedSlotIds = slotsToKeep;
+        updateData.pairedSlotId = slotsToKeep[0];
+      } else {
+        updateData.linkedSlotIds = [];
+        updateData.pairedSlotId = null;
+      }
+
+      transaction.update(bookingRef, updateData);
+    } else {
+      // Same number of slots required - just update service type
+      transaction.update(bookingRef, {
+        serviceType: newServiceType,
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      });
+    }
+  });
+}
+
 export async function saveInvoice(bookingId: string, invoice: Invoice) {
   // Get current booking to preserve status if already confirmed
   const bookingRef = bookingsCollection.doc(bookingId);
