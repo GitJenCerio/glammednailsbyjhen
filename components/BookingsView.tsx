@@ -6,7 +6,7 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import type { Booking, Slot, BookingWithSlot, NailTech } from '@/lib/types';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { PaymentModal } from '@/components/admin/modals/PaymentModal';
-import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical, IoCashOutline } from 'react-icons/io5';
+import { IoChevronDown, IoEyeOutline, IoDocumentTextOutline, IoCalendarOutline, IoTrashOutline, IoRefreshOutline, IoCloseCircleOutline, IoEllipsisVertical, IoCashOutline, IoSearchOutline, IoClose } from 'react-icons/io5';
 
 type FilterPeriod = 'all' | 'today' | 'week' | 'month';
 type StatusFilter = 'all' | 'upcoming' | 'done';
@@ -55,6 +55,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
   const [localSelectedNailTechId, setLocalSelectedNailTechId] = useState<string | null>(selectedNailTechId || null);
   const [activeFilterField, setActiveFilterField] = useState<'nailTech' | 'status' | 'date'>('status');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Sync local state with prop
   useEffect(() => {
@@ -320,179 +321,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     return 'Invoiced';
   }, [getFinanceSummary]);
 
-  // Filter bookings by period, status, and month
-  const filteredBookings = useMemo(() => {
-    let result: BookingWithSlot[];
-
-    // Base date filtering (All / Today / This Week / This Month)
-    if (filterPeriod === 'all') {
-      result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
-      
-      // Apply month filter if selected (for "all" period)
-      if (monthFilter !== 'all') {
-        result = result.filter((booking) => {
-          if (!booking.slot) return false;
-          const appointmentDate = parseISO(booking.slot.date);
-          return appointmentDate.getMonth() + 1 === monthFilter; // getMonth() returns 0-11
-        });
-      }
-    } else {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      let start: Date;
-      let end: Date;
-
-      switch (filterPeriod) {
-        case 'today':
-          start = startOfDay(today);
-          end = endOfDay(today);
-          break;
-        case 'week':
-          start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
-          end = endOfWeek(today, { weekStartsOn: 1 });
-          break;
-        case 'month':
-          start = startOfMonth(today);
-          end = endOfMonth(today);
-          break;
-        default:
-          return bookingsWithSlots.filter((booking) => booking.slot !== undefined);
-      }
-
-      result = bookingsWithSlots.filter((booking) => {
-        if (!booking.slot) return false;
-        const bookingDate = parseISO(booking.slot.date);
-        return isWithinInterval(bookingDate, { start, end });
-      });
-    }
-
-    // Month filter (January, February, etc.)
-    if (monthFilter !== 'all') {
-      result = result.filter((booking) => {
-        if (!booking.slot) return false;
-        const monthIndex = parseISO(booking.slot.date).getMonth() + 1; // 1-12
-        return monthIndex === monthFilter;
-      });
-    }
-
-    // Status filter (Upcoming vs Done)
-    if (statusFilter !== 'all') {
-      result = result.filter((booking) => {
-        const stage = getBookingStageLabel(booking);
-        if (statusFilter === 'done') {
-          return stage === 'Done';
-        }
-        // 'upcoming' = anything not done
-        return stage !== 'Done';
-      });
-    }
-
-    // Sort by date and time (ascending - earliest first)
-    return result.sort((a, b) => {
-      if (!a.slot || !b.slot) return 0;
-      const dateCompare = a.slot.date.localeCompare(b.slot.date);
-      if (dateCompare !== 0) return dateCompare;
-      // Ascending order: earlier times first
-      return a.slot.time.localeCompare(b.slot.time);
-    });
-  }, [bookingsWithSlots, filterPeriod, statusFilter, monthFilter, getBookingStageLabel]);
-
-  // Calculate today's bookings
-  const todayBookings = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    let result = bookingsWithSlots.filter((booking) => {
-      if (!booking.slot) return false;
-      const appointmentDate = parseISO(booking.slot.date);
-      return appointmentDate >= today && appointmentDate < tomorrow;
-    });
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      result = result.filter((booking) => {
-        const stage = getBookingStageLabel(booking);
-        if (statusFilter === 'done') {
-          return stage === 'Done';
-        }
-        return stage !== 'Done';
-      });
-    }
-
-    // Apply nail tech filter only if nail tech filter is active
-    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
-      result = result.filter((booking) => booking.nailTechId === localSelectedNailTechId);
-    }
-
-    return result.sort((a, b) => {
-      if (!a.slot || !b.slot) return 0;
-      const dateCompare = a.slot.date.localeCompare(b.slot.date);
-      if (dateCompare !== 0) return dateCompare;
-      return a.slot.time.localeCompare(b.slot.time);
-    });
-  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel]);
-  
-  // Calculate this week's bookings (excluding today's bookings to avoid duplicates)
-  const thisWeekBookings = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    const startOfWeek = new Date(today);
-    const dayOfWeek = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
-    endOfWeek.setHours(23, 59, 59, 999);
-    
-    let result = bookingsWithSlots.filter((booking) => {
-      if (!booking.slot) return false;
-      const appointmentDate = parseISO(booking.slot.date);
-      // Exclude today's bookings (they're shown in the Today section)
-      if (appointmentDate >= today && appointmentDate < tomorrow) return false;
-      // Include rest of the week
-      if (!(appointmentDate >= startOfWeek && appointmentDate < endOfWeek)) return false;
-      
-      // Exclude cancelled bookings
-      if (booking.status === 'cancelled') return false;
-      
-      // Exclude done bookings
-      const stage = getBookingStageLabel(booking);
-      if (stage === 'Done') return false;
-      
-      return true;
-    });
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      result = result.filter((booking) => {
-        const stage = getBookingStageLabel(booking);
-        if (statusFilter === 'done') {
-          return stage === 'Done';
-        }
-        return stage !== 'Done';
-      });
-    }
-
-    // Apply nail tech filter only if nail tech filter is active
-    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
-      result = result.filter((booking) => booking.nailTechId === localSelectedNailTechId);
-    }
-
-    return result.sort((a, b) => {
-      if (!a.slot || !b.slot) return 0;
-      const dateCompare = a.slot.date.localeCompare(b.slot.date);
-      if (dateCompare !== 0) return dateCompare;
-      return a.slot.time.localeCompare(b.slot.time);
-    });
-  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel]);
-
+  // Helper functions for search (defined early so they can be used in matchesSearch)
   const getCustomerName = (booking: BookingWithSlot): string => {
     // Priority 1: Get customer name from form data (for bookings with submitted forms)
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
@@ -544,7 +373,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
         return null;
       };
 
-      // Try to find last name/surname first (including the exact Google Form field name with autofill text)
+      // Try to find last name/surname (including the exact Google Form field name with autofill text)
       const lastName = findField(['surname', 'last name', 'lastname', 'lname', 'family name']);
       
       // Try to find first name (excluding surname fields)
@@ -559,10 +388,6 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       if (firstName) return firstName;
       if (lastName) return lastName;
       
-      // If we found only first name or only last name, use it
-      if (firstName) return firstName;
-      if (lastName) return lastName;
-      
       // Last resort: look for any field that might be a name (not email, phone, etc.)
       for (const [key, value] of Object.entries(booking.customerData)) {
         const lowerKey = key.toLowerCase();
@@ -572,7 +397,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
             lowerKey.includes('service') || lowerKey.includes('location') || lowerKey.includes('referral')) {
           continue;
         }
-        // If it's a reasonable length and looks like a name, use it
+        // If it's a reasonable length, use it
         const strValue = String(value).trim();
         if (strValue.length > 0 && strValue.length < 100) {
           return strValue;
@@ -669,6 +494,249 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     return `${hour12}:${minutes} ${ampm}`;
   };
 
+  const getTimeRange = (booking: BookingWithSlot): string => {
+    if (!booking.slot) return 'N/A';
+    if (booking.linkedSlots && booking.linkedSlots.length > 0) {
+      const lastSlot = booking.linkedSlots[booking.linkedSlots.length - 1];
+      return `${formatTime(booking.slot.time)} - ${formatTime(lastSlot.time)}`;
+    }
+    if (booking.pairedSlot) {
+      return `${formatTime(booking.slot.time)} - ${formatTime(booking.pairedSlot.time)}`;
+    }
+    return formatTime(booking.slot.time);
+  };
+
+  // Search function to filter bookings by query
+  const matchesSearch = useCallback((booking: BookingWithSlot, query: string): boolean => {
+    if (!query.trim()) return true;
+    
+    const lowerQuery = query.toLowerCase().trim();
+    
+    // Search by booking ID
+    if (booking.bookingId.toLowerCase().includes(lowerQuery)) return true;
+    
+    // Search by customer name
+    const customerName = getCustomerName(booking).toLowerCase();
+    if (customerName.includes(lowerQuery)) return true;
+    
+    // Search by phone number
+    const phone = getCustomerPhone(booking).toLowerCase();
+    if (phone.includes(lowerQuery)) return true;
+    
+    // Search by service type
+    if (booking.serviceType && booking.serviceType.toLowerCase().includes(lowerQuery)) return true;
+    if (booking.serviceType && serviceLabels[booking.serviceType]?.toLowerCase().includes(lowerQuery)) return true;
+    
+    // Search by date
+    if (booking.slot) {
+      const dateStr = format(parseISO(booking.slot.date), 'MMM d, yyyy').toLowerCase();
+      if (dateStr.includes(lowerQuery)) return true;
+    }
+    
+    // Search by time
+    if (booking.slot) {
+      const timeStr = getTimeRange(booking).toLowerCase();
+      if (timeStr.includes(lowerQuery)) return true;
+    }
+    
+    // Search in customer data fields
+    if (booking.customerData) {
+      for (const value of Object.values(booking.customerData)) {
+        if (String(value).toLowerCase().includes(lowerQuery)) return true;
+      }
+    }
+    
+    return false;
+  }, [customers]);
+
+  // Filter bookings by period, status, and month
+  const filteredBookings = useMemo(() => {
+    let result: BookingWithSlot[];
+
+    // Base date filtering (All / Today / This Week / This Month)
+    if (filterPeriod === 'all') {
+      result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+      
+      // Apply month filter if selected (for "all" period)
+      if (monthFilter !== 'all') {
+        result = result.filter((booking) => {
+          if (!booking.slot) return false;
+          const appointmentDate = parseISO(booking.slot.date);
+          return appointmentDate.getMonth() + 1 === monthFilter; // getMonth() returns 0-11
+        });
+      }
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      let start: Date;
+      let end: Date;
+
+      switch (filterPeriod) {
+        case 'today':
+          start = startOfDay(today);
+          end = endOfDay(today);
+          break;
+        case 'week':
+          start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+          end = endOfWeek(today, { weekStartsOn: 1 });
+          break;
+        case 'month':
+          start = startOfMonth(today);
+          end = endOfMonth(today);
+          break;
+        default:
+          return bookingsWithSlots.filter((booking) => booking.slot !== undefined);
+      }
+
+      result = bookingsWithSlots.filter((booking) => {
+        if (!booking.slot) return false;
+        const bookingDate = parseISO(booking.slot.date);
+        return isWithinInterval(bookingDate, { start, end });
+      });
+    }
+
+    // Month filter (January, February, etc.)
+    if (monthFilter !== 'all') {
+      result = result.filter((booking) => {
+        if (!booking.slot) return false;
+        const monthIndex = parseISO(booking.slot.date).getMonth() + 1; // 1-12
+        return monthIndex === monthFilter;
+      });
+    }
+
+    // Status filter (Upcoming vs Done)
+    if (statusFilter !== 'all') {
+      result = result.filter((booking) => {
+        const stage = getBookingStageLabel(booking);
+        if (statusFilter === 'done') {
+          return stage === 'Done';
+        }
+        // 'upcoming' = anything not done
+        return stage !== 'Done';
+      });
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      result = result.filter((booking) => matchesSearch(booking, searchQuery));
+    }
+
+    // Sort by date and time (ascending - earliest first)
+    return result.sort((a, b) => {
+      if (!a.slot || !b.slot) return 0;
+      const dateCompare = a.slot.date.localeCompare(b.slot.date);
+      if (dateCompare !== 0) return dateCompare;
+      // Ascending order: earlier times first
+      return a.slot.time.localeCompare(b.slot.time);
+    });
+  }, [bookingsWithSlots, filterPeriod, statusFilter, monthFilter, getBookingStageLabel, searchQuery, matchesSearch]);
+
+  // Calculate today's bookings
+  const todayBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    let result = bookingsWithSlots.filter((booking) => {
+      if (!booking.slot) return false;
+      const appointmentDate = parseISO(booking.slot.date);
+      return appointmentDate >= today && appointmentDate < tomorrow;
+    });
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((booking) => {
+        const stage = getBookingStageLabel(booking);
+        if (statusFilter === 'done') {
+          return stage === 'Done';
+        }
+        return stage !== 'Done';
+      });
+    }
+
+    // Apply nail tech filter only if nail tech filter is active
+    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
+      result = result.filter((booking) => booking.nailTechId === localSelectedNailTechId);
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      result = result.filter((booking) => matchesSearch(booking, searchQuery));
+    }
+
+    return result.sort((a, b) => {
+      if (!a.slot || !b.slot) return 0;
+      const dateCompare = a.slot.date.localeCompare(b.slot.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.slot.time.localeCompare(b.slot.time);
+    });
+  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel, searchQuery, matchesSearch]);
+  
+  // Calculate this week's bookings (excluding today's bookings to avoid duplicates)
+  const thisWeekBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const startOfWeek = new Date(today);
+    const dayOfWeek = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    let result = bookingsWithSlots.filter((booking) => {
+      if (!booking.slot) return false;
+      const appointmentDate = parseISO(booking.slot.date);
+      // Exclude today's bookings (they're shown in the Today section)
+      if (appointmentDate >= today && appointmentDate < tomorrow) return false;
+      // Include rest of the week
+      if (!(appointmentDate >= startOfWeek && appointmentDate < endOfWeek)) return false;
+      
+      // Exclude cancelled bookings
+      if (booking.status === 'cancelled') return false;
+      
+      // Exclude done bookings
+      const stage = getBookingStageLabel(booking);
+      if (stage === 'Done') return false;
+      
+      return true;
+    });
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((booking) => {
+        const stage = getBookingStageLabel(booking);
+        if (statusFilter === 'done') {
+          return stage === 'Done';
+        }
+        return stage !== 'Done';
+      });
+    }
+
+    // Apply nail tech filter only if nail tech filter is active
+    if (activeFilterField === 'nailTech' && localSelectedNailTechId) {
+      result = result.filter((booking) => booking.nailTechId === localSelectedNailTechId);
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      result = result.filter((booking) => matchesSearch(booking, searchQuery));
+    }
+
+    return result.sort((a, b) => {
+      if (!a.slot || !b.slot) return 0;
+      const dateCompare = a.slot.date.localeCompare(b.slot.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.slot.time.localeCompare(b.slot.time);
+    });
+  }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel, searchQuery, matchesSearch]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     if (!openDropdownId) return;
@@ -692,19 +760,6 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDropdownId]);
 
-  const getTimeRange = (booking: BookingWithSlot): string => {
-    if (!booking.slot) return 'N/A';
-    if (booking.linkedSlots && booking.linkedSlots.length > 0) {
-      const lastSlot = booking.linkedSlots[booking.linkedSlots.length - 1];
-      return `${formatTime(booking.slot.time)} - ${formatTime(lastSlot.time)}`;
-    }
-    if (booking.pairedSlot) {
-      return `${formatTime(booking.slot.time)} - ${formatTime(booking.pairedSlot.time)}`;
-    }
-    return formatTime(booking.slot.time);
-  };
-
-
   // Helper function to render booking card (mobile)
   const renderBookingCard = (booking: BookingWithSlot, borderColor: string, bgColor: string) => {
     const clientType = booking.clientType || clientTypeMap[booking.id];
@@ -715,19 +770,23 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       <div key={booking.id} className={`rounded-2xl border-2 ${borderColor} ${bgColor} p-4 shadow-sm`}>
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="text-xs sm:text-sm font-semibold text-slate-900">{booking.bookingId}</span>
+              <span className="text-xs text-slate-600">•</span>
+              <span className="text-xs text-slate-600 truncate">{getCustomerName(booking)}</span>
               {(booking.dateChanged || booking.timeChanged) && (
                 <span className="text-xs sm:text-sm" title={booking.validationWarnings?.join('; ') || 'Date or time was changed'}>
                   ⚠️
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
             {booking.slot && (
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-xs text-slate-500">
                   {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {getTimeRange(booking)}
                 </span>
                 {booking.nailTechId && (() => {
                   const tech = nailTechs.find(t => t.id === booking.nailTechId);
@@ -756,9 +815,6 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                     </span>
                   );
                 })()}
-                <span className="text-xs text-slate-500">
-                  {getTimeRange(booking)}
-                </span>
               </div>
             )}
           </div>
@@ -770,115 +826,189 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
             {stageLabel}
           </span>
         </div>
-        <div className="space-y-2 text-xs sm:text-sm">
-          <div className="flex justify-between items-start gap-2">
-            <span className="text-slate-500 flex-shrink-0">Service:</span>
-            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-              <span className="font-medium text-slate-900 text-right break-words">{booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}</span>
-              {booking.serviceLocation && (
+        <div className="flex items-start gap-2 mt-3">
+          <div className="flex-1 space-y-2 text-xs sm:text-sm">
+            <div className="flex justify-between items-start gap-2">
+              <span className="text-slate-500 flex-shrink-0">Service:</span>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                <span className="font-medium text-slate-900 text-right break-words">{booking.serviceType ? serviceLabels[booking.serviceType] || booking.serviceType : 'N/A'}</span>
+                {booking.serviceLocation && (
+                  <span
+                    className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap flex-shrink-0 ${
+                      booking.serviceLocation === 'homebased_studio'
+                        ? 'bg-indigo-100 text-indigo-800'
+                        : 'bg-teal-100 text-teal-800'
+                    }`}
+                    title={booking.serviceLocation === 'homebased_studio' ? 'Studio St' : 'Home Service'}
+                  >
+                    {booking.serviceLocation === 'homebased_studio' ? 'ST' : 'HS'}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-between items-start gap-2">
+              <span className="text-slate-500 flex-shrink-0">Contact:</span>
+              <span className="font-medium text-slate-600 text-right break-all">{getCustomerPhone(booking)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500">Type:</span>
+              {clientType ? (
                 <span
-                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap flex-shrink-0 ${
-                    booking.serviceLocation === 'homebased_studio'
-                      ? 'bg-indigo-100 text-indigo-800'
-                      : 'bg-teal-100 text-teal-800'
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                    clientType === 'repeat'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-blue-100 text-blue-800'
                   }`}
-                  title={booking.serviceLocation === 'homebased_studio' ? 'Studio St' : 'Home Service'}
                 >
-                  {booking.serviceLocation === 'homebased_studio' ? 'ST' : 'HS'}
+                  {clientType === 'repeat' ? 'Repeat' : 'New'}
                 </span>
+              ) : (
+                <span className="text-slate-400">N/A</span>
               )}
             </div>
           </div>
-          <div className="flex justify-between items-start gap-2">
-            <span className="text-slate-500 flex-shrink-0">Contact:</span>
-            <span className="font-medium text-slate-600 text-right break-all">{getCustomerPhone(booking)}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500">Type:</span>
-            {clientType ? (
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${
-                  clientType === 'repeat'
-                    ? 'bg-purple-100 text-purple-800'
-                    : 'bg-blue-100 text-blue-800'
-                }`}
-              >
-                {clientType === 'repeat' ? 'Repeat' : 'New'}
-              </span>
-            ) : (
-              <span className="text-slate-400">N/A</span>
-            )}
-          </div>
-        </div>
-        <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center">
           {!isDone && (
-            <div className="flex flex-wrap gap-2">
-              {booking.customerData && Object.keys(booking.customerData).length > 0 && (
-                <button
-                  onClick={() => setResponseModalBooking(booking)}
-                  className="inline-flex items-center gap-1 rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
-                >
-                  <IoEyeOutline className="w-3.5 h-3.5" />
-                  <span>View</span>
-                </button>
-              )}
-              {onMakeQuotation && (
-                <button
-                  onClick={() => onMakeQuotation(booking.id)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
-                    booking.invoice
-                      ? 'bg-rose-600 hover:bg-rose-700'
-                      : 'bg-green-600 hover:bg-green-700'
-                  }`}
-                >
-                  {booking.invoice ? 'Requote' : 'Quote'}
-                </button>
-              )}
-              {onReschedule && (
-                <button
-                  onClick={() => onReschedule(booking.id)}
-                  className="rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 touch-manipulation active:scale-[0.98] hover:bg-slate-50"
-                >
-                  Resched
-                </button>
-              )}
-              {onSplitReschedule && (booking.serviceType === 'mani_pedi' || (booking.linkedSlotIds && booking.linkedSlotIds.length > 0)) && (
-                <button
-                  onClick={() => onSplitReschedule(booking.id)}
-                  className="rounded-full border-2 border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 touch-manipulation active:scale-[0.98] hover:bg-purple-100"
-                  title="Split reschedule into 2 separate bookings"
-                >
-                  Split Resched
-                </button>
-              )}
-              {onCancel && (
-                <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to cancel this booking?')) {
-                      onCancel(booking.id);
-                    }
+            <div
+              className="relative flex-shrink-0 -mr-1"
+              ref={(el: HTMLDivElement | null) => {
+                dropdownRefs.current[`mobile-${booking.id}`] = el;
+              }}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const button = e.currentTarget;
+                  const rect = button.getBoundingClientRect();
+                  if (openDropdownId === `mobile-${booking.id}`) {
+                    setOpenDropdownId(null);
+                    setDropdownPosition(null);
+                  } else {
+                    setOpenDropdownId(`mobile-${booking.id}`);
+                    // Position dropdown at the middle-right of the button
+                    const buttonCenterY = rect.top + rect.height / 2;
+                    setDropdownPosition({
+                      top: buttonCenterY,
+                      right: window.innerWidth - rect.right,
+                    });
+                  }
+                }}
+                className="inline-flex items-center justify-center p-0.5 text-slate-700 hover:text-slate-900 transition-colors focus:outline-none touch-manipulation active:scale-[0.98]"
+                aria-label="Actions menu"
+              >
+                <IoEllipsisVertical className="w-5 h-5 flex-shrink-0" />
+              </button>
+              {openDropdownId === `mobile-${booking.id}` && dropdownPosition && typeof window !== 'undefined' && createPortal(
+                <div 
+                  className="dropdown-menu fixed w-48 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                  style={{
+                    top: `${Math.max(12, Math.min(window.innerHeight - 200, dropdownPosition.top))}px`,
+                    right: `${Math.max(12, dropdownPosition.right + 8)}px`,
+                    transform: 'translateY(-50%)',
                   }}
-                  className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
-                  Cancel
-                </button>
+                  <div className="py-1">
+                    {booking.customerData && Object.keys(booking.customerData).length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResponseModalBooking(booking);
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoEyeOutline className="w-4 h-4" />
+                        View Response
+                      </button>
+                    )}
+                    {onMakeQuotation && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMakeQuotation(booking.id);
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
+                        {booking.invoice ? 'Requote' : 'Quotation'}
+                      </button>
+                    )}
+                    {onReschedule && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReschedule(booking.id);
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoCalendarOutline className="w-4 h-4" />
+                        Reschedule
+                      </button>
+                    )}
+                    {onSplitReschedule && (booking.serviceType === 'mani_pedi' || (booking.linkedSlotIds && booking.linkedSlotIds.length > 0)) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSplitReschedule(booking.id);
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-purple-700 hover:bg-purple-50 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoRefreshOutline className="w-4 h-4" />
+                        Split Reschedule
+                      </button>
+                    )}
+                    {onUpdatePayment && booking.invoice && (() => {
+                      const { balance } = getFinanceSummary(booking);
+                      const isAwaitingPayment = (booking.paymentStatus === 'unpaid' || booking.paymentStatus === 'partial') && balance > 0;
+                      return isAwaitingPayment ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBookingForPayment(booking);
+                            setPaymentModalOpen(true);
+                            setOpenDropdownId(null);
+                            setDropdownPosition(null);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 touch-manipulation"
+                        >
+                          <IoCashOutline className="w-4 h-4" />
+                          Payment
+                        </button>
+                      ) : null;
+                    })()}
+                    {onCancel && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Are you sure you want to cancel this booking?')) {
+                            onCancel(booking.id);
+                          }
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoCloseCircleOutline className="w-4 h-4" />
+                        Cancel Booking
+                      </button>
+                    )}
+                  </div>
+                </div>,
+                document.body
               )}
-              {onUpdatePayment && booking.invoice && (() => {
-                const { balance } = getFinanceSummary(booking);
-                const isAwaitingPayment = (booking.paymentStatus === 'unpaid' || booking.paymentStatus === 'partial') && balance > 0;
-                return isAwaitingPayment ? (
-                  <button
-                    onClick={() => {
-                      setSelectedBookingForPayment(booking);
-                      setPaymentModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full border-2 border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 touch-manipulation active:scale-[0.98] hover:bg-emerald-100"
-                  >
-                    <IoCashOutline className="w-3.5 h-3.5" />
-                    <span>Payment</span>
-                  </button>
-                ) : null;
-              })()}
             </div>
           )}
         </div>
@@ -1099,24 +1229,8 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               }}
                               className="w-full text-left px-4 py-2 text-xs text-purple-700 hover:bg-purple-50 flex items-center gap-2"
                             >
-                              <IoCalendarOutline className="w-4 h-4" />
+                              <IoRefreshOutline className="w-4 h-4" />
                               Split Reschedule
-                            </button>
-                          )}
-                          {onCancel && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm('Are you sure you want to cancel this booking?')) {
-                                  onCancel(booking.id);
-                                }
-                                setOpenDropdownId(null);
-                                setDropdownPosition(null);
-                              }}
-                              className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <IoCloseCircleOutline className="w-4 h-4" />
-                              Cancel
                             </button>
                           )}
                           {onUpdatePayment && booking.invoice && (() => {
@@ -1138,6 +1252,22 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               </button>
                             ) : null;
                           })()}
+                          {onCancel && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('Are you sure you want to cancel this booking?')) {
+                                  onCancel(booking.id);
+                                }
+                                setOpenDropdownId(null);
+                                setDropdownPosition(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <IoCloseCircleOutline className="w-4 h-4" />
+                              Cancel
+                            </button>
+                          )}
                         </div>
                       </div>,
                       document.body
@@ -1154,6 +1284,27 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Search Input */}
+      <div className="relative">
+        <IoSearchOutline className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by booking ID, name, phone, service, date, time..."
+          className="w-full pl-10 pr-10 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Clear search"
+          >
+            <IoClose className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="space-y-2">
         <p className="text-[11px] sm:text-xs text-slate-500 font-semibold">Filter by:</p>

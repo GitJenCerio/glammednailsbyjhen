@@ -5,7 +5,7 @@ import { format, startOfMonth, isSameMonth, isSameDay } from 'date-fns';
 import type { Booking, Slot, BlockedDate } from '@/lib/types';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
 import { SlotCard } from '@/components/admin/SlotCard';
-import { SLOT_TIMES } from '@/lib/constants/slots';
+import { SLOT_TIMES, getNextSlotTime } from '@/lib/constants/slots';
 import { formatTime12Hour } from '@/lib/utils';
 
 type RescheduleModalProps = {
@@ -53,6 +53,7 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
   }, [slots, selectedDate, blockedDates]);
 
   const getRequiredSlotCount = (serviceType?: string): number => {
+    if (serviceType === 'mani_pedi') return 2;
     if (serviceType === 'home_service_2slots') return 2;
     if (serviceType === 'home_service_3slots') return 3;
     return 1;
@@ -61,41 +62,66 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
   const canSlotAccommodateService = useCallback((slot: Slot, requiredSlots: number): boolean => {
     if (requiredSlots === 1) return true;
 
-    const slotTimes = SLOT_TIMES;
-    const currentIndex = slotTimes.indexOf(slot.time as any);
-    if (currentIndex === -1) return false;
+    // Get all slots for this date and same nail tech, sorted by time
+    const slotsForDate = slots
+      .filter((s) => s.date === slot.date && s.nailTechId === slot.nailTechId)
+      .sort((a, b) => a.time.localeCompare(b.time));
 
-    let foundSlots = [slot];
-    let currentSlotIndex = currentIndex;
-
-    for (let i = 1; i < requiredSlots; i++) {
-      currentSlotIndex++;
-      if (currentSlotIndex >= slotTimes.length) return false;
-
-      const nextTime = slotTimes[currentSlotIndex];
-      const nextSlot = slots.find(
-        (s) => s.date === slot.date && s.time === nextTime
-      );
-
+    let referenceSlot = slot;
+    // Consecutive means: available slots with no booked/blocked slots in between
+    // We skip over slot times that don't exist in the schedule at all
+    for (let step = 1; step < requiredSlots; step += 1) {
+      let nextSlot: Slot | null = null;
+      let currentCheckTime = referenceSlot.time.trim();
+      
+      // Keep looking for the next available slot in sequence
+      while (!nextSlot) {
+        const nextTime = getNextSlotTime(currentCheckTime);
+        if (!nextTime) {
+          // No more slot times in the sequence
+          return false;
+        }
+        
+        // Check if a slot exists at this time (normalize time strings for comparison)
+        const normalizedNextTime = nextTime.trim();
+        const slotAtTime = slotsForDate.find(
+          (candidate) => candidate.time.trim() === normalizedNextTime
+        );
+        
+        if (slotAtTime) {
+          // Slot exists at this time
+          // Check if blocked
+          const isBlocked = blockedDates.some(
+            (block) => slotAtTime.date >= block.startDate && slotAtTime.date <= block.endDate
+          );
+          if (isBlocked) {
+            // Blocked slot breaks consecutiveness
+            return false;
+          }
+          
+          // Check status
+          if (slotAtTime.status === 'available') {
+            // Found the next available slot - this is consecutive
+            nextSlot = slotAtTime;
+            break;
+          } else {
+            // Slot exists but is not available (pending, confirmed, blocked, etc.)
+            // This breaks consecutiveness - there's a gap
+            return false;
+          }
+        }
+        // Slot doesn't exist at this time - skip it (not a gap, just not created)
+        // Continue to next time in sequence
+        currentCheckTime = normalizedNextTime;
+      }
+      
       if (!nextSlot) {
-        // Slot time doesn't exist - skip it and continue
-        continue;
+        // Couldn't find the next available slot
+        return false;
       }
-
-      if (nextSlot.status !== 'available') {
-        return false; // Slot is booked or blocked
-      }
-
-      if (blockedDates.some(
-        (block) => nextSlot.date >= block.startDate && nextSlot.date <= block.endDate
-      )) {
-        return false; // Slot is in a blocked date range
-      }
-
-      foundSlots.push(nextSlot);
+      referenceSlot = nextSlot;
     }
-
-    return foundSlots.length === requiredSlots;
+    return true;
   }, [blockedDates, slots]);
 
   useEffect(() => {
@@ -114,21 +140,59 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
       return;
     }
 
-    const slotTimes = SLOT_TIMES;
-    const currentIndex = slotTimes.indexOf(selectedSlot.time as any);
-    const linked: Slot[] = [];
-    let currentSlotIndex = currentIndex;
+    // Get all slots for this date and same nail tech, sorted by time
+    const slotsForDate = slots
+      .filter((s) => s.date === selectedSlot.date && s.nailTechId === selectedSlot.nailTechId)
+      .sort((a, b) => a.time.localeCompare(b.time));
 
-    for (let i = 1; i < requiredSlots; i++) {
-      currentSlotIndex++;
-      if (currentSlotIndex < slotTimes.length) {
-        const nextTime = slotTimes[currentSlotIndex];
-        const nextSlot = slots.find(
-          (s) => s.date === selectedSlot.date && s.time === nextTime && s.status === 'available'
-        );
-        if (nextSlot) {
-          linked.push(nextSlot);
+    const linked: Slot[] = [];
+    let referenceSlot = selectedSlot;
+
+    for (let step = 1; step < requiredSlots; step += 1) {
+      let nextSlot: Slot | null = null;
+      let currentCheckTime = referenceSlot.time.trim();
+      
+      // Keep looking for the next available slot in sequence
+      while (!nextSlot) {
+        const nextTime = getNextSlotTime(currentCheckTime);
+        if (!nextTime) {
+          // No more slot times in the sequence
+          break;
         }
+        
+        // Check if a slot exists at this time (normalize time strings for comparison)
+        const normalizedNextTime = nextTime.trim();
+        const slotAtTime = slotsForDate.find(
+          (candidate) => candidate.time.trim() === normalizedNextTime
+        );
+        
+        if (slotAtTime) {
+          // Slot exists at this time
+          // Check if blocked
+          const isBlocked = blockedDates.some(
+            (block) => slotAtTime.date >= block.startDate && slotAtTime.date <= block.endDate
+          );
+          
+          if (!isBlocked && slotAtTime.status === 'available') {
+            // Found the next available slot - this is consecutive
+            nextSlot = slotAtTime;
+            linked.push(nextSlot);
+            break;
+          } else {
+            // Slot is blocked or not available - can't use it
+            break;
+          }
+        }
+        // Slot doesn't exist at this time - skip it (not a gap, just not created)
+        // Continue to next time in sequence
+        currentCheckTime = normalizedNextTime;
+      }
+      
+      if (nextSlot) {
+        referenceSlot = nextSlot;
+      } else {
+        // Couldn't find the next available slot
+        break;
       }
     }
 
@@ -139,11 +203,21 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
   const handleReschedule = async () => {
     if (!booking || !selectedSlot) return;
 
+    const requiredSlots = getRequiredSlotCount(booking.serviceType);
+    
+    // Validate that we have all required consecutive slots
+    if (requiredSlots > 1) {
+      const allSelectedSlots = [selectedSlot, ...linkedSlots];
+      if (allSelectedSlots.length !== requiredSlots) {
+        setError(`This service requires ${requiredSlots} consecutive slots. Please select a slot that has ${requiredSlots} consecutive available slots.`);
+        return;
+      }
+    }
+
     setRescheduling(true);
     setError(null);
 
     try {
-      const requiredSlots = getRequiredSlotCount(booking.serviceType);
       const linkedSlotIds = requiredSlots > 1 ? linkedSlots.map(s => s.id) : [];
 
       await onReschedule(booking.id, selectedSlot.id, linkedSlotIds);
@@ -178,6 +252,17 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
                 ? `${format(new Date(slots.find(s => s.id === booking.slotId)!.date), 'MMM d, yyyy')} at ${formatTime12Hour(slots.find(s => s.id === booking.slotId)!.time)}`
                 : 'N/A'}
             </p>
+            {(() => {
+              const requiredSlots = getRequiredSlotCount(booking.serviceType);
+              if (requiredSlots > 1) {
+                return (
+                  <p className="text-xs sm:text-sm text-blue-600 mt-2 font-medium">
+                    ℹ️ This booking requires {requiredSlots} consecutive slots. Select a time slot that has {requiredSlots} consecutive available slots from the same nail tech.
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
@@ -244,16 +329,31 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
                 </div>
               )}
 
-              {selectedSlot && linkedSlots.length > 0 && (
-                <div className="mt-4 p-3 bg-emerald-50 rounded-xl">
-                  <p className="text-xs sm:text-sm font-semibold text-emerald-900 mb-2">
-                    Selected Time Range:
-                  </p>
-                  <p className="text-xs sm:text-sm text-emerald-700">
-                    {formatTime12Hour(selectedSlot.time)} - {formatTime12Hour(linkedSlots[linkedSlots.length - 1].time)}
-                  </p>
-                </div>
-              )}
+              {selectedSlot && (() => {
+                const requiredSlots = getRequiredSlotCount(booking.serviceType);
+                const allSelectedSlots = [selectedSlot, ...linkedSlots];
+                
+                if (requiredSlots > 1 && allSelectedSlots.length === requiredSlots) {
+                  return (
+                    <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                      <p className="text-xs sm:text-sm font-semibold text-emerald-900 mb-2">
+                        Selected {requiredSlots} Consecutive Slots:
+                      </p>
+                      <div className="space-y-1">
+                        {allSelectedSlots.map((slot, index) => (
+                          <p key={slot.id} className="text-xs sm:text-sm text-emerald-700">
+                            {index + 1}. {formatTime12Hour(slot.time)}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="text-xs sm:text-sm text-emerald-600 mt-2 font-medium">
+                        Time Range: {formatTime12Hour(selectedSlot.time)} - {formatTime12Hour(linkedSlots[linkedSlots.length - 1].time)}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
 
@@ -274,7 +374,13 @@ export function RescheduleModal({ open, booking, slots, blockedDates, onReschedu
             <button
               type="button"
               onClick={handleReschedule}
-              disabled={!selectedSlot || rescheduling}
+              disabled={!selectedSlot || rescheduling || (() => {
+                const requiredSlots = getRequiredSlotCount(booking.serviceType);
+                if (requiredSlots > 1) {
+                  return linkedSlots.length !== requiredSlots - 1;
+                }
+                return false;
+              })()}
               className="w-full sm:w-auto rounded-full bg-slate-900 px-6 py-2 text-xs sm:text-sm font-semibold text-white disabled:opacity-50 touch-manipulation"
             >
               {rescheduling ? 'Rescheduling...' : 'Reschedule Booking'}
