@@ -24,7 +24,7 @@ export default function Footer() {
 
   return (
     <footer id="book" className="bg-gray-100 section-padding">
-      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 sm:gap-10 md:gap-12 mb-6 sm:mb-8">
           {/* About Section */}
           <div>

@@ -41,38 +41,38 @@ export default function Header() {
     <motion.header 
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md"
+      className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md w-full max-w-full"
     >
-      <nav className="px-2 sm:px-4 md:px-8 lg:px-16 xl:px-32 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px] overflow-x-hidden">
+      <nav className="pl-2 pr-2 sm:pl-3 sm:pr-3 md:px-6 lg:px-8 xl:px-12 2xl:px-16 flex items-center justify-between py-4 sm:py-6 md:py-8 relative min-h-[70px] sm:min-h-[80px] md:min-h-[90px] overflow-x-hidden gap-1 sm:gap-2 w-full max-w-full">
         {/* Mobile Menu Button - Left */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="lg:hidden flex items-center justify-center w-8 h-8 z-50 flex-shrink-0 bg-transparent hover:bg-gray-100 rounded-lg transition-colors relative"
+          className="lg:hidden flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 z-50 flex-shrink-0 bg-transparent hover:bg-gray-100 rounded-lg transition-colors relative"
           aria-label="Toggle menu"
         >
           {isOpen ? (
-            <IoClose className="w-6 h-6 text-black" />
+            <IoClose className="w-5 h-5 sm:w-6 sm:h-6 text-black" />
           ) : (
-            <IoMenu className="w-6 h-6 text-black" />
+            <IoMenu className="w-5 h-5 sm:w-6 sm:h-6 text-black" />
           )}
         </button>
 
         {/* Invisible placeholder to balance for justify-between on desktop */}
-        <div className="hidden lg:block w-32 flex-shrink-0"></div>
+        <div className="hidden lg:block w-24 flex-shrink-0"></div>
 
         {/* Center Group: Logo + Navigation - Centered */}
-        <div className="hidden lg:flex items-center gap-6 lg:gap-8 xl:gap-10 absolute left-1/2 -translate-x-1/2 max-w-[90vw]">
+        <div className="hidden lg:flex items-center gap-2 lg:gap-3 xl:gap-4 absolute left-1/2 -translate-x-1/2 max-w-[70vw]">
           <Link href="/" className="flex items-center flex-shrink-0">
             <Image 
               src="/logo.png" 
               alt="glammednailsbyjhen logo" 
               width={200}
               height={64}
-              className="h-10 md:h-12 lg:h-14 xl:h-16 w-auto max-w-[120px] md:max-w-[140px] lg:max-w-[160px] xl:max-w-none"
+              className="h-10 md:h-12 lg:h-12 xl:h-14 w-auto max-w-[120px] md:max-w-[140px] lg:max-w-[150px] xl:max-w-[180px]"
               priority
             />
           </Link>
-          <div className="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8">
+          <div className="hidden lg:flex items-center gap-2 xl:gap-3 2xl:gap-4">
             {navLinks.map((link) => (
               link.isRoute ? (
                 <Link
@@ -100,13 +100,13 @@ export default function Header() {
         </div>
 
         {/* Mobile Logo - Centered */}
-        <Link href="/" className="lg:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[35vw] sm:max-w-[30vw]">
+        <Link href="/" className="lg:hidden absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[40vw] sm:max-w-[35vw]">
           <Image 
             src="/logo.png" 
             alt="glammednailsbyjhen logo" 
             width={200}
             height={56}
-            className="h-9 sm:h-11 md:h-14 w-auto max-w-full"
+            className="h-10 sm:h-12 md:h-14 w-auto max-w-full"
             priority
           />
         </Link>
@@ -114,7 +114,7 @@ export default function Header() {
         {/* Book Appointment Button - Far Right */}
         <Link
           href="/booking"
-          className="hidden lg:block px-4 lg:px-6 py-2 lg:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs lg:text-sm whitespace-nowrap flex-shrink-0"
+          className="hidden lg:block px-3 lg:px-4 xl:px-5 py-2 lg:py-2.5 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-xs lg:text-sm whitespace-nowrap flex-shrink-0"
         >
           Book Now
         </Link>
@@ -122,7 +122,7 @@ export default function Header() {
         {/* Mobile Book Button - Right */}
         <Link
           href="/booking"
-          className="lg:hidden px-2.5 py-1.5 sm:px-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] transition-all duration-300 text-[10px] sm:text-xs whitespace-nowrap flex-shrink-0 z-10 relative"
+          className="lg:hidden px-1.5 py-1 sm:px-2 sm:py-1.5 bg-black text-white font-medium border border-white shadow-none hover:bg-white hover:text-black hover:border hover:border-black transition-all duration-300 text-[9px] sm:text-[10px] whitespace-nowrap flex-shrink-0 z-10 relative"
         >
           Book
         </Link>
@@ -135,7 +135,7 @@ export default function Header() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="lg:hidden absolute left-2 sm:left-4 top-full mt-0 bg-white border-t rounded-xl shadow-2xl z-[100] max-w-[90vw] sm:max-w-xs w-[280px] sm:w-64"
+            className="lg:hidden absolute left-2 sm:left-4 top-full mt-0 bg-white border-t border-gray-200 rounded-b-xl shadow-2xl z-[100] max-w-[90vw] sm:max-w-xs w-[280px] sm:w-64 overflow-hidden"
           >
             <div className="px-2 py-4 space-y-3">
               {navLinks.map((link) => (

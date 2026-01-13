@@ -214,11 +214,11 @@ export default function FAQ() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="max-w-4xl mx-auto px-2 sm:px-6 lg:px-8"
+        className="max-w-4xl mx-auto px-3 sm:px-6 lg:px-8"
       >
         <div id="faq" style={{ scrollMarginTop: '180px', height: 0 }} />
-        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4">Frequently Asked Questions</h2>
-        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 text-sm sm:text-base px-2 sm:px-4">Have questions? We have answers</p>
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-3 sm:px-4">Frequently Asked Questions</h2>
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 text-sm sm:text-base px-3 sm:px-4">Have questions? We have answers</p>
         <div className="space-y-6 sm:space-y-8">
           {faqSections.map((section, sectionIdx) => {
             const expanded = expandedSections[sectionIdx];

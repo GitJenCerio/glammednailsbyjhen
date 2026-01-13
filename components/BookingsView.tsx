@@ -553,7 +553,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
   const filteredBookings = useMemo(() => {
     let result: BookingWithSlot[];
 
-    // Base date filtering (All / Today / This Week / This Month)
+    // Base date filtering (All / Today / Upcoming / This Month)
     if (filterPeriod === 'all') {
       result = bookingsWithSlots.filter((booking) => booking.slot !== undefined);
       
@@ -673,30 +673,25 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     });
   }, [bookingsWithSlots, statusFilter, localSelectedNailTechId, activeFilterField, getBookingStageLabel, searchQuery, matchesSearch]);
   
-  // Calculate this week's bookings (excluding today's bookings to avoid duplicates)
+  // Calculate upcoming bookings (today up to 3 days after today, excluding today's bookings to avoid duplicates)
   const thisWeekBookings = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    const startOfWeek = new Date(today);
-    const dayOfWeek = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
-    endOfWeek.setHours(23, 59, 59, 999);
+    // Calculate end date: 3 days after today
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 3);
+    endDate.setHours(23, 59, 59, 999);
     
     let result = bookingsWithSlots.filter((booking) => {
       if (!booking.slot) return false;
       const appointmentDate = parseISO(booking.slot.date);
       // Exclude today's bookings (they're shown in the Today section)
       if (appointmentDate >= today && appointmentDate < tomorrow) return false;
-      // Include rest of the week
-      if (!(appointmentDate >= startOfWeek && appointmentDate < endOfWeek)) return false;
+      // Include bookings from tomorrow up to 3 days after today
+      if (!(appointmentDate >= tomorrow && appointmentDate <= endDate)) return false;
       
       // Exclude cancelled bookings
       if (booking.status === 'cancelled') return false;
@@ -1385,7 +1380,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                 >
                   <option value="all">All time</option>
                   <option value="today">Today</option>
-                  <option value="week">This week</option>
+                  <option value="week">Upcoming</option>
                   <option value="month">This month</option>
                 </select>
               </div>
@@ -1471,20 +1466,20 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
         </div>
       )}
 
-      {/* This Week's Bookings Table - Always Visible */}
+      {/* Upcoming Bookings Table - Always Visible */}
       {thisWeekBookings.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-            <span>This Week&apos;s Bookings</span>
+            <span>Upcoming Bookings</span>
             <span className="text-sm font-normal text-slate-500">({thisWeekBookings.length})</span>
           </h2>
           
-          {/* Mobile Card View for This Week */}
+          {/* Mobile Card View for Upcoming */}
           <div className="md:hidden space-y-3">
             {thisWeekBookings.map((booking) => renderBookingCard(booking, 'border-emerald-200', 'bg-emerald-50'))}
           </div>
 
-          {/* Tablet & Desktop Table View for This Week */}
+          {/* Tablet & Desktop Table View for Upcoming */}
           <div className="hidden md:block rounded-2xl border-2 border-emerald-200 bg-emerald-50 shadow-sm overflow-hidden">
             <div className="w-full">
               <table className="w-full" style={{ tableLayout: 'fixed' }}>

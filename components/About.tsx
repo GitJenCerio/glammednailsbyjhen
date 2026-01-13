@@ -6,7 +6,7 @@ import Image from 'next/image';
 export default function About() {
   return (
     <section id="about" className="section-padding bg-gray-50">
-      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 lg:gap-12 items-center">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
@@ -31,7 +31,7 @@ export default function About() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.5 }}
-            className="text-center lg:text-left px-2 sm:px-0"
+            className="text-center lg:text-left px-3 sm:px-0"
           >
             <div id="about" style={{ scrollMarginTop: '180px', height: 0 }} />
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia mb-4 sm:mb-6">

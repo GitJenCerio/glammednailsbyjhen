@@ -462,6 +462,7 @@ export default function BookingPage() {
   const [selectedNailTechId, setSelectedNailTechId] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingNailTechs, setLoadingNailTechs] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
   const slotsSectionRef = useRef<HTMLElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -511,6 +512,7 @@ export default function BookingPage() {
   }, [selectedNailTechId]);
 
   async function loadNailTechs() {
+    setLoadingNailTechs(true);
     try {
       const response = await fetch('/api/nail-techs?activeOnly=true', {
         cache: 'no-store',
@@ -518,16 +520,13 @@ export default function BookingPage() {
       const data = await response.json();
       setNailTechs(data.nailTechs || []);
       
-      // Default to first active nail tech (should be Ms. Jhen if migration ran)
-      if (data.nailTechs && data.nailTechs.length > 0) {
-        const defaultTech = data.nailTechs.find((tech: NailTech) => 
-          tech.role === 'Owner' && tech.status === 'Active'
-        ) || data.nailTechs[0];
-        setSelectedNailTechId(defaultTech.id);
-      }
+      // Don't auto-select a nail tech - user must choose first
+      // This ensures the calendar is hidden until a selection is made
     } catch (err) {
       console.error('Error loading nail techs', err);
       setError('Unable to load nail technicians. Please try again.');
+    } finally {
+      setLoadingNailTechs(false);
     }
   }
 
@@ -849,7 +848,7 @@ export default function BookingPage() {
     <main className="min-h-screen bg-white">
       <Header />
       
-      <section className="mt-16 sm:mt-28 md:mt-32 lg:mt-36 pt-4 sm:pt-6 md:pt-8 px-2 sm:px-6 pb-8 sm:pb-12">
+      <section className="pt-[70px] sm:pt-[80px] md:pt-[90px] px-2 sm:px-6 pb-8 sm:pb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -862,35 +861,16 @@ export default function BookingPage() {
             Select your preferred nail technician and an available time slot
           </p>
 
-          {/* Nail Tech Selection */}
-          {nailTechs.length > 0 && (
+          {/* Nail Tech Selection - Now shown in modal */}
+          {selectedNailTechId && (
             <div className="mb-6 sm:mb-8 max-w-4xl mx-auto px-2 sm:px-4">
               <div className="rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-slate-50 px-4 sm:px-5 py-3 sm:py-4">
-                <label className="block text-sm sm:text-base font-semibold text-slate-900 mb-2">
-                  Select Nail Technician
-                </label>
-                <select
-                  value={selectedNailTechId || ''}
-                  onChange={(e) => {
-                    setSelectedNailTechId(e.target.value);
-                    setSelectedSlot(null);
-                    setLinkedSlots([]);
-                    setServiceMessage(null);
-                  }}
-                  className="w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-xs sm:text-sm touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
-                >
-                  {nailTechs.map((tech) => (
-                    <option key={tech.id} value={tech.id}>
-                      Ms. {tech.name} ({tech.role}){tech.discount != null && tech.discount > 0 ? ` - ${tech.discount}% OFF` : ''} - {tech.serviceAvailability}
-                    </option>
-                  ))}
-                </select>
-                {selectedNailTechId && (() => {
+                {(() => {
                   const selectedTech = nailTechs.find(t => t.id === selectedNailTechId);
                   if (!selectedTech) return null;
                   const hasDiscount = selectedTech.discount !== undefined && selectedTech.discount !== null && selectedTech.discount > 0;
                   return (
-                    <div className="mt-2 space-y-1">
+                    <div className="space-y-1">
                       <p className="text-xs sm:text-sm text-slate-600">
                         Viewing calendar for: <strong>Ms. {selectedTech.name}</strong>
                       </p>
@@ -899,6 +879,17 @@ export default function BookingPage() {
                           🎉 Special Offer: {selectedTech.discount}% discount on all services!
                         </p>
                       )}
+                      <button
+                        onClick={() => {
+                          setSelectedNailTechId(null);
+                          setSelectedSlot(null);
+                          setLinkedSlots([]);
+                          setServiceMessage(null);
+                        }}
+                        className="text-xs sm:text-sm text-slate-600 hover:text-slate-900 underline mt-2"
+                      >
+                        Change nail technician
+                      </button>
                     </div>
                   );
                 })()}
@@ -924,16 +915,12 @@ export default function BookingPage() {
             </div>
           </div>
 
-          {!selectedNailTechId ? (
+          {!selectedNailTechId ? null : loading ? (
             <div className="flex justify-center items-center h-96">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4" />
-                <p className="text-slate-600">Loading nail technicians...</p>
+                <p className="text-slate-600">Loading calendar...</p>
               </div>
-            </div>
-          ) : loading ? (
-            <div className="flex justify-center items-center h-96">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black" />
             </div>
           ) : (
             <>
@@ -1020,6 +1007,87 @@ export default function BookingPage() {
           )}
         </motion.div>
       </section>
+
+      {/* Nail Tech Selection Modal - Shows first when no nail tech is selected */}
+      {!selectedNailTechId && !loadingNailTechs && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto relative"
+          >
+            <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4 pr-8 sm:pr-10">
+              Select Your Nail Technician
+            </h3>
+            <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">
+              Please choose your preferred nail technician to view available booking slots.
+            </p>
+            
+            {nailTechs.length > 0 ? (
+              <div className="space-y-3 sm:space-y-4">
+                <label className="block text-sm sm:text-base font-semibold text-slate-900">
+                  Nail Technician <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedNailTechId || ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedNailTechId(e.target.value);
+                      setSelectedSlot(null);
+                      setLinkedSlots([]);
+                      setServiceMessage(null);
+                    }
+                  }}
+                  className="w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-3 text-xs sm:text-sm touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  <option value="">-- Please select a nail technician --</option>
+                  {nailTechs.map((tech) => (
+                    <option key={tech.id} value={tech.id}>
+                      Ms. {tech.name} ({tech.role}){tech.discount != null && tech.discount > 0 ? ` - ${tech.discount}% OFF` : ''} - {tech.serviceAvailability}
+                    </option>
+                  ))}
+                </select>
+                
+                {selectedNailTechId && (() => {
+                  const selectedTech = nailTechs.find(t => t.id === selectedNailTechId);
+                  if (!selectedTech) return null;
+                  const hasDiscount = selectedTech.discount !== undefined && selectedTech.discount !== null && selectedTech.discount > 0;
+                  return (
+                    <div className="mt-3 space-y-2">
+                      <div className="rounded-xl border-2 border-green-300 bg-green-50 px-3 sm:px-4 py-2.5 sm:py-3">
+                        <p className="text-xs sm:text-sm text-green-900 font-medium">
+                          Selected: <strong>Ms. {selectedTech.name}</strong>
+                        </p>
+                        {hasDiscount && (
+                          <p className="text-xs sm:text-sm font-semibold text-green-700 mt-1">
+                            🎉 Special Offer: {selectedTech.discount}% discount on all services!
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (selectedNailTechId) {
+                            // Modal will close automatically when selectedNailTechId is set
+                          }
+                        }}
+                        className="w-full px-4 py-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 touch-manipulation text-sm sm:text-base"
+                      >
+                        Continue to Calendar
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
+                <p className="text-sm sm:text-base text-red-800">
+                  No nail technicians available at the moment. Please try again later.
+                </p>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
 
       <SlotModal
         slot={selectedSlot}

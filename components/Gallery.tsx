@@ -26,11 +26,11 @@ export default function Gallery() {
 
   return (
     <section id="gallery" className="section-padding bg-white">
-      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-3 sm:px-4">
           Gallery
         </h2>
-        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-2 sm:px-4 text-sm sm:text-base">
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-3 sm:px-4 text-sm sm:text-base">
           Browse our latest work and get inspired
         </p>
 
