@@ -551,7 +551,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     }
     
     return false;
-  }, [customers]);
+  }, [getCustomerName, getCustomerPhone, getTimeRange]);
 
   // Filter bookings by period, status, and month
   const filteredBookings = useMemo(() => {

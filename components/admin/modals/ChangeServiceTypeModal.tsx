@@ -158,7 +158,7 @@ export function ChangeServiceTypeModal({ open, booking, slots, onClose, onConfir
             <p className="text-[10px] sm:text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Current Service</p>
             <div className="px-3 sm:px-4 py-2 sm:py-3 bg-slate-50 rounded-lg border border-slate-200">
               <p className="text-xs sm:text-sm font-semibold text-slate-900">
-                {serviceLabels[currentServiceType] || currentServiceType}
+                {currentServiceType ? (serviceLabels[currentServiceType] || currentServiceType) : 'No service type'}
               </p>
               <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
                 {currentRequiredSlots} slot{currentRequiredSlots > 1 ? 's' : ''} required
