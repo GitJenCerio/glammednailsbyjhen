@@ -1175,7 +1175,9 @@ export async function updateServiceType(bookingId: string, newServiceType: Servi
       return; // No change needed
     }
 
-    const currentRequiredSlots = getRequiredSlotCount(booking.serviceType);
+    // Default to 'manicure' if serviceType is undefined
+    const currentServiceType = booking.serviceType || 'manicure';
+    const currentRequiredSlots = getRequiredSlotCount(currentServiceType);
     const newRequiredSlots = getRequiredSlotCount(newServiceType);
 
     // Get current slots
