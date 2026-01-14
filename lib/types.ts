@@ -1,6 +1,6 @@
 export type SlotStatus = 'available' | 'blocked' | 'pending' | 'confirmed';
 export type BookingStatus = 'pending_form' | 'pending_payment' | 'confirmed' | 'cancelled';
-export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'refunded';
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'refunded' | 'forfeited';
 export type ServiceType = 'manicure' | 'pedicure' | 'mani_pedi' | 'home_service_2slots' | 'home_service_3slots';
 export type NailTechRole = 'Owner' | 'Junior Tech' | 'Senior Tech';
 export type ServiceAvailability = 'Studio only' | 'Home service only' | 'Studio and Home Service';

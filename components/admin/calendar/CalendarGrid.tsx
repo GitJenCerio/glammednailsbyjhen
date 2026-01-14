@@ -1,10 +1,12 @@
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subMonths } from 'date-fns';
-import type { BlockedDate, Slot } from '@/lib/types';
+import { useMemo } from 'react';
+import type { BlockedDate, Slot, Booking } from '@/lib/types';
 import { isDateWithinBlockedRange } from '@/lib/scheduling';
 
 type CalendarGridProps = {
   referenceDate: Date;
   slots: Slot[];
+  bookings?: Booking[]; // Optional: bookings to show booking statuses
   blockedDates: BlockedDate[];
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
@@ -15,56 +17,152 @@ type CalendarGridProps = {
 export function CalendarGrid({
   referenceDate,
   slots,
+  bookings = [],
   blockedDates,
   selectedDate,
   onSelectDate,
   onChangeMonth,
   nailTechName,
 }: CalendarGridProps) {
-  const start = startOfWeek(startOfMonth(referenceDate), { weekStartsOn: 0 });
-  const end = endOfWeek(endOfMonth(referenceDate), { weekStartsOn: 0 });
-  const days = eachDayOfInterval({ start, end });
-  const today = format(new Date(), 'yyyy-MM-dd');
+  // Memoize calendar structure calculations
+  const { weeks, today } = useMemo(() => {
+    const start = startOfWeek(startOfMonth(referenceDate), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(referenceDate), { weekStartsOn: 0 });
+    const days = eachDayOfInterval({ start, end });
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-  const weeks = [];
-  for (let i = 0; i < days.length; i += 7) {
-    weeks.push(days.slice(i, i + 7));
-  }
+    const weeksArray = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeksArray.push(days.slice(i, i + 7));
+    }
+
+    return { weeks: weeksArray, today: todayStr };
+  }, [referenceDate]);
+
+  // Memoize slots by date for faster lookups
+  const slotsByDate = useMemo(() => {
+    const map = new Map<string, Slot[]>();
+    slots.forEach(slot => {
+      const date = slot.date;
+      if (!map.has(date)) {
+        map.set(date, []);
+      }
+      map.get(date)!.push(slot);
+    });
+    return map;
+  }, [slots]);
+
+  // Memoize bookings by slot ID for faster lookups
+  const bookingsBySlotId = useMemo(() => {
+    const map = new Map<string, Booking>();
+    bookings.forEach(booking => {
+      map.set(booking.slotId, booking);
+      // Also map linked slots
+      if (booking.linkedSlotIds) {
+        booking.linkedSlotIds.forEach(slotId => {
+          map.set(slotId, booking);
+        });
+      }
+      if (booking.pairedSlotId) {
+        map.set(booking.pairedSlotId, booking);
+      }
+    });
+    return map;
+  }, [bookings]);
+
+  // Memoize day metadata for the entire month
+  const dayMetaMap = useMemo(() => {
+    const map = new Map<string, { isBlocked: boolean; badges: Array<{ label: string; color: string }>; isoDate: string }>();
+    
+    weeks.forEach(week => {
+      week.forEach(date => {
+        const isoDate = format(date, 'yyyy-MM-dd');
+        const daySlots = slotsByDate.get(isoDate) || [];
+        
+        // Check if blocked - optimize by checking blockedDates directly
+        let isBlocked = false;
+        for (const block of blockedDates) {
+          if (isDateWithinBlockedRange(isoDate, block)) {
+            isBlocked = true;
+            break;
+          }
+        }
+        
+        // Count by booking status if bookings exist, otherwise by slot status
+        const pendingFormCount = daySlots.filter((slot) => {
+          const booking = bookingsBySlotId.get(slot.id);
+          return booking?.status === 'pending_form';
+        }).length;
+        
+        const pendingPaymentCount = daySlots.filter((slot) => {
+          const booking = bookingsBySlotId.get(slot.id);
+          return booking?.status === 'pending_payment';
+        }).length;
+        
+        const confirmedCount = daySlots.filter((slot) => {
+          const booking = bookingsBySlotId.get(slot.id);
+          return booking?.status === 'confirmed' || (!booking && slot.status === 'confirmed');
+        }).length;
+        
+        const availableCount = daySlots.filter((slot) => {
+          const booking = bookingsBySlotId.get(slot.id);
+          return !booking && slot.status === 'available';
+        }).length;
+        
+        const pendingSlotCount = daySlots.filter((slot) => {
+          const booking = bookingsBySlotId.get(slot.id);
+          return !booking && slot.status === 'pending';
+        }).length;
+
+        const badges: Array<{ label: string; color: string }> = [];
+
+        if (isBlocked) {
+          badges.push({ label: 'B', color: 'bg-rose-400 text-white border border-rose-600' });
+        } else {
+          // Show booking statuses first (pending_form, pending_payment, confirmed)
+          if (pendingFormCount > 0) {
+            badges.push({ 
+              label: `${pendingFormCount}`,
+              color: 'bg-yellow-500 text-white border border-yellow-600' 
+            });
+          }
+          if (pendingPaymentCount > 0) {
+            badges.push({ 
+              label: `${pendingPaymentCount}`,
+              color: 'bg-blue-500 text-white border border-blue-600' 
+            });
+          }
+          if (confirmedCount > 0) {
+            badges.push({ 
+              label: `${confirmedCount}`,
+              color: 'bg-slate-700 text-white border border-slate-900' 
+            });
+          }
+          // Then show slot statuses (available, pending)
+          if (availableCount > 0) {
+            badges.push({ 
+              label: `${availableCount}`,
+              color: 'bg-emerald-500 text-white border border-emerald-600' 
+            });
+          }
+          if (pendingSlotCount > 0) {
+            badges.push({ 
+              label: `${pendingSlotCount}`,
+              color: 'bg-amber-500 text-white border border-amber-600' 
+            });
+          }
+        }
+
+        map.set(isoDate, { isBlocked, badges, isoDate });
+      });
+    });
+    
+    return map;
+  }, [weeks, slotsByDate, blockedDates, bookingsBySlotId]);
 
   const getDayMeta = (date: Date) => {
     const isoDate = format(date, 'yyyy-MM-dd');
-    const daySlots = slots.filter((slot) => slot.date === isoDate);
-    const isBlocked = blockedDates.some((block) => isDateWithinBlockedRange(isoDate, block));
-    const availableCount = daySlots.filter((slot) => slot.status === 'available').length;
-    const pendingCount = daySlots.filter((slot) => slot.status === 'pending').length;
-    const confirmedCount = daySlots.filter((slot) => slot.status === 'confirmed').length;
-
-    const badges: Array<{ label: string; color: string }> = [];
-
-    if (isBlocked) {
-      badges.push({ label: 'B', color: 'bg-rose-300 text-rose-900' });
-    } else {
-      if (confirmedCount > 0) {
-        badges.push({ 
-          label: `${confirmedCount}`,
-          color: 'bg-slate-900 text-white' 
-        });
-      }
-      if (availableCount > 0) {
-        badges.push({ 
-          label: `${availableCount}`,
-          color: 'bg-emerald-300 text-emerald-900' 
-        });
-      }
-      if (pendingCount > 0) {
-        badges.push({ 
-          label: `${pendingCount}`,
-          color: 'bg-amber-300 text-amber-900' 
-        });
-      }
-    }
-
-    return { isBlocked, badges, isoDate };
+    return dayMetaMap.get(isoDate) || { isBlocked: false, badges: [], isoDate };
   };
 
   return (
@@ -116,11 +214,11 @@ export function CalendarGrid({
                 <button
                   key={isoDate}
                   type="button"
-                  onClick={() => !isPast && onSelectDate(isoDate)}
-                  disabled={isPast}
+                  onClick={() => onSelectDate(isoDate)}
                   className={[
                     'flex flex-col gap-0.5 sm:gap-0.5 md:gap-1 rounded-lg sm:rounded-xl md:rounded-2xl border-2 p-0.5 sm:p-1 md:p-1.5 lg:p-2 xl:p-2.5 text-left transition-all shadow-sm min-h-[2.5rem] sm:min-h-[3rem] md:min-h-[3.5rem] lg:min-h-[4rem] xl:min-h-[4.5rem]',
-                    isPast ? 'opacity-40 cursor-not-allowed' : 'touch-manipulation active:scale-95',
+                    isPast ? 'opacity-60' : '',
+                    'touch-manipulation active:scale-95',
                     isCurrentMonth ? 'border-slate-300' : 'border-slate-200 text-slate-400',
                     isBlocked ? 'bg-rose-200 border-rose-400 hover:bg-rose-300 hover:border-rose-500' : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400',
                     isSelected ? 'ring-2 ring-slate-900 ring-offset-1 sm:ring-offset-2 border-slate-900' : '',

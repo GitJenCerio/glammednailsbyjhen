@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listSlots, createSlot, deleteExpiredSlots } from '@/lib/services/slotService';
+import { listSlots, createSlot } from '@/lib/services/slotService';
 import { listBlockedDates } from '@/lib/services/blockService';
 
 // Prevent caching in production
@@ -8,15 +8,8 @@ export const revalidate = 0;
 
 export async function GET() {
   // Automatic slot release is disabled - use manual release from admin dashboard instead
-  // Try to delete expired slots, but don't fail if index is missing
-  try {
-    const deletedCount = await deleteExpiredSlots();
-    if (deletedCount > 0) {
-      console.log(`Deleted ${deletedCount} expired slot(s)`);
-    }
-  } catch (error) {
-    console.warn('Expired slot cleanup skipped:', error);
-  }
+  // Don't run expired slot cleanup on every request - it's slow and not critical
+  // Run it in a background cron job or manually from admin dashboard instead
   const slots = await listSlots();
   
   // Prevent caching to ensure fresh data, especially after deletions

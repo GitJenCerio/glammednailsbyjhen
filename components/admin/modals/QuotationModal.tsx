@@ -48,6 +48,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
   const [priceMap, setPriceMap] = useState<Record<string, PriceSheetRow>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [savingQuotation, setSavingQuotation] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const quoteCardRef = useRef<HTMLDivElement>(null);
@@ -66,6 +67,8 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
       setQuoteItems([]);
       setNotes('');
       lastBookingIdRef.current = null;
+      setGeneratingImage(false);
+      setSavingQuotation(false);
       return;
     }
 
@@ -75,6 +78,10 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     }
 
     lastBookingIdRef.current = booking.id;
+    
+    // Reset loading states when booking changes
+    setGeneratingImage(false);
+    setSavingQuotation(false);
     
     // Load existing invoice if it exists
     if (booking.invoice) {
@@ -238,6 +245,9 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
       return;
     }
     
+    // Set loading state immediately
+    setGeneratingImage(true);
+    
     // Get element reference - use a function to always get fresh reference
     const getElement = () => quoteCardRef.current;
     
@@ -252,6 +262,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     
     if (!element) {
       console.error('Invoice element not found after', attempts, 'attempts');
+      setGeneratingImage(false);
       alert('Unable to generate invoice. Invoice element not found. Please refresh the page and try again.');
       return;
     }
@@ -269,8 +280,6 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     (element as HTMLElement).style.display = 'block';
     (element as HTMLElement).style.visibility = 'visible';
     (element as HTMLElement).style.opacity = '1';
-    
-    setGeneratingImage(true);
     
     // Wait for React to finish re-rendering and ensure element is still accessible
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -1210,10 +1219,10 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
             <div className="space-y-2">
               <button
                 onClick={handleGenerateInvoice}
-                disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
+                disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage || savingQuotation}
                 className="w-full rounded-full bg-rose-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-rose-700 transition-colors"
               >
-                {booking.invoice ? 'Update & Download Invoice' : 'Generate & Download Invoice'}
+                {generatingImage ? 'Generating...' : (booking.invoice ? 'Update & Download Invoice' : 'Generate & Download Invoice')}
               </button>
               {booking.invoice && (
                 <button
@@ -1224,26 +1233,29 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                       return;
                     }
                     
-                    // Recalculate total to ensure it's correct
-                    const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-                    const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
-                    const recalculatedDiscountAmount = discountRate > 0 && discountRate < 100 
-                      ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) 
-                      : 0;
-                    const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
+                    // Set loading state immediately
+                    setSavingQuotation(true);
                     
-                    const invoiceData = {
-                      items: quoteItems,
-                      total: recalculatedTotal, // Use recalculated total (includes discount)
-                      notes,
-                      squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
-                      discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined, // Store discount rate for reference
-                      discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined, // Store discount amount for reference
-                      createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date or use current date
-                      updatedAt: new Date().toISOString(),
-                    };
-
                     try {
+                      // Recalculate total to ensure it's correct
+                      const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+                      const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+                      const recalculatedDiscountAmount = discountRate > 0 && discountRate < 100 
+                        ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) 
+                        : 0;
+                      const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
+                      
+                      const invoiceData = {
+                        items: quoteItems,
+                        total: recalculatedTotal, // Use recalculated total (includes discount)
+                        notes,
+                        squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
+                        discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined, // Store discount rate for reference
+                        discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined, // Store discount amount for reference
+                        createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date or use current date
+                        updatedAt: new Date().toISOString(),
+                      };
+
                       const res = await fetch(`/api/bookings/${booking.id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
@@ -1253,28 +1265,28 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                         }),
                       });
 
-                      if (!res.ok) {
-                        throw new Error('Failed to save invoice');
-                      }
+      if (!res.ok) {
+        throw new Error('Failed to save invoice');
+      }
 
-                      if (onSendInvoice) {
-                        await onSendInvoice(booking.id, invoiceData);
-                      }
-                      
-                      // Show success and close
-                      setShowSuccess(true);
-                      setTimeout(() => {
-                        onClose();
-                      }, 500);
+      // Don't call onSendInvoice - invoice is already saved above
+      // This prevents duplicate saves and makes it faster
+      
+      // Show success and close
+      setShowSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 500);
                     } catch (error) {
                       console.error('Failed to save invoice', error);
                       alert('Failed to save invoice. Please try again.');
+                      setSavingQuotation(false);
                     }
                   }}
-                  disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
+                  disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage || savingQuotation}
                   className="w-full rounded-full bg-slate-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-slate-700 transition-colors"
                 >
-                  Save Quotation (No Download)
+                  {savingQuotation ? 'Saving...' : 'Save Quotation (No Download)'}
                 </button>
               )}
             </div>

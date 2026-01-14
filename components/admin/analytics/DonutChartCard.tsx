@@ -35,8 +35,8 @@ export function DonutChartCard({ title, data, className = '' }: DonutChartCardPr
         </div>
       ) : (
         <div className="space-y-2 sm:space-y-3 md:space-y-2">
-          <div className="h-[160px] sm:h-[180px] md:h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[160px] sm:h-[180px] md:h-[200px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={data}

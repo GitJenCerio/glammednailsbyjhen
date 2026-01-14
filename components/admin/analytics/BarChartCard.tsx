@@ -25,8 +25,8 @@ export function BarChartCard({ title, data, className = '' }: BarChartCardProps)
           No data available
         </div>
       ) : (
-        <div className="h-[200px] sm:h-[250px] md:h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-[200px] sm:h-[250px] md:h-[300px] min-w-0">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <BarChart data={chartData} layout="vertical" margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis type="number" stroke="#64748b" style={{ fontSize: '12px' }} tickLine={false} />

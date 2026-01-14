@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { motion } from 'framer-motion';
 import { IoClose } from 'react-icons/io5';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
+import { NoRecordFoundModal } from '@/components/booking/NoRecordFoundModal';
+import { RecordFoundModal } from '@/components/booking/RecordFoundModal';
 import type { Slot, BlockedDate, ServiceType, NailTech } from '@/lib/types';
 import { getNextSlotTime, SLOT_TIMES } from '@/lib/constants/slots';
 import { formatTime12Hour } from '@/lib/utils';
@@ -135,6 +137,10 @@ interface SlotModalProps {
   socialMediaName: string;
   onSocialMediaNameChange: (value: string) => void;
   disableProceed: boolean;
+  hasConfirmedNoRecord: boolean;
+  onResetNoRecord: () => void;
+  onNoRecordFound: (searchedValue: string) => void;
+  onRecordFound: (customerName: string) => void;
   onClose: () => void;
   onProceed: () => void;
 }
@@ -163,6 +169,10 @@ function SlotModal({
   socialMediaName,
   onSocialMediaNameChange,
   disableProceed,
+  hasConfirmedNoRecord,
+  onResetNoRecord,
+  onNoRecordFound,
+  onRecordFound,
   isBooking,
   onClose,
   onProceed,
@@ -183,9 +193,14 @@ function SlotModal({
         className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto relative"
       >
         <button
-          onClick={onClose}
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 sm:p-2 rounded-full hover:bg-slate-200 active:bg-slate-300 transition-colors touch-manipulation"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }}
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 sm:p-2 rounded-full hover:bg-slate-200 active:bg-slate-300 transition-colors touch-manipulation z-10"
           aria-label="Close"
+          type="button"
         >
           <IoClose className="w-5 h-5 sm:w-6 sm:h-6 text-slate-700" />
         </button>
@@ -260,6 +275,7 @@ function SlotModal({
                   onRepeatClientNameChange(null);
                   onRepeatClientEmailChange('');
                   onSocialMediaNameChange('');
+                  onResetNoRecord();
                 }
               }}
               className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
@@ -281,6 +297,7 @@ function SlotModal({
                     onRepeatClientEmailChange(e.target.value);
                     onRepeatClientNameChange(null);
                     setRepeatClientError(null);
+                    onResetNoRecord(); // Reset when user types
                   }}
                   placeholder="Email or contact number"
                   className="flex-1 mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -309,21 +326,24 @@ function SlotModal({
                         if (data.found && data.customer?.name) {
                           onRepeatClientNameChange(data.customer.name);
                           setRepeatClientError(null);
+                          onResetNoRecord();
+                          onRecordFound(data.customer.name);
+                          setIsCheckingCustomer(false);
                         } else {
-                          // Customer not found - show error message
-                          onRepeatClientNameChange(null);
-                          setRepeatClientError('No existing customer found with this email or contact number. Please select "New Client" if this is your first booking.');
+                          // Customer not found - show modal after checking completes
+                          setIsCheckingCustomer(false);
+                          onNoRecordFound(inputValue);
                         }
                       } else {
-                        onRepeatClientNameChange(null);
-                        setRepeatClientError('Unable to verify customer. Please try again or select "New Client".');
+                        // Error checking - show modal after checking completes
+                        setIsCheckingCustomer(false);
+                        onNoRecordFound(inputValue);
                       }
                     } catch (error) {
                       console.error('Error finding customer:', error);
-                      onRepeatClientNameChange(null);
-                      setRepeatClientError('Error checking customer. Please try again.');
-                    } finally {
+                      // Error occurred - show modal after checking completes
                       setIsCheckingCustomer(false);
+                      onNoRecordFound(inputValue);
                     }
                   }}
                   disabled={!repeatClientEmail.trim() || isCheckingCustomer}
@@ -342,26 +362,6 @@ function SlotModal({
                 </div>
               )}
               
-              {repeatClientError && (
-                <div className="mt-2 rounded-xl sm:rounded-2xl border-2 border-amber-200 bg-amber-50 px-3 sm:px-4 py-2.5">
-                  <p className="text-[10px] sm:text-xs text-amber-800 font-medium flex items-start gap-1.5">
-                    <span className="text-amber-600 mt-0.5">⚠</span>
-                    <span>{repeatClientError}</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClientTypeChange('new');
-                      onRepeatClientEmailChange('');
-                      onRepeatClientNameChange(null);
-                      setRepeatClientError(null);
-                    }}
-                    className="mt-2 text-[10px] sm:text-xs text-amber-700 font-semibold underline hover:text-amber-900"
-                  >
-                    Select &quot;New Client&quot; instead
-                  </button>
-                </div>
-              )}
               
               {!repeatClientName && !repeatClientError && repeatClientEmail.trim() && (
                 <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
@@ -376,7 +376,7 @@ function SlotModal({
               )}
             </div>
           )}
-          {clientType === 'new' && (
+          {(clientType === 'new' || (clientType === 'repeat' && !repeatClientName && hasConfirmedNoRecord)) && (
             <div>
               <label className="text-sm sm:text-base text-gray-600 mb-1 block">
                 Facebook or Instagram Name <span className="text-red-500">*</span>
@@ -389,6 +389,11 @@ function SlotModal({
                 className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
                 required
               />
+              {clientType === 'repeat' && !repeatClientName && hasConfirmedNoRecord && (
+                <p className="mt-1.5 text-[10px] sm:text-xs text-slate-600">
+                  No existing record found. Please provide your Facebook or Instagram name to proceed.
+                </p>
+              )}
             </div>
           )}
           {requiresMultipleSlots && missingLinkedSlots && serviceMessage && (serviceMessage.includes('requires') || serviceMessage.includes('consecutive')) && (
@@ -479,6 +484,12 @@ export default function BookingPage() {
   const [repeatClientError, setRepeatClientError] = useState<string | null>(null);
   const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
   const [socialMediaName, setSocialMediaName] = useState('');
+  const [userClosedModal, setUserClosedModal] = useState(false);
+  const [showNoRecordModal, setShowNoRecordModal] = useState(false);
+  const [searchedValue, setSearchedValue] = useState('');
+  const [showRecordFoundModal, setShowRecordFoundModal] = useState(false);
+  const [foundCustomerName, setFoundCustomerName] = useState('');
+  const [hasConfirmedNoRecord, setHasConfirmedNoRecord] = useState(false);
   const serviceOptions = SERVICE_OPTIONS[serviceLocation];
 
   useEffect(() => {
@@ -698,6 +709,36 @@ export default function BookingPage() {
     [availableSlotsForDate, selectedService, slots, blockedDates],
   );
 
+  const handleSelectSlot = useCallback((slot: Slot) => {
+    if (slot.status !== 'available') return;
+    setSelectedService('manicure');
+    setClientType('new');
+    setRepeatClientEmail('');
+    setRepeatClientName(null);
+    setSocialMediaName('');
+    setServiceLocation('homebased_studio');
+    setLinkedSlots([]);
+    setServiceMessage(null);
+    setSqueezeFeeAcknowledged(false);
+    setSelectedSlot(slot);
+  }, []);
+
+  // Auto-select first available slot when date is selected (only if user hasn't manually closed the modal)
+  useEffect(() => {
+    if (selectedDate && availableSlotsForDate.length > 0 && !selectedSlot && !userClosedModal) {
+      // Automatically select the first available slot
+      const firstAvailableSlot = availableSlotsForDate[0];
+      if (firstAvailableSlot && firstAvailableSlot.status === 'available') {
+        handleSelectSlot(firstAvailableSlot);
+      }
+    }
+  }, [selectedDate, availableSlotsForDate, selectedSlot, handleSelectSlot, userClosedModal]);
+
+  // Reset the userClosedModal flag when date changes (user selected a new date, so auto-select is allowed again)
+  useEffect(() => {
+    setUserClosedModal(false);
+  }, [selectedDate]);
+
   // Scroll to show both calendar and slots on mobile when date is selected
   useEffect(() => {
     if (selectedDate) {
@@ -727,71 +768,34 @@ export default function BookingPage() {
   const requiredSlots = getRequiredSlotCount(selectedService);
   const hasSqueezeFee = selectedSlot?.slotType === 'with_squeeze_fee';
   const missingLinkedSlots = requiredSlots > 1 && linkedSlots.length !== requiredSlots - 1;
-  const missingSocialMediaName = clientType === 'new' && !socialMediaName.trim();
+  // Require social media name for new clients OR repeat clients confirmed as "no record found"
+  const missingSocialMediaName =
+    (clientType === 'new' || (clientType === 'repeat' && !repeatClientName && hasConfirmedNoRecord)) &&
+    !socialMediaName.trim();
+
+  // Repeat clients must confirm their record (or switch to new) before proceeding
+  const repeatNotConfirmedYet = clientType === 'repeat' && !repeatClientName && !hasConfirmedNoRecord;
   const disableProceed =
     !selectedSlot ||
     missingLinkedSlots ||
     (hasSqueezeFee && !squeezeFeeAcknowledged) ||
     missingSocialMediaName ||
+    repeatNotConfirmedYet ||
     isBooking;
 
-  const handleSelectSlot = (slot: Slot) => {
-    if (slot.status !== 'available') return;
-    setSelectedService('manicure');
-    setClientType('new');
-    setRepeatClientEmail('');
-    setRepeatClientName(null);
-    setSocialMediaName('');
-    setServiceLocation('homebased_studio');
-    setLinkedSlots([]);
-    setServiceMessage(null);
-    setSqueezeFeeAcknowledged(false);
-    setSelectedSlot(slot);
-  };
 
   async function handleProceedToBooking() {
     if (!selectedSlot || isBooking) return; // Prevent multiple simultaneous bookings
     
     setIsBooking(true);
     try {
-      // Refresh slot data before booking to ensure we have the latest status
-      await loadData();
-      
-      // Verify the selected slot still exists and is available after refresh
-      const refreshedSlot = slots.find((s) => s.id === selectedSlot.id);
-      if (!refreshedSlot) {
-        alert('This slot is no longer available. Please select another slot.');
-        setSelectedSlot(null);
-        setLinkedSlots([]);
-        setIsBooking(false);
-        return;
-      }
-      
-      if (refreshedSlot.status !== 'available') {
-        alert(`This slot is no longer available (status: ${refreshedSlot.status}). Please select another slot.`);
-        setSelectedSlot(null);
-        setLinkedSlots([]);
-        setIsBooking(false);
-        return;
-      }
-      
-      // Update selectedSlot to use refreshed data
-      setSelectedSlot(refreshedSlot);
-      
+      // Optimized: don't pre-refresh (extra network hop). The server will validate availability atomically.
       const requiredSlots = getRequiredSlotCount(selectedService);
-      const linkedSlotIds = linkedSlots.map((slot) => {
-        const refreshedLinkedSlot = slots.find((s) => s.id === slot.id);
-        if (!refreshedLinkedSlot || refreshedLinkedSlot.status !== 'available') {
-          return null;
-        }
-        return refreshedLinkedSlot.id;
-      }).filter((id): id is string => id !== null);
+      const linkedSlotIds = linkedSlots.map((slot) => slot.id);
 
       if (requiredSlots > 1 && linkedSlotIds.length !== requiredSlots - 1) {
-        // Re-validate slots after refresh - they might have changed
-        // The useEffect will automatically update serviceMessage with the correct validation
+        // Client-side validation (should already be enforced by UI)
         setLinkedSlots([]);
-        setIsBooking(false);
         return;
       }
 
@@ -799,14 +803,14 @@ export default function BookingPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          slotId: refreshedSlot.id,
+          slotId: selectedSlot.id,
           serviceType: selectedService,
           pairedSlotId: linkedSlotIds[0],
           linkedSlotIds,
-          clientType,
-          repeatClientEmail: clientType === 'repeat' ? repeatClientEmail : undefined,
+          clientType: clientType === 'repeat' && repeatClientName ? 'repeat' : 'new',
+          repeatClientEmail: clientType === 'repeat' && repeatClientName ? repeatClientEmail : undefined,
           serviceLocation,
-          socialMediaName: clientType === 'new' ? socialMediaName : undefined,
+          socialMediaName: socialMediaName.trim() || undefined,
         }),
       });
 
@@ -822,19 +826,13 @@ export default function BookingPage() {
 
       const data = await response.json();
       
-      // Immediately refresh slots before redirecting so other users see updated status
-      // This helps prevent double-booking by updating the slot status to 'pending' quickly
-      await loadData(false);
-      
-      // Small delay to ensure the refresh completes before redirect
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       // Redirect to Google Form - booking is successfully reserved
       window.location.href = data.googleFormUrl;
       // Note: We don't reset state here since we're redirecting
     } catch (error: any) {
       console.error('Error creating booking:', error);
       alert(error.message || 'This slot is no longer available. Please pick another slot.');
+      // Only refresh on failure (keeps success path fast)
       await loadData();
       // Reset selection to allow user to pick a new slot
       setSelectedSlot(null);
@@ -857,9 +855,6 @@ export default function BookingPage() {
           <h1 id="booking-heading" className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4 text-slate-900 scroll-mt-24 sm:scroll-mt-28">
             Book Your Appointment
           </h1>
-          <p className="text-center text-gray-600 mb-4 sm:mb-6 max-w-2xl mx-auto px-2 sm:px-4 text-xs sm:text-base">
-            Select your preferred nail technician and an available time slot
-          </p>
 
           {/* Nail Tech Selection - Now shown in modal */}
           {selectedNailTechId && (
@@ -904,11 +899,11 @@ export default function BookingPage() {
                 <span>Slot Requirements by Service</span>
               </h3>
               <div className="space-y-1.5 sm:space-y-2 text-[10px] sm:text-sm text-blue-800">
-                <p><strong>Mani + Pedi, Home Service (2 pax):</strong> 2 consecutive slots required</p>
-                <p><strong>Home Service (3 pax):</strong> 3 consecutive slots required</p>
+                <p><strong>Mani + Pedi:</strong> 2 consecutive slots required</p>
+                <p><strong>Home Service:</strong> Requires Mani + Pedi or 2 pax within Manila and 3 pax if outside Manila</p>
                 <div className="mt-2.5 pt-2.5 border-t border-blue-200">
                   <p className="text-[9px] sm:text-xs font-medium italic text-blue-900">
-                    <strong>Important:</strong> For services requiring multiple slots, select the <strong>first</strong> slot of the consecutive sequence. The system will automatically book the required consecutive slots for you.
+                    <strong>Important:</strong> For services requiring multiple slots, select the <strong>first</strong> slot of the consecutive sequence. The system will automatically book the required consecutive slots for you. If you have special cases like 3 or more pax, please send us a message.
                   </p>
                 </div>
               </div>
@@ -1014,20 +1009,17 @@ export default function BookingPage() {
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-md w-full p-4 sm:p-6 md:p-8 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto relative"
+            className="bg-slate-100 border-2 border-slate-300 rounded-lg max-w-sm w-full p-4 sm:p-5 shadow-xl shadow-slate-900/20 my-4 max-h-[90vh] overflow-y-auto relative"
           >
-            <h3 className="text-xl sm:text-2xl font-heading font-semibold mb-3 sm:mb-4 pr-8 sm:pr-10">
+            <h3 className="text-base sm:text-lg font-heading font-semibold mb-2 sm:mb-3 pr-8 sm:pr-10">
               Select Your Nail Technician
             </h3>
-            <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">
+            <p className="text-xs sm:text-sm text-slate-600 mb-3 sm:mb-4">
               Please choose your preferred nail technician to view available booking slots.
             </p>
             
             {nailTechs.length > 0 ? (
-              <div className="space-y-3 sm:space-y-4">
-                <label className="block text-sm sm:text-base font-semibold text-slate-900">
-                  Nail Technician <span className="text-red-500">*</span>
-                </label>
+              <div className="space-y-2 sm:space-y-3">
                 <select
                   value={selectedNailTechId || ''}
                   onChange={(e) => {
@@ -1038,7 +1030,7 @@ export default function BookingPage() {
                       setServiceMessage(null);
                     }
                   }}
-                  className="w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-3 text-xs sm:text-sm touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full rounded-lg sm:rounded-xl border-2 border-slate-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-[10px] sm:text-xs touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
                 >
                   <option value="">-- Please select a nail technician --</option>
                   {nailTechs.map((tech) => (
@@ -1053,13 +1045,13 @@ export default function BookingPage() {
                   if (!selectedTech) return null;
                   const hasDiscount = selectedTech.discount !== undefined && selectedTech.discount !== null && selectedTech.discount > 0;
                   return (
-                    <div className="mt-3 space-y-2">
-                      <div className="rounded-xl border-2 border-green-300 bg-green-50 px-3 sm:px-4 py-2.5 sm:py-3">
-                        <p className="text-xs sm:text-sm text-green-900 font-medium">
+                    <div className="mt-2 space-y-2">
+                      <div className="rounded-lg sm:rounded-xl border-2 border-green-300 bg-green-50 px-2.5 sm:px-3 py-2 sm:py-2.5">
+                        <p className="text-xs text-green-900 font-medium">
                           Selected: <strong>Ms. {selectedTech.name}</strong>
                         </p>
                         {hasDiscount && (
-                          <p className="text-xs sm:text-sm font-semibold text-green-700 mt-1">
+                          <p className="text-xs font-semibold text-green-700 mt-1">
                             🎉 Special Offer: {selectedTech.discount}% discount on all services!
                           </p>
                         )}
@@ -1070,7 +1062,7 @@ export default function BookingPage() {
                             // Modal will close automatically when selectedNailTechId is set
                           }
                         }}
-                        className="w-full px-4 py-3 sm:py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 touch-manipulation text-sm sm:text-base"
+                        className="w-full px-3 sm:px-4 py-2 bg-black text-white font-medium border-2 border-white shadow-[0_0_0_2px_#000000] hover:bg-white hover:text-black hover:border hover:border-black hover:shadow-[0_0_0_2px_#ffffff,0_0_0_3px_#000000] active:scale-[0.98] transition-all duration-300 touch-manipulation text-xs sm:text-sm"
                       >
                         Continue to Calendar
                       </button>
@@ -1079,8 +1071,8 @@ export default function BookingPage() {
                 })()}
               </div>
             ) : (
-              <div className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
-                <p className="text-sm sm:text-base text-red-800">
+              <div className="rounded-lg sm:rounded-xl border-2 border-red-300 bg-red-50 px-3 sm:px-4 py-2.5 sm:py-3">
+                <p className="text-xs sm:text-sm text-red-800">
                   No nail technicians available at the moment. Please try again later.
                 </p>
               </div>
@@ -1113,8 +1105,20 @@ export default function BookingPage() {
         socialMediaName={socialMediaName}
         onSocialMediaNameChange={setSocialMediaName}
         disableProceed={disableProceed}
+        hasConfirmedNoRecord={hasConfirmedNoRecord}
+        onResetNoRecord={() => setHasConfirmedNoRecord(false)}
+        onNoRecordFound={(value) => {
+          setSearchedValue(value);
+          setHasConfirmedNoRecord(true);
+          setShowNoRecordModal(true);
+        }}
+        onRecordFound={(name) => {
+          setFoundCustomerName(name);
+          setShowRecordFoundModal(true);
+        }}
         isBooking={isBooking}
         onClose={() => {
+          setUserClosedModal(true); // Mark that user manually closed the modal
           setSelectedSlot(null);
           setSelectedService('manicure');
           setClientType('new');
@@ -1125,8 +1129,42 @@ export default function BookingPage() {
           setLinkedSlots([]);
           setServiceMessage(null);
           setSqueezeFeeAcknowledged(false);
+          setHasConfirmedNoRecord(false); // Reset the flag when modal closes
         }}
         onProceed={handleProceedToBooking}
+      />
+
+      <NoRecordFoundModal
+        open={showNoRecordModal}
+        searchValue={searchedValue}
+        onClose={() => {
+          setShowNoRecordModal(false);
+          setSearchedValue('');
+        }}
+        onProceedAsNew={() => {
+          // Switch to new client mode
+          setClientType('new');
+          setRepeatClientEmail('');
+          setRepeatClientName(null);
+          setRepeatClientError(null);
+          setHasConfirmedNoRecord(true); // Keep this true so the message shows
+          setShowNoRecordModal(false);
+          setSearchedValue('');
+        }}
+      />
+
+      <RecordFoundModal
+        open={showRecordFoundModal}
+        customerName={foundCustomerName || repeatClientName || 'Client'}
+        onClose={() => {
+          setShowRecordFoundModal(false);
+          setFoundCustomerName('');
+        }}
+        onProceed={() => {
+          setShowRecordFoundModal(false);
+          setFoundCustomerName('');
+          handleProceedToBooking();
+        }}
       />
 
       <Footer />

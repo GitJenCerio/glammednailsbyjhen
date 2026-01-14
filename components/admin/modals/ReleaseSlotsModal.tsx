@@ -105,7 +105,7 @@ export function ReleaseSlotsModal({ open, onClose, onRelease }: ReleaseSlotsModa
           <div>
             <h2 className="text-xl font-semibold">Release Slots</h2>
             <p className="text-sm text-slate-600 mt-1">
-              Select bookings to release (2+ hours old, no form received)
+              Select bookings to release (no form received)
             </p>
           </div>
           <button
@@ -137,7 +137,7 @@ export function ReleaseSlotsModal({ open, onClose, onRelease }: ReleaseSlotsModa
             <div className="text-center py-12">
               <p className="text-slate-600">No bookings eligible for release</p>
               <p className="text-sm text-slate-500 mt-2">
-                All pending bookings either have forms synced or are less than 2 hours old
+                All pending bookings have forms synced
               </p>
             </div>
           ) : (

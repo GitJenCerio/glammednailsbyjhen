@@ -1007,9 +1007,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm('Are you sure you want to cancel this booking?')) {
-                            onCancel(booking.id);
-                          }
+                          onCancel(booking.id);
                           setOpenDropdownId(null);
                           setDropdownPosition(null);
                         }}
@@ -1285,9 +1283,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm('Are you sure you want to cancel this booking?')) {
-                                  onCancel(booking.id);
-                                }
+                                onCancel(booking.id);
                                 setOpenDropdownId(null);
                                 setDropdownPosition(null);
                               }}

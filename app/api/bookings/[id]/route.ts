@@ -35,7 +35,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 
   if (body?.action === 'cancel') {
-    await updateBookingStatus(params.id, 'cancelled');
+    const releaseSlot = body.releaseSlot !== false; // Default to true if not specified
+    await updateBookingStatus(params.id, 'cancelled', releaseSlot);
     return NextResponse.json({ success: true });
   }
 

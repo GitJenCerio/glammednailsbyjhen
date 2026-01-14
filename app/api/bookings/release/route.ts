@@ -1,22 +1,30 @@
 import { NextResponse } from 'next/server';
 import { getEligibleBookingsForRelease, manuallyReleaseBookings } from '@/lib/services/bookingService';
-import { listSlots } from '@/lib/services/slotService';
+import { getSlotsByIds } from '@/lib/services/slotService';
 import type { BookingWithSlot, Slot } from '@/lib/types';
 
 /**
  * GET: Get bookings eligible for manual release
- * Returns bookings that are 2+ hours old, pending_form status, and no form synced
+ * Returns bookings that are pending_form status and no form synced
  * Includes slot information for display
  */
 export async function GET() {
   try {
     const eligibleBookings = await getEligibleBookingsForRelease();
-    const slots = await listSlots();
+
+    // PERF: only fetch the specific slots we need (instead of loading all slots)
+    const slotIdsToFetch = eligibleBookings.flatMap((b) => [
+      b.slotId,
+      ...(b.linkedSlotIds || []),
+      ...(b.pairedSlotId ? [b.pairedSlotId] : []),
+    ]);
+    const slots = await getSlotsByIds(slotIdsToFetch);
+    const slotsById = new Map(slots.map((s) => [s.id, s]));
     
     // Enrich bookings with slot information
     const bookingsWithSlots: BookingWithSlot[] = eligibleBookings
       .map(booking => {
-        const slot = slots.find(s => s.id === booking.slotId);
+        const slot = slotsById.get(booking.slotId);
         if (!slot) {
           // If slot not found, skip this booking (shouldn't happen but handle gracefully)
           // Return null to filter it out
@@ -24,8 +32,8 @@ export async function GET() {
         }
         
         const linkedSlots = (booking.linkedSlotIds || [])
-          .map(id => slots.find(s => s.id === id))
-          .filter((s): s is Slot => s !== undefined);
+          .map((id) => slotsById.get(id))
+          .filter((s): s is Slot => !!s);
         
         const result: BookingWithSlot = {
           ...booking,

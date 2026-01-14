@@ -27,6 +27,7 @@ import { SplitRescheduleModal } from '@/components/admin/modals/SplitRescheduleM
 import { ReleaseSlotsModal } from '@/components/admin/modals/ReleaseSlotsModal';
 import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingModal';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
+import { CancelBookingModal } from '@/components/admin/modals/CancelBookingModal';
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
@@ -77,7 +78,9 @@ function AdminDashboardContent() {
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [blockDefaults, setBlockDefaults] = useState<{ start?: string | null; end?: string | null }>({});
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingCalendar, setLoadingCalendar] = useState(true); // Separate loading state for calendar
   const [toast, setToast] = useState<string | null>(null);
   
   // Get section from URL params, default to 'bookings'
@@ -98,6 +101,9 @@ function AdminDashboardContent() {
   const [splitReschedulingBookingId, setSplitReschedulingBookingId] = useState<string | null>(null);
   const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
   const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
+  const [cancelBookingModalOpen, setCancelBookingModalOpen] = useState(false);
+  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(null);
+  const [isCancellingBooking, setIsCancellingBooking] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -372,9 +378,14 @@ function AdminDashboardContent() {
 
   async function loadData() {
     try {
+      setLoading(true);
+      setLoadingCalendar(true);
       // Add cache-busting timestamp to prevent stale data in production
       const cacheBuster = `?t=${Date.now()}`;
-      const [slotsRes, blocksRes, bookingsRes, customersRes, nailTechsRes] = await Promise.all([
+      
+      // Prioritize calendar data (slots, blocks, nail techs) - load these first
+      // Calendar can render immediately after this
+      const [slotsRes, blocksRes, nailTechsRes] = await Promise.all([
         fetch(`/api/slots${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
@@ -389,6 +400,56 @@ function AdminDashboardContent() {
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()),
+        fetch(`/api/nail-techs${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
+      ]);
+      
+      // Set calendar data immediately so calendar can render
+      setSlots(slotsRes.slots);
+      setBlockedDates(blocksRes.blockedDates);
+      setNailTechs(nailTechsRes.nailTechs || []);
+      
+      // Mark calendar as loaded - it can now render
+      setLoadingCalendar(false);
+      
+      // Default to Ms. Jhen (Owner) for calendar/bookings section only - all existing calendar data belongs to her
+      // Don't set default for finance section, show all bookings by default
+      const nailTechsList = nailTechsRes.nailTechs || [];
+      if (!selectedNailTechId && nailTechsList.length > 0) {
+        // Only set default if we're in bookings/calendar section, not finance
+        if (activeSection === 'bookings' || activeSection === 'overview') {
+          // First try to find Ms. Jhen by name (case insensitive)
+          let defaultTech = nailTechsList.find((tech: NailTech) => 
+            tech.name.toLowerCase().includes('jhen') && 
+            tech.status === 'Active'
+          );
+          
+          // If not found, try any Owner with Active status
+          if (!defaultTech) {
+            defaultTech = nailTechsList.find((tech: NailTech) => 
+              tech.role === 'Owner' && tech.status === 'Active'
+            );
+          }
+          
+          // If still not found, get first active tech
+          if (!defaultTech) {
+            defaultTech = nailTechsList.find((tech: NailTech) => tech.status === 'Active') || nailTechsList[0];
+          }
+          
+          if (defaultTech) {
+            setSelectedNailTechId(defaultTech.id);
+          }
+        }
+      }
+      
+      // Load bookings and customers in parallel (less critical for calendar display)
+      // These load in the background and don't block calendar rendering
+      Promise.all([
         fetch(`/api/bookings${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
@@ -403,51 +464,17 @@ function AdminDashboardContent() {
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()).catch(() => ({ customers: [] })),
-        fetch(`/api/nail-techs${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
-      ]);
-      setSlots(slotsRes.slots);
-      setBlockedDates(blocksRes.blockedDates);
-      setBookings(bookingsRes.bookings);
-      setCustomers(customersRes.customers || []);
-      setNailTechs(nailTechsRes.nailTechs || []);
-      
-      // Default to Ms. Jhen (Owner) for calendar/bookings section only - all existing calendar data belongs to her
-      // Don't set default for finance section, show all bookings by default
-      if (!selectedNailTechId && nailTechsRes.nailTechs && nailTechsRes.nailTechs.length > 0) {
-        // Only set default if we're in bookings/calendar section, not finance
-        if (activeSection === 'bookings' || activeSection === 'overview') {
-          // First try to find Ms. Jhen by name (case insensitive)
-          let defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
-            tech.name.toLowerCase().includes('jhen') && 
-            tech.status === 'Active'
-          );
-          
-          // If not found, try any Owner with Active status
-          if (!defaultTech) {
-            defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => 
-              tech.role === 'Owner' && tech.status === 'Active'
-            );
-          }
-          
-          // If still not found, get first active tech
-          if (!defaultTech) {
-            defaultTech = nailTechsRes.nailTechs.find((tech: NailTech) => tech.status === 'Active') || nailTechsRes.nailTechs[0];
-          }
-          
-          if (defaultTech) {
-            setSelectedNailTechId(defaultTech.id);
-          }
-        }
-      }
+      ]).then(([bookingsRes, customersRes]) => {
+        setBookings(bookingsRes.bookings);
+        setCustomers(customersRes.customers || []);
+      }).catch((error) => {
+        console.error('Failed to load bookings/customers:', error);
+        // Don't show toast for background loading failures
+      });
     } catch (error) {
       console.error('Failed to load admin data', error);
       setToast('Unable to load data. Check your backend configuration.');
+      setLoadingCalendar(false); // Still allow calendar to render even on error
     } finally {
       setLoading(false);
     }
@@ -475,6 +502,14 @@ function AdminDashboardContent() {
       setCustomerLifetimeValue(0);
     }
   }, [selectedCustomerId]);
+
+  // Memoize filtered slots for calendar (by nail tech) - used for calendar display
+  const calendarSlots = useMemo(() => {
+    if (selectedNailTechId) {
+      return slots.filter(s => s.nailTechId === selectedNailTechId);
+    }
+    return slots;
+  }, [slots, selectedNailTechId]);
 
   const selectedSlots = useMemo(() => {
     // PRIORITIZE ALL SLOTS: Include all slot statuses (available, pending, confirmed, blocked)
@@ -551,33 +586,9 @@ function AdminDashboardContent() {
     return bookingsWithSlots;
   }, [bookingsWithSlots, bookingFilterPeriod]);
 
-  // Filter by selected date and nail tech (for booking status overview - shows bookings matching the displayed slots)
-  const filteredBookingsForOverview = useMemo(() => {
-    if (!selectedDate) return [];
-    
-    // Get the slot IDs that are displayed for the selected date
-    const displayedSlotIds = new Set(selectedSlots.map(slot => slot.id));
-    
-    // Filter bookings to only show those that match the displayed slots
-    return bookingsWithSlots.filter((b) => {
-      if (!b.slot) return false;
-      
-      // Check if the booking's primary slot is in the displayed slots
-      if (displayedSlotIds.has(b.slot.id)) {
-        return true;
-      }
-      
-      // Check if any of the booking's linked slots are in the displayed slots
-      if (b.linkedSlotIds && b.linkedSlotIds.some(id => displayedSlotIds.has(id))) {
-        return true;
-      }
-      
-      return false;
-    });
-  }, [bookingsWithSlots, selectedSlots, selectedDate]);
-
-  const selectedBooking =
-    bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? bookingsWithSlots[0] ?? null;
+  const selectedBooking = selectedBookingId
+    ? bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? null
+    : null;
 
   async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string }) {
     const url = editingSlot ? `/api/slots/${editingSlot.id}` : '/api/slots';
@@ -765,34 +776,62 @@ function AdminDashboardContent() {
     }
   }
 
-  async function handleCancelBooking(id: string) {
-    if (!confirm('Are you sure you want to cancel this booking?')) return;
-    const res = await fetch(`/api/bookings/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cancel' }),
-    });
-    if (!res.ok) {
-      const error = await res.json();
-      setToast(`Error: ${error.error || 'Failed to cancel booking'}`);
-      return;
-    }
-    await loadData();
+  async function handleCancelBooking(id: string): Promise<void> {
+    setCancellingBookingId(id);
+    setCancelBookingModalOpen(true);
+    // Return immediately - the actual cancellation happens in confirmCancelBooking
+    return Promise.resolve();
+  }
+
+  async function confirmCancelBooking(releaseSlot: boolean = true) {
+    if (!cancellingBookingId) return;
     
-    // Create notification for booking cancelled
+    setIsCancellingBooking(true);
     try {
-      const booking = bookings.find(b => b.id === id);
-      const customer = booking ? customers.find(c => c.id === booking.customerId) : null;
-      const customerName = customer?.name || 'Unknown Customer';
-      if (booking) {
-        await notifyBookingCancelled(booking.id, customerName);
+      const res = await fetch(`/api/bookings/${cancellingBookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', releaseSlot }),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        setToast(`Error: ${error.error || 'Failed to cancel booking'}`);
+        setIsCancellingBooking(false);
+        return;
       }
-    } catch (error) {
-      console.error('Failed to create notification:', error);
+      
+      // Update local state immediately for better UX
+      setBookings(prev => prev.map(b => 
+        b.id === cancellingBookingId ? { ...b, status: 'cancelled' as const } : b
+      ));
+      
+      // Create notification for booking cancelled
+      try {
+        const booking = bookings.find(b => b.id === cancellingBookingId);
+        const customer = booking ? customers.find(c => c.id === booking.customerId) : null;
+        const customerName = customer?.name || 'Unknown Customer';
+        if (booking) {
+          await notifyBookingCancelled(booking.id, customerName);
+        }
+      } catch (error) {
+        console.error('Failed to create notification:', error);
+      }
+      
+      setToast('Booking cancelled.');
+      setSelectedBookingId(null);
+      setCancelBookingModalOpen(false);
+      setCancellingBookingId(null);
+      
+      // Reload data in background to ensure consistency
+      loadData().catch(err => {
+        console.error('Failed to reload data:', err);
+      });
+    } catch (error: any) {
+      setToast(`Error: ${error.message || 'Failed to cancel booking'}`);
+    } finally {
+      setIsCancellingBooking(false);
     }
-    
-    setToast('Booking cancelled.');
-    setSelectedBookingId(null);
   }
 
   function handleRescheduleBooking(id: string) {
@@ -861,21 +900,23 @@ function AdminDashboardContent() {
   }
 
   async function handleSendInvoice(bookingId: string, invoiceData: { items: any[]; total: number; notes: string }) {
-    // Save invoice data to booking - this will also update status to pending_payment
-    const res = await fetch(`/api/bookings/${bookingId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'save_invoice',
-        invoice: invoiceData,
-      }),
-    });
-    if (res.ok) {
+    // Note: Invoice is already saved in QuotationModal, so we just need to update local state
+    // This is much faster than reloading all data
+    try {
+      // Update the booking in local state without reloading everything
+      setBookings(prevBookings => 
+        prevBookings.map(booking => 
+          booking.id === bookingId 
+            ? { ...booking, invoice: invoiceData as any }
+            : booking
+        )
+      );
+      setToast('Invoice saved successfully.');
+    } catch (error) {
+      console.error('Error updating local state:', error);
+      // Fallback to full reload if local update fails
       await loadData();
-      setToast('Invoice generated and saved.');
-      setQuotationModalOpen(false);
-    } else {
-      setToast('Failed to save invoice.');
+      setToast('Invoice saved (reloaded data).');
     }
   }
 
@@ -1028,11 +1069,31 @@ function AdminDashboardContent() {
               }),
             });
             if (res.ok) {
-              await loadData();
-              const message = tipAmount && tipAmount > 0 
-                ? `Payment status updated. Tip: ₱${tipAmount.toLocaleString('en-PH')}`
-                : 'Payment status updated.';
-              setToast(message);
+              // Update local state instead of reloading all data - much faster
+              try {
+                setBookings(prevBookings => 
+                  prevBookings.map(booking => 
+                    booking.id === bookingId 
+                      ? { 
+                          ...booking, 
+                          paymentStatus, 
+                          paidAmount: paidAmount ?? booking.paidAmount,
+                          tipAmount: tipAmount ?? booking.tipAmount,
+                          status: paymentStatus === 'paid' ? 'confirmed' : booking.status
+                        }
+                      : booking
+                  )
+                );
+                const message = tipAmount && tipAmount > 0 
+                  ? `Payment status updated. Tip: ₱${tipAmount.toLocaleString('en-PH')}`
+                  : 'Payment status updated.';
+                setToast(message);
+              } catch (error) {
+                console.error('Error updating local state:', error);
+                // Fallback to full reload if local update fails
+                await loadData();
+                setToast('Payment status updated (reloaded data).');
+              }
             }
           }}
         />
@@ -1080,15 +1141,36 @@ function AdminDashboardContent() {
           {/* Calendar and Slots side by side */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[2fr,1fr] xl:grid-cols-[2.5fr,1fr]">
             <div>
-              <CalendarGrid
-                referenceDate={currentMonth}
-                slots={selectedNailTechId ? slots.filter(s => s.nailTechId === selectedNailTechId) : slots}
-                blockedDates={blockedDates}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-                onChangeMonth={setCurrentMonth}
-                nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
-              />
+              {loadingCalendar ? (
+                <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-3 sm:p-4 md:p-6 shadow-md shadow-slate-900/10 animate-pulse">
+                  <div className="mb-3 sm:mb-4 md:mb-6 flex items-center justify-between">
+                    <div>
+                      <div className="h-3 w-24 bg-slate-300 rounded mb-2"></div>
+                      <div className="h-6 w-32 bg-slate-300 rounded"></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="h-8 w-16 bg-slate-300 rounded-full"></div>
+                      <div className="h-8 w-16 bg-slate-300 rounded-full"></div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                    {Array.from({ length: 35 }).map((_, i) => (
+                      <div key={i} className="h-16 sm:h-20 bg-slate-200 rounded-lg"></div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <CalendarGrid
+                  referenceDate={currentMonth}
+                  slots={calendarSlots}
+                  bookings={bookings}
+                  blockedDates={blockedDates}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                  onChangeMonth={setCurrentMonth}
+                  nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
+                />
+              )}
             </div>
 
             <section className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
@@ -1164,53 +1246,109 @@ function AdminDashboardContent() {
                     // Sort nail techs by name for consistent color assignment
                     const sortedTechIds = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
                     return (
-                      <SlotCard
+                      <div
                         key={slot.id}
-                        slot={slot}
-                        booking={bookingForSlot || null}
-                        customer={customerForBooking || null}
-                        onEdit={(value) => {
-                          setEditingSlot(value);
-                          setSlotModalOpen(true);
+                        onClick={(e) => {
+                          // Only handle click if not clicking on a button or interactive element
+                          const target = e.target as HTMLElement;
+                          if (target.closest('button') || target.closest('[role="button"]')) {
+                            return;
+                          }
+                          // When slot is clicked, select the associated booking if it exists
+                          if (bookingForSlot) {
+                            setSelectedBookingId(bookingForSlot.id);
+                            setSelectedSlotId(null);
+                          } else {
+                            // If no booking, show available slot info
+                            setSelectedBookingId(null);
+                            setSelectedSlotId(slot.id);
+                          }
                         }}
-                        onDelete={handleDeleteSlot}
-                        onView={(booking) => setResponseModalBooking(booking)}
-                        onMakeQuotation={handleMakeQuotation}
-                        nailTechs={nailTechs}
-                        selectedNailTechId={selectedNailTechId}
-                        allNailTechIds={sortedTechIds}
-                      />
+                        className="cursor-pointer"
+                      >
+                        <SlotCard
+                          slot={slot}
+                          booking={bookingForSlot || null}
+                          customer={customerForBooking || null}
+                          onEdit={(value) => {
+                            setEditingSlot(value);
+                            setSlotModalOpen(true);
+                          }}
+                          onDelete={handleDeleteSlot}
+                          onView={(booking) => setResponseModalBooking(booking)}
+                          onMakeQuotation={handleMakeQuotation}
+                          onSlotClick={(clickedSlot) => {
+                            // When available slot is clicked, show available slot info
+                            setSelectedBookingId(null);
+                            setSelectedSlotId(clickedSlot.id);
+                          }}
+                          nailTechs={nailTechs}
+                          selectedNailTechId={selectedNailTechId}
+                          allNailTechIds={sortedTechIds}
+                        />
+                      </div>
                     );
                   })}
               </div>
             </section>
           </div>
 
-          {/* Bookings status overview below */}
-          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr,1fr]">
-            <div className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
-              <BookingList
-                bookings={filteredBookingsForOverview}
-                onSelect={(booking) => setSelectedBookingId(booking.id)}
-                selectedId={selectedBooking?.id ?? null}
-                customers={customers}
+          {/* Booking detail panel - shown when slot is clicked */}
+          {selectedBooking && (
+            <div className="mt-4 sm:mt-6">
+              <BookingDetailPanel
+                booking={selectedBooking}
+                slotLabel={
+                  selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
+                }
+                pairedSlotLabel={
+                  selectedBooking?.linkedSlots && selectedBooking.linkedSlots.length > 0
+                    ? formatTime12Hour(selectedBooking.linkedSlots[selectedBooking.linkedSlots.length - 1].time)
+                    : selectedBooking?.pairedSlot
+                      ? formatTime12Hour(selectedBooking.pairedSlot.time)
+                      : undefined
+                }
+                nailTechName={selectedBooking?.slot?.nailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedBooking.slot.nailTechId)?.name || 'Unknown'}` : undefined}
+                onConfirm={handleConfirmBooking}
+                onCancel={handleCancelBooking}
+                onView={(booking) => setResponseModalBooking(booking)}
               />
             </div>
-            <BookingDetailPanel
-              booking={selectedBooking ?? null}
-              slotLabel={
-                selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
-              }
-              pairedSlotLabel={
-                selectedBooking?.linkedSlots && selectedBooking.linkedSlots.length > 0
-                  ? formatTime12Hour(selectedBooking.linkedSlots[selectedBooking.linkedSlots.length - 1].time)
-                  : selectedBooking?.pairedSlot
-                    ? formatTime12Hour(selectedBooking.pairedSlot.time)
-                    : undefined
-              }
-              onConfirm={handleConfirmBooking}
-            />
-          </div>
+          )}
+          {/* Show available slot message when clicking an available slot */}
+          {selectedSlotId && !selectedBooking && (() => {
+            const selectedSlot = slots.find(s => s.id === selectedSlotId);
+            if (!selectedSlot) return null;
+            return (
+              <div className="mt-4 sm:mt-6">
+                <div className="rounded-2xl sm:rounded-3xl border-2 border-emerald-300 bg-emerald-50 p-4 sm:p-6 shadow-md shadow-slate-900/5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg sm:text-xl font-semibold text-emerald-900 mb-1">
+                        Slot Available
+                      </h3>
+                      <p className="text-sm sm:text-base text-emerald-700">
+                        {format(new Date(selectedSlot.date), 'EEEE, MMMM d, yyyy')} · {formatTime12Hour(selectedSlot.time)}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-semibold bg-emerald-500 text-white border border-emerald-600">
+                      Available
+                    </span>
+                  </div>
+                  <div className="border-t border-emerald-200 pt-4 mt-4">
+                    <p className="text-sm sm:text-base text-emerald-800 font-medium">
+                      This slot is available and not booked yet.
+                    </p>
+                    {selectedSlot.notes && (
+                      <p className="text-xs sm:text-sm text-emerald-700 mt-2">
+                        <strong>Notes:</strong> {selectedSlot.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </>
@@ -1407,6 +1545,46 @@ function AdminDashboardContent() {
               selectedNailTechId={selectedNailTechId}
               onNailTechChange={(id) => setSelectedNailTechId(id)}
               onMakeQuotation={handleMakeQuotation}
+              onUpdatePayment={async (bookingId, paymentStatus, paidAmount, tipAmount, paidPaymentMethod) => {
+                const res = await fetch(`/api/bookings/${bookingId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'update_payment',
+                    paymentStatus,
+                    paidAmount,
+                    tipAmount,
+                    paidPaymentMethod,
+                  }),
+                });
+                if (res.ok) {
+                  // Update local state instead of reloading all data - much faster
+                  try {
+                    setBookings(prevBookings => 
+                      prevBookings.map(booking => 
+                        booking.id === bookingId 
+                          ? { 
+                              ...booking, 
+                              paymentStatus, 
+                              paidAmount: paidAmount ?? booking.paidAmount,
+                              tipAmount: tipAmount ?? booking.tipAmount,
+                              status: paymentStatus === 'paid' ? 'confirmed' : booking.status
+                            }
+                          : booking
+                      )
+                    );
+                    const message = tipAmount && tipAmount > 0 
+                      ? `Payment status updated. Tip: ₱${tipAmount.toLocaleString('en-PH')}`
+                      : 'Payment status updated.';
+                    setToast(message);
+                  } catch (error) {
+                    console.error('Error updating local state:', error);
+                    // Fallback to full reload if local update fails
+                    await loadData();
+                    setToast('Payment status updated (reloaded data).');
+                  }
+                }
+              }}
             />
           ) : activeSection === 'customers' ? (
             <div className="space-y-4 sm:space-y-6">
@@ -1581,6 +1759,28 @@ function AdminDashboardContent() {
         booking={responseModalBooking}
         onClose={() => setResponseModalBooking(null)}
       />
+
+      {cancelBookingModalOpen && cancellingBookingId && (() => {
+        const bookingToCancel = bookings.find(b => b.id === cancellingBookingId);
+        const slotToCancel = bookingToCancel ? slots.find(s => s.id === bookingToCancel.slotId) : null;
+        const customerToCancel = bookingToCancel ? customers.find(c => c.id === bookingToCancel.customerId) : null;
+        
+        return (
+          <CancelBookingModal
+            open={cancelBookingModalOpen}
+            booking={bookingToCancel || null}
+            slot={slotToCancel || null}
+            customer={customerToCancel || null}
+            customers={customers}
+            onClose={() => {
+              setCancelBookingModalOpen(false);
+              setCancellingBookingId(null);
+            }}
+            onConfirm={confirmCancelBooking}
+            isCancelling={isCancellingBooking}
+          />
+        );
+      })()}
     </div>
   );
 }

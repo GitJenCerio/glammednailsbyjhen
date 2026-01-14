@@ -15,6 +15,7 @@ type FinanceViewProps = {
   selectedNailTechId?: string | null;
   onNailTechChange?: (nailTechId: string | null) => void;
   onMakeQuotation?: (bookingId: string) => void;
+  onUpdatePayment?: (bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number, paidPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
 };
 
 type MonthFilter = 'all' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
@@ -24,6 +25,7 @@ const paymentStatusLabels: Record<PaymentStatus, string> = {
   partial: 'Partial',
   paid: 'Paid',
   refunded: 'Refunded',
+  forfeited: 'DP FORFEITED',
 };
 
 const paymentStatusColors: Record<PaymentStatus, string> = {
@@ -31,10 +33,10 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
   partial: 'bg-orange-100 text-orange-800 border-orange-200',
   paid: 'bg-green-100 text-green-800 border-green-200',
   refunded: 'bg-gray-100 text-gray-800 border-gray-200',
+  forfeited: 'bg-amber-100 text-amber-800 border-amber-200',
 };
 
-export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onMakeQuotation }: FinanceViewProps) {
-  const [viewMode, setViewMode] = useState<'revenue' | 'payments'>('revenue'); // 'revenue' = by service date, 'payments' = by payment date
+export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onMakeQuotation, onUpdatePayment }: FinanceViewProps) {
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
@@ -62,6 +64,15 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     onNailTechChange?.(nailTechId);
   };
 
+  // Create a Map for O(1) slot lookups instead of O(n) find operations
+  const slotsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    slots.forEach(slot => {
+      map.set(slot.id, slot);
+    });
+    return map;
+  }, [slots]);
+
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
     let filteredBookings = bookings;
@@ -72,21 +83,21 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     }
     
     filteredBookings.forEach((booking) => {
-      const slot = slots.find((candidate) => candidate.id === booking.slotId);
+      const slot = slotsMap.get(booking.slotId);
       if (!slot) return;
       
       // Also filter by selected nail tech for slots (double-check)
       if (localSelectedNailTechId && slot.nailTechId !== localSelectedNailTechId) return;
       
       const linkedSlots = (booking.linkedSlotIds ?? [])
-        .map((linkedId) => slots.find((candidate) => candidate.id === linkedId))
+        .map((linkedId) => slotsMap.get(linkedId))
         .filter((value): value is any => Boolean(value))
         .filter((linkedSlot) => !localSelectedNailTechId || linkedSlot.nailTechId === localSelectedNailTechId);
       const pairedSlot = linkedSlots[0];
       list.push({ ...booking, slot, pairedSlot, linkedSlots });
     });
     return list;
-  }, [bookings, slots, localSelectedNailTechId]);
+  }, [bookings, slotsMap, localSelectedNailTechId]);
 
   const getPaymentMethodBadge = (method?: 'PNB' | 'CASH' | 'GCASH') => {
     if (!method) return null;
@@ -108,7 +119,17 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
   };
 
   // Helper to get effective payment status: if paid but no invoice, show as partial
+  // For cancelled bookings with payments, show as forfeited
   const getEffectivePaymentStatus = (booking: Booking): PaymentStatus => {
+    // Check if booking is cancelled and has payments (deposit or paid amount)
+    if (booking.status === 'cancelled') {
+      const hasPayment = (booking.depositAmount && booking.depositAmount > 0) || (booking.paidAmount && booking.paidAmount > 0);
+      if (hasPayment) {
+        return 'forfeited';
+      }
+      return 'unpaid'; // Cancelled with no payment
+    }
+    
     const hasPayment = (booking.depositAmount && booking.depositAmount > 0) || (booking.paidAmount && booking.paidAmount > 0);
     if (!booking.invoice && hasPayment) {
       return 'partial';
@@ -211,21 +232,10 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     return booking.bookingId;
   };
 
-  // Helper function to get the relevant date based on view mode
+  // Helper function to get the relevant date (always service date for revenue recognition)
   const getRelevantDate = useCallback((booking: BookingWithSlot): Date => {
-    if (viewMode === 'revenue') {
-      // Revenue recognition: Use service date (slot.date)
-      return parseISO(booking.slot.date);
-    } else {
-      // Payment tracking: Use the earliest payment date available
-      // Priority: depositDate > paidDate > tipDate > invoice.createdAt > updatedAt
-      if (booking.depositDate) return new Date(booking.depositDate);
-      if (booking.paidDate) return new Date(booking.paidDate);
-      if (booking.tipDate) return new Date(booking.tipDate);
-      if (booking.invoice?.createdAt) return new Date(booking.invoice.createdAt);
-      return new Date(booking.updatedAt);
-    }
-  }, [viewMode]);
+    return parseISO(booking.slot.date);
+  }, []);
 
   const filteredBookings = useMemo(() => {
     let filtered = bookingsWithSlots.filter((booking) => {
@@ -235,10 +245,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       // Include bookings with invoices OR bookings with deposits/paid amounts (partial payments) OR confirmed bookings (even with 0 payment)
       if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed') return false;
       
-      // For payment tracking view, only show bookings that have payments OR confirmed bookings
-      if (viewMode === 'payments') {
-        if (!booking.depositDate && !booking.paidDate && !booking.tipDate && booking.status !== 'confirmed') return false;
-      }
       
       return true;
     });
@@ -316,190 +322,101 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       const dateB = getRelevantDate(b).getTime();
       return dateA - dateB;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, viewMode, getRelevantDate]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, getRelevantDate]);
 
   // Get available years from bookings data
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     bookingsWithSlots.forEach((booking) => {
-      // Use the same logic as getRelevantDate but inline to avoid dependency issues
-      let bookingDate: Date;
-      if (viewMode === 'revenue') {
-        bookingDate = parseISO(booking.slot.date);
-      } else {
-        if (booking.depositDate) bookingDate = new Date(booking.depositDate);
-        else if (booking.paidDate) bookingDate = new Date(booking.paidDate);
-        else if (booking.tipDate) bookingDate = new Date(booking.tipDate);
-        else if (booking.invoice?.createdAt) bookingDate = new Date(booking.invoice.createdAt);
-        else bookingDate = new Date(booking.updatedAt);
-      }
+      // Always use service date
+      const bookingDate = parseISO(booking.slot.date);
       years.add(bookingDate.getFullYear());
     });
     return Array.from(years).sort((a, b) => b - a); // Sort descending (newest first)
-  }, [bookingsWithSlots, viewMode]);
+  }, [bookingsWithSlots]);
 
   const totals = useMemo(() => {
-    if (viewMode === 'revenue') {
-      // REVENUE RECOGNITION MODE: Count revenue by service date (when service happens)
-      // This means a deposit paid today for next month's service counts in next month
-      
-      // Unpaid: Remaining balance for bookings with invoice
-      const unpaid = filteredBookings
-        .filter((b) => {
-          if (!b.invoice) return false;
-          const total = b.invoice.total || 0;
-          const deposit = b.depositAmount || 0;
-          const paid = b.paidAmount || 0;
-          const balance = total - deposit - paid;
-          return balance > 0;
-        })
-        .reduce((sum, b) => {
-          const total = b.invoice?.total || 0;
-          const deposit = b.depositAmount || 0;
-          const paid = b.paidAmount || 0;
-          const balance = total - deposit - paid;
-          return sum + balance;
-        }, 0);
-      
-      // Partial: Deposit amount when there's a deposit but invoice isn't fully paid
-      const partial = filteredBookings
-        .filter((b) => {
-          const deposit = b.depositAmount || 0;
-          if (deposit === 0) return false;
-          if (!b.invoice) return true; // Deposit but no invoice yet
-          const total = b.invoice.total || 0;
-          const paid = b.paidAmount || 0;
-          const balance = total - deposit - paid;
-          return balance > 0;
-        })
-        .reduce((sum, b) => {
-          const deposit = b.depositAmount || 0;
-          return sum + deposit;
-        }, 0);
-      
-      // Paid: Fully paid invoices (counted by service date)
-      const paid = filteredBookings
-        .filter((b) => b.paymentStatus === 'paid')
-        .reduce((sum, b) => {
-          const invoiceTotal = b.invoice?.total || 0;
-          const tip = b.tipAmount || 0;
-          return sum + invoiceTotal + tip;
-        }, 0);
-      
-      // Total Revenue = All amounts for services in this period (by service date)
-      const total = filteredBookings.reduce((sum, b) => {
+    // REVENUE RECOGNITION: Count revenue by service date (when service happens)
+    // This means a deposit paid today for next month's service counts in next month
+    
+    // Unpaid: Remaining balance for bookings with invoice
+    const unpaid = filteredBookings
+      .filter((b) => {
+        if (!b.invoice) return false;
+        const total = b.invoice.total || 0;
         const deposit = b.depositAmount || 0;
         const paid = b.paidAmount || 0;
+        const balance = total - deposit - paid;
+        return balance > 0;
+      })
+      .reduce((sum, b) => {
+        const total = b.invoice?.total || 0;
+        const deposit = b.depositAmount || 0;
+        const paid = b.paidAmount || 0;
+        const balance = total - deposit - paid;
+        return sum + balance;
+      }, 0);
+    
+    // Partial: Deposit amount when there's a deposit but invoice isn't fully paid
+    const partial = filteredBookings
+      .filter((b) => {
+        const deposit = b.depositAmount || 0;
+        if (deposit === 0) return false;
+        if (!b.invoice) return true; // Deposit but no invoice yet
+        const total = b.invoice.total || 0;
+        const paid = b.paidAmount || 0;
+        const balance = total - deposit - paid;
+        return balance > 0;
+      })
+      .reduce((sum, b) => {
+        const deposit = b.depositAmount || 0;
+        return sum + deposit;
+      }, 0);
+    
+    // Paid: Fully paid invoices (counted by service date)
+    const paid = filteredBookings
+      .filter((b) => b.paymentStatus === 'paid')
+      .reduce((sum, b) => {
+        const invoiceTotal = b.invoice?.total || 0;
         const tip = b.tipAmount || 0;
-        return sum + deposit + paid + tip;
+        return sum + invoiceTotal + tip;
       }, 0);
-      
-      const tips = filteredBookings.reduce((sum, b) => sum + (b.tipAmount || 0), 0);
+    
+    // Total Revenue = All amounts for services in this period (by service date)
+    const total = filteredBookings.reduce((sum, b) => {
+      const deposit = b.depositAmount || 0;
+      const paid = b.paidAmount || 0;
+      const tip = b.tipAmount || 0;
+      return sum + deposit + paid + tip;
+    }, 0);
+    
+    const tips = filteredBookings.reduce((sum, b) => sum + (b.tipAmount || 0), 0);
 
-      // Calculate commission based on nail tech's commission rate
-      const nailTechCommissionTotal = filteredBookings.reduce((sum, b) => {
-        if (!b.invoice?.total) return sum;
-        
-        // Find the nail tech for this booking
-        const tech = nailTechs.find(t => t.id === b.nailTechId);
-        if (!tech || !tech.commissionRate) return sum;
-        
-        // Calculate commission: invoice total * commission rate
-        return sum + b.invoice.total * tech.commissionRate;
-      }, 0);
+    // Calculate commission based on nail tech's commission rate
+    const nailTechCommissionTotal = filteredBookings.reduce((sum, b) => {
+      if (!b.invoice?.total) return sum;
+      
+      // Find the nail tech for this booking
+      const tech = nailTechs.find(t => t.id === b.nailTechId);
+      if (!tech || !tech.commissionRate) return sum;
+      
+      // Calculate commission: invoice total * commission rate
+      return sum + b.invoice.total * tech.commissionRate;
+    }, 0);
 
-      return { unpaid, partial, paid, total, tips, nailTechCommissionTotal };
-    } else {
-      // PAYMENT TRACKING MODE: Count payments by when they were actually received
-      // This shows cash flow - when money actually came in
-      
-      // For payment tracking, we need to count payments that occurred in the filtered period
-      // Unpaid: Bookings with remaining balance (but we show when balance will be due)
-      const unpaid = filteredBookings
-        .filter((b) => {
-          if (!b.invoice) return false;
-          const total = b.invoice.total || 0;
-          const deposit = b.depositAmount || 0;
-          const paid = b.paidAmount || 0;
-          const balance = total - deposit - paid;
-          return balance > 0;
-        })
-        .reduce((sum, b) => {
-          const total = b.invoice?.total || 0;
-          const deposit = b.depositAmount || 0;
-          const paid = b.paidAmount || 0;
-          const balance = total - deposit - paid;
-          return sum + balance;
-        }, 0);
-      
-      // Partial: Deposits received in this period
-      const partial = filteredBookings
-        .filter((b) => {
-          const deposit = b.depositAmount || 0;
-          if (deposit === 0) return false;
-          // Only count if deposit was paid in the filtered period
-          if (b.depositDate) {
-            const depositDate = new Date(b.depositDate);
-            // Check if it matches the current filters (this is handled by filteredBookings)
-            return true;
-          }
-          return false;
-        })
-        .reduce((sum, b) => {
-          const deposit = b.depositAmount || 0;
-          return sum + deposit;
-        }, 0);
-      
-      // Paid: Full payments received in this period
-      const paid = filteredBookings
-        .filter((b) => {
-          // Only count if payment was made in the filtered period
-          return b.paidDate !== undefined || b.depositDate !== undefined;
-        })
-        .reduce((sum, b) => {
-          if (b.paymentStatus === 'paid') {
-            const invoiceTotal = b.invoice?.total || 0;
-            const tip = b.tipAmount || 0;
-            return sum + invoiceTotal + tip;
-          }
-          return sum;
-        }, 0);
-      
-      // Total Payments = All payments received in this period (by payment date)
-      const total = filteredBookings.reduce((sum, b) => {
-        // Count deposits paid in this period
-        const deposit = (b.depositDate && b.depositAmount) ? b.depositAmount : 0;
-        // Count payments made in this period
-        const paid = (b.paidDate && b.paidAmount) ? b.paidAmount : 0;
-        // Count tips received in this period
-        const tip = (b.tipDate && b.tipAmount) ? b.tipAmount : 0;
-        return sum + deposit + paid + tip;
-      }, 0);
-      
-      const tips = filteredBookings
-        .filter((b) => b.tipDate !== undefined)
-        .reduce((sum, b) => sum + (b.tipAmount || 0), 0);
-
-      // Calculate commission based on nail tech's commission rate (only for paid bookings)
-      const nailTechCommissionTotal = filteredBookings.reduce((sum, b) => {
-        if (!b.invoice?.total) return sum;
-        
-        // Only count commission if payment was received
-        if (!b.paidDate && !b.depositDate) return sum;
-        
-        // Find the nail tech for this booking
-        const tech = nailTechs.find(t => t.id === b.nailTechId);
-        if (!tech || !tech.commissionRate) return sum;
-        
-        // Calculate commission: invoice total * commission rate
-        return sum + b.invoice.total * tech.commissionRate;
-      }, 0);
-
-      return { unpaid, partial, paid, total, tips, nailTechCommissionTotal };
-    }
-  }, [filteredBookings, viewMode, nailTechs]);
+    return { unpaid, partial, paid, total, tips, nailTechCommissionTotal };
+  }, [filteredBookings, nailTechs]);
 
   const handleUpdatePayment = async (bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number, paidPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => {
+    setOpenDropdownId(null);
+    
+    // Use parent's onUpdatePayment callback if provided (optimized, updates local state)
+    if (onUpdatePayment) {
+      await onUpdatePayment(bookingId, paymentStatus, paidAmount, tipAmount, paidPaymentMethod);
+      return;
+    }
+    
+    // Fallback: direct API call (still faster than page reload)
     const res = await fetch(`/api/bookings/${bookingId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -515,8 +432,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       alert('Failed to update payment status');
       return;
     }
-    setOpenDropdownId(null);
-    window.location.reload();
+    // Note: Without onUpdatePayment callback, the parent will need to reload data
+    // But at least we're not doing a full page reload
   };
 
   // Close dropdown when clicking outside and calculate position
@@ -538,7 +455,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
         const viewportHeight = window.innerHeight;
         const spaceBelow = viewportHeight - rect.bottom;
         const spaceAbove = rect.top;
-        const dropdownHeight = 120; // Approximate dropdown height
+        const dropdownHeight = 100; // Approximate dropdown height
         
         // If not enough space below but enough space above, open upward
         if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
@@ -615,37 +532,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
   return (
     <div className="space-y-4 sm:space-y-6">
 
-      {/* View Mode Toggle */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs sm:text-sm text-slate-600 font-medium">View:</span>
-          <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              onClick={() => setViewMode('revenue')}
-              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-                viewMode === 'revenue' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-              title="Revenue by service date - counts revenue when service happens"
-            >
-              Revenue Recognition
-            </button>
-            <button
-              onClick={() => setViewMode('payments')}
-              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ${
-                viewMode === 'payments' ? 'bg-black text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-              title="Payments by date received - shows when money actually came in"
-            >
-              Payment Tracking
-            </button>
-          </div>
-        </div>
-        <div className="text-xs text-slate-500">
-          {viewMode === 'revenue' 
-            ? 'Revenue counted by service date' 
-            : 'Payments counted by date received'}
-        </div>
-      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
@@ -753,6 +639,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                 <option value="partial">Partial</option>
                 <option value="paid">Paid</option>
                 <option value="refunded">Refunded</option>
+                <option value="forfeited">DP FORFEITED</option>
               </select>
             </div>
           )}
@@ -1064,19 +951,13 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       </button>
                     </td>
                         <td className="px-4 xl:px-6 py-3">
-                          <button
-                            onClick={() => {
-                              setSelectedBookingForPayment(booking);
-                              setPaymentModalOpen(true);
-                            }}
-                            className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
+                          <span
+                            className={`inline-flex items-center text-xs sm:text-sm font-semibold ${
                               balance > 0 ? 'text-red-700' : 'text-emerald-700'
                             }`}
-                            title="Click to update payment"
                           >
                             ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                            <IoCreateOutline className="w-3.5 h-3.5" />
-                          </button>
+                          </span>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
@@ -1291,19 +1172,13 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       </button>
                     </td>
                         <td className="px-4 xl:px-6 py-3">
-                          <button
-                            onClick={() => {
-                              setSelectedBookingForPayment(booking);
-                              setPaymentModalOpen(true);
-                            }}
-                            className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:underline cursor-pointer ${
+                          <span
+                            className={`inline-flex items-center text-xs sm:text-sm font-semibold ${
                               balance > 0 ? 'text-red-700' : 'text-emerald-700'
                             }`}
-                            title="Click to update payment"
                           >
                             ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                            <IoCreateOutline className="w-3.5 h-3.5" />
-                          </button>
+                          </span>
                         </td>
                         <td className="px-4 xl:px-6 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
@@ -1379,28 +1254,12 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               </div>
               <div className="space-y-2 text-xs sm:text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">
-                    {viewMode === 'revenue' ? 'Service Date:' : 'Payment Date:'}
-                  </span>
+                  <span className="text-slate-500">Service Date:</span>
                   <span className="font-medium text-slate-900 text-right">
-                    {viewMode === 'revenue' 
-                      ? format(parseISO(booking.slot.date), 'MMM d, yyyy')
-                      : booking.depositDate
-                        ? format(parseISO(booking.depositDate), 'MMM d, yyyy')
-                        : booking.paidDate
-                          ? format(parseISO(booking.paidDate), 'MMM d, yyyy')
-                          : booking.invoice?.createdAt
-                            ? format(parseISO(booking.invoice.createdAt), 'MMM d, yyyy')
-                            : 'N/A'}
+                    {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
                   </span>
                 </div>
-                {viewMode === 'payments' && booking.depositDate && (
-                  <div className="flex justify-between text-xs text-slate-400">
-                    <span>Service Date:</span>
-                    <span>{format(parseISO(booking.slot.date), 'MMM d, yyyy')}</span>
-                  </div>
-                )}
-                {viewMode === 'revenue' && booking.depositDate && (
+                {booking.depositDate && (
                   <div className="flex justify-between text-xs text-slate-400">
                     <span>DP Paid:</span>
                     <span>{format(parseISO(booking.depositDate), 'MMM d, yyyy')}</span>
@@ -1517,7 +1376,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   Customer
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  {viewMode === 'revenue' ? 'Service Date' : 'Payment Date'}
+                  Service Date
                 </th>
                 <th className="px-4 xl:px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Total Amount
@@ -1556,35 +1415,16 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       <span className="text-xs xl:text-sm text-slate-900">{getCustomerName(booking)}</span>
                     </td>
                     <td className="px-4 xl:px-6 py-3">
-                      {viewMode === 'revenue' ? (
-                        <div>
-                          <span className="text-xs xl:text-sm text-slate-600">
-                            {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
-                          </span>
-                          {booking.depositDate && (
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              DP: {format(parseISO(booking.depositDate), 'MMM d')}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          {booking.depositDate ? (
-                            <span className="text-xs xl:text-sm text-slate-600">
-                              {format(parseISO(booking.depositDate), 'MMM d, yyyy')}
-                            </span>
-                          ) : booking.paidDate ? (
-                            <span className="text-xs xl:text-sm text-slate-600">
-                              {format(parseISO(booking.paidDate), 'MMM d, yyyy')}
-                            </span>
-                          ) : (
-                            <span className="text-xs xl:text-sm text-slate-400">N/A</span>
-                          )}
+                      <div>
+                        <span className="text-xs xl:text-sm text-slate-600">
+                          {format(parseISO(booking.slot.date), 'MMM d, yyyy')}
+                        </span>
+                        {booking.depositDate && (
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Service: {format(parseISO(booking.slot.date), 'MMM d')}
+                            DP: {format(parseISO(booking.depositDate), 'MMM d')}
                           </p>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 xl:px-6 py-3">
                       <span className="text-xs xl:text-sm font-semibold text-slate-900">
@@ -1635,19 +1475,13 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         const balance = total - totalPaid;
                         return (
                           <div>
-                            <button
-                              onClick={() => {
-                                setSelectedBookingForPayment(booking);
-                                setPaymentModalOpen(true);
-                              }}
-                              className={`inline-flex items-center gap-1.5 text-xs xl:text-sm font-bold hover:underline cursor-pointer ${
+                            <span
+                              className={`inline-flex items-center text-xs xl:text-sm font-bold ${
                                 balance > 0 ? 'text-red-700' : 'text-emerald-700'
                               }`}
-                              title="Click to update payment"
                             >
                               ₱{Math.max(0, balance).toLocaleString('en-PH')}
-                              <IoCreateOutline className="w-3.5 h-3.5" />
-                            </button>
+                            </span>
                             {booking.paymentStatus === 'paid' && booking.tipAmount && booking.tipAmount > 0 && (
                               <p className="text-xs text-emerald-700 mt-1 font-semibold">
                                 Tip: ₱{booking.tipAmount.toLocaleString('en-PH')}
@@ -1692,42 +1526,39 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         </button>
                         {openDropdownId === booking.id && (
                           <div 
-                            className="fixed w-40 rounded-xl border border-slate-200 bg-white shadow-lg z-[100] overflow-hidden"
+                            className="fixed w-48 rounded-xl border border-slate-200 bg-white shadow-lg z-[100] overflow-hidden"
                             style={{
                               right: typeof window !== 'undefined' ? `${Math.max(20, window.innerWidth - (dropdownRefs.current[booking.id]?.getBoundingClientRect().right || 0) + 20)}px` : '20px',
                               top: dropdownPosition[booking.id] === 'up' 
-                                ? `${Math.max(20, (dropdownRefs.current[booking.id]?.getBoundingClientRect().top || 0) - 130)}px`
-                                : `${Math.min((typeof window !== 'undefined' ? window.innerHeight : 1000) - 150, (dropdownRefs.current[booking.id]?.getBoundingClientRect().bottom || 0) + 4)}px`,
+                                ? `${Math.max(20, (dropdownRefs.current[booking.id]?.getBoundingClientRect().top || 0) - 100)}px`
+                                : `${Math.min((typeof window !== 'undefined' ? window.innerHeight : 1000) - 120, (dropdownRefs.current[booking.id]?.getBoundingClientRect().bottom || 0) + 4)}px`,
                             }}
                           >
-                            {booking.paymentStatus !== 'paid' && (
-                              <>
-                                <button
-                                  onClick={() => handleUpdatePayment(booking.id, 'partial', booking.invoice?.total ? booking.invoice.total * 0.5 : 0)}
-                                  className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-orange-700 hover:bg-orange-50 transition-colors"
-                                >
-                                  Mark as Partial
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSelectedBookingForPayment(booking);
-                                    setPaymentModalOpen(true);
-                                    setOpenDropdownId(null);
-                                  }}
-                                  className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
-                                >
-                                  Mark as Paid
-                              </button>
-                            </>
-                          )}
-                            {booking.invoice && booking.paymentStatus === 'paid' ? (
+                            {/* Quote/Requote Action */}
+                            {onMakeQuotation && (
                               <button
-                                onClick={() => handleUpdatePayment(booking.id, 'refunded')}
+                                onClick={() => {
+                                  onMakeQuotation(booking.id);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors border-b border-slate-100"
+                              >
+                                {booking.invoice ? 'Requote' : 'Quote'}
+                              </button>
+                            )}
+                            
+                            {/* Refund Action */}
+                            {booking.invoice && booking.paymentStatus === 'paid' && (
+                              <button
+                                onClick={() => {
+                                  handleUpdatePayment(booking.id, 'refunded');
+                                  setOpenDropdownId(null);
+                                }}
                                 className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
                               >
                                 Refund
                               </button>
-                            ) : null}
+                            )}
                           </div>
                         )}
                       </div>

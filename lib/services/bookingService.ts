@@ -1145,20 +1145,88 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
   // Email functionality disabled
 }
 
-export async function updateBookingStatus(bookingId: string, status: BookingStatus) {
+export async function updateBookingStatus(bookingId: string, status: BookingStatus, releaseSlot: boolean = true) {
   // Get booking and related data before updating (for email notifications)
   const bookingSnap = await bookingsCollection.doc(bookingId).get();
   const booking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
   const slot = booking ? await getSlotById(booking.slotId) : null;
   const customer = booking ? await getCustomerById(booking.customerId) : null;
 
-  await bookingsCollection.doc(bookingId).set(
-    {
-      status,
-      updatedAt: Timestamp.now().toDate().toISOString(),
-    },
-    { merge: true },
-  );
+  const updateData: any = {
+    status,
+    updatedAt: Timestamp.now().toDate().toISOString(),
+  };
+
+  // When cancelling a booking with a quote, remove the quote and set total to paid deposit (forfeited)
+  if (status === 'cancelled' && booking) {
+    const depositAmount = booking.depositAmount || 0;
+    
+    // Remove the invoice/quote
+    updateData.invoice = null;
+    
+    // If there's a deposit, create a new invoice with total = deposit amount (forfeited)
+    if (depositAmount > 0) {
+      const now = Timestamp.now().toDate().toISOString();
+      updateData.invoice = {
+        items: [
+          {
+            id: 'forfeited-deposit',
+            description: 'Forfeited Deposit (Cancelled Booking)',
+            unitPrice: depositAmount,
+            quantity: 1,
+          },
+        ],
+        total: depositAmount,
+        notes: 'Deposit forfeited due to cancellation',
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
+
+    // Release slots if requested
+    if (releaseSlot) {
+      await adminDb.runTransaction(async (transaction) => {
+        const bookingRef = bookingsCollection.doc(bookingId);
+        const slotRef = slotsCollection.doc(booking.slotId);
+        
+        // Get linked slot IDs
+        const linkedSlotIds = booking.linkedSlotIds || [];
+        const linkedRefs = linkedSlotIds.map((id) => slotsCollection.doc(id));
+        
+        // Fetch all slot docs in one call
+        const allSlotSnaps = await transaction.getAll(slotRef, ...linkedRefs);
+        const slotSnap = allSlotSnaps[0];
+        const linkedSnaps = allSlotSnaps.slice(1);
+        
+        // Release the main slot
+        if (slotSnap.exists) {
+          const slotStatus = slotSnap.data()?.status;
+          if (slotStatus && slotStatus !== 'available') {
+            transaction.update(slotRef, {
+              status: 'available',
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            });
+          }
+        }
+        
+        // Release linked slots
+        linkedRefs.forEach((ref, index) => {
+          const snap = linkedSnaps[index];
+          if (snap?.exists) {
+            const slotStatus = snap.data()?.status;
+            if (slotStatus && slotStatus !== 'available') {
+              transaction.update(ref, {
+                status: 'available',
+                updatedAt: Timestamp.now().toDate().toISOString(),
+              });
+            }
+          }
+        });
+      });
+    }
+  }
+
+  await bookingsCollection.doc(bookingId).set(updateData, { merge: true });
 
   // Email functionality disabled
 }
@@ -1330,12 +1398,12 @@ export async function updateServiceType(bookingId: string, newServiceType: Servi
 }
 
 export async function saveInvoice(bookingId: string, invoice: Invoice) {
-  // Get current booking to preserve status if already confirmed
+  // Optimize: Use update() instead of set() with merge for better performance
+  // Also, we'll read the booking in parallel with preparing the update data
   const bookingRef = bookingsCollection.doc(bookingId);
-  const bookingSnap = await bookingRef.get();
-  const currentBooking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
   
-  const updateData: any = {
+  // Prepare base update data first (doesn't depend on current booking)
+  const baseUpdateData: any = {
     invoice: {
       ...invoice,
       createdAt: invoice.createdAt || Timestamp.now().toDate().toISOString(),
@@ -1344,8 +1412,12 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
     updatedAt: Timestamp.now().toDate().toISOString(),
   };
   
-  const wasPendingPayment = currentBooking?.status === 'pending_payment';
-  const isNowPendingPayment = currentBooking?.status !== 'confirmed';
+  // Get current booking to preserve status if already confirmed
+  // This read is necessary for payment status logic, but we optimize by using update() instead of set()
+  const bookingSnap = await bookingRef.get();
+  const currentBooking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
+  
+  const updateData = { ...baseUpdateData };
   
   // Separate booking status and payment status
   // Booking status: pending_form, pending_payment, confirmed, cancelled
@@ -1385,7 +1457,8 @@ export async function saveInvoice(bookingId: string, invoice: Invoice) {
   }
   // Otherwise, preserve existing paidAmount (it was set through proper payment tracking)
   
-  await bookingRef.set(updateData, { merge: true });
+  // Use update() instead of set() with merge - this is faster and more efficient
+  await bookingRef.update(updateData);
 
   // Email functionality disabled
 }
@@ -1423,7 +1496,8 @@ export async function updatePaymentStatus(bookingId: string, paymentStatus: Paym
     updateData.tipDate = now;
   }
   
-  await bookingsCollection.doc(bookingId).set(updateData, { merge: true });
+  // Use update() instead of set() with merge - this is faster and more efficient
+  await bookingsCollection.doc(bookingId).update(updateData);
 }
 
 export async function updateDepositAmount(bookingId: string, depositAmount: number, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
@@ -1788,22 +1862,16 @@ export async function splitRescheduleBooking(
 /**
  * Get bookings eligible for manual release
  * Returns bookings that are:
- * - 2+ hours old from creation time
  * - Still in 'pending_form' status
  * - No form has been synced (no formResponseId)
  */
 export async function getEligibleBookingsForRelease() {
-  const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000; // 2 hours in milliseconds
   const snapshot = await bookingsCollection.where('status', '==', 'pending_form').get();
 
   const eligibleBookings: Booking[] = [];
 
   for (const docSnap of snapshot.docs) {
     const data = docSnap.data();
-    if (!data.createdAt) continue;
-    
-    const createdAt = new Date(data.createdAt).getTime();
-    if (Number.isNaN(createdAt) || createdAt >= twoHoursAgo) continue;
     
     // Only include bookings that haven't been synced with a form yet
     // If formResponseId exists, it means a form was received and synced
@@ -1846,20 +1914,19 @@ export async function manuallyReleaseBookings(bookingIds: string[]) {
 
         await adminDb.runTransaction(async (transaction) => {
           const slotRef = slotsCollection.doc(data.slotId);
-          const slotSnap = await transaction.get(slotRef);
-
           const linkedSlotIds: string[] = Array.isArray(data.linkedSlotIds)
             ? data.linkedSlotIds
             : data.pairedSlotId
               ? [data.pairedSlotId]
               : [];
-          const linkedRefs: FirebaseFirestore.DocumentReference[] = [];
-          const linkedSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
-          for (const linkedId of linkedSlotIds) {
-            const ref = slotsCollection.doc(linkedId);
-            linkedRefs.push(ref);
-            linkedSnaps.push(await transaction.get(ref));
-          }
+          const linkedRefs: FirebaseFirestore.DocumentReference[] = linkedSlotIds.map((id) =>
+            slotsCollection.doc(id),
+          );
+
+          // PERF: fetch all slot docs in one call inside the transaction
+          const allSlotSnaps = await transaction.getAll(slotRef, ...linkedRefs);
+          const slotSnap = allSlotSnaps[0];
+          const linkedSnaps = allSlotSnaps.slice(1);
 
           transaction.delete(bookingRef);
 

@@ -7,6 +7,22 @@ import { getDefaultNailTech } from './nailTechService';
 const slotCollection = adminDb.collection('slots');
 const allowedStatuses: SlotStatus[] = ['available', 'blocked', 'pending', 'confirmed'];
 
+export async function getSlotsByIds(slotIds: string[]): Promise<Slot[]> {
+  const uniqueIds = Array.from(new Set((slotIds || []).filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  const refs = uniqueIds.map((id) => slotCollection.doc(id));
+  const snaps = await adminDb.getAll(...refs);
+
+  const slots: Slot[] = [];
+  snaps.forEach((snap) => {
+    if (!snap.exists) return;
+    slots.push(docToSlot(snap.id, snap.data()!));
+  });
+
+  return slots;
+}
+
 export async function listSlots(nailTechId?: string): Promise<Slot[]> {
   // Fetch all slots and filter/sort in memory to avoid requiring composite index
   const snapshot = await slotCollection.get();
@@ -14,16 +30,43 @@ export async function listSlots(nailTechId?: string): Promise<Slot[]> {
   // Handle backward compatibility: assign default nail tech to slots without one
   const defaultNailTech = await getDefaultNailTech();
   const slots: Slot[] = [];
+  const slotsToUpdate: Array<{ ref: FirebaseFirestore.DocumentReference; nailTechId: string }> = [];
   
+  // First pass: collect slots and identify which need updates
   for (const doc of snapshot.docs) {
     const data = doc.data();
     if (!data.nailTechId && defaultNailTech) {
-      // Update slot in database for future queries
-      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      // Queue for batch update (don't block on individual writes)
+      slotsToUpdate.push({ ref: doc.ref, nailTechId: defaultNailTech.id });
       slots.push(docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id }));
     } else {
       slots.push(docToSlot(doc.id, data));
     }
+  }
+  
+  // Batch update slots that need nailTechId (non-blocking, fire and forget)
+  if (slotsToUpdate.length > 0) {
+    // Use batch write for efficiency (max 500 operations per batch)
+    const batch = adminDb.batch();
+    const batches: FirebaseFirestore.WriteBatch[] = [batch];
+    let currentBatch = batch;
+    let operationCount = 0;
+    
+    for (const { ref, nailTechId } of slotsToUpdate) {
+      if (operationCount >= 500) {
+        // Firestore batch limit is 500 operations
+        currentBatch = adminDb.batch();
+        batches.push(currentBatch);
+        operationCount = 0;
+      }
+      currentBatch.set(ref, { nailTechId }, { merge: true });
+      operationCount++;
+    }
+    
+    // Execute all batches in parallel (don't await - let it run in background)
+    Promise.all(batches.map(b => b.commit())).catch(err => {
+      console.warn('Background slot update failed (non-critical):', err);
+    });
   }
   
   // Filter by nailTechId if provided
@@ -59,15 +102,27 @@ export async function listSlotsByStatus(status: Slot['status'], nailTechId?: str
   // Handle backward compatibility
   const defaultNailTech = await getDefaultNailTech();
   const slots: Slot[] = [];
+  const slotsToUpdate: Array<{ ref: FirebaseFirestore.DocumentReference; nailTechId: string }> = [];
   
   for (const doc of snapshot.docs) {
     const data = doc.data();
     if (!data.nailTechId && defaultNailTech) {
-      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      slotsToUpdate.push({ ref: doc.ref, nailTechId: defaultNailTech.id });
       slots.push(docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id }));
     } else {
       slots.push(docToSlot(doc.id, data));
     }
+  }
+  
+  // Batch update in background (non-blocking)
+  if (slotsToUpdate.length > 0) {
+    const batch = adminDb.batch();
+    slotsToUpdate.forEach(({ ref, nailTechId }) => {
+      batch.set(ref, { nailTechId }, { merge: true });
+    });
+    batch.commit().catch(err => {
+      console.warn('Background slot update failed (non-critical):', err);
+    });
   }
   
   return slots;
@@ -203,9 +258,12 @@ export async function getSlotById(slotId: string): Promise<Slot | null> {
   const data = doc.data()!;
   const defaultNailTech = await getDefaultNailTech();
   
-  // Handle backward compatibility: assign default nail tech if missing
+  // Handle backward compatibility: assign default nail tech if missing (non-blocking)
   if (!data.nailTechId && defaultNailTech) {
-    await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+    // Update in background - don't block the response
+    doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true }).catch(err => {
+      console.warn('Background slot update failed (non-critical):', err);
+    });
     return docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id });
   }
   
@@ -226,15 +284,27 @@ export async function getSlotsByDate(date: string, nailTechId?: string): Promise
   // Handle backward compatibility
   const defaultNailTech = await getDefaultNailTech();
   const slots: Slot[] = [];
+  const slotsToUpdate: Array<{ ref: FirebaseFirestore.DocumentReference; nailTechId: string }> = [];
   
   for (const doc of snapshot.docs) {
     const data = doc.data();
     if (!data.nailTechId && defaultNailTech) {
-      await doc.ref.set({ nailTechId: defaultNailTech.id }, { merge: true });
+      slotsToUpdate.push({ ref: doc.ref, nailTechId: defaultNailTech.id });
       slots.push(docToSlot(doc.id, { ...data, nailTechId: defaultNailTech.id }));
     } else {
       slots.push(docToSlot(doc.id, data));
     }
+  }
+  
+  // Batch update in background (non-blocking)
+  if (slotsToUpdate.length > 0) {
+    const batch = adminDb.batch();
+    slotsToUpdate.forEach(({ ref, nailTechId }) => {
+      batch.set(ref, { nailTechId }, { merge: true });
+    });
+    batch.commit().catch(err => {
+      console.warn('Background slot update failed (non-critical):', err);
+    });
   }
   
   return slots;
