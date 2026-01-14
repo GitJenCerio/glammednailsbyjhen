@@ -240,7 +240,7 @@ function SlotModal({
             <select
               value={serviceLocation}
               onChange={(e) => onServiceLocationChange(e.target.value as ServiceLocation)}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-3 sm:py-2 text-base sm:text-base touch-manipulation"
             >
               <option value="homebased_studio">Homebased Studio</option>
               <option value="home_service">Home Service (+₱1,000)</option>
@@ -256,7 +256,7 @@ function SlotModal({
             <select
               value={serviceType}
               onChange={(e) => onServiceChange(e.target.value as ServiceType)}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-3 sm:py-2 text-base sm:text-base touch-manipulation"
             >
               {serviceOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -278,7 +278,7 @@ function SlotModal({
                   onResetNoRecord();
                 }
               }}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-3 sm:py-2 text-base sm:text-base touch-manipulation"
             >
               <option value="new">New Client</option>
               <option value="repeat">Repeat Client</option>
@@ -300,7 +300,7 @@ function SlotModal({
                     onResetNoRecord(); // Reset when user types
                   }}
                   placeholder="Email or contact number"
-                  className="flex-1 mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="flex-1 mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-3 sm:py-2 text-base sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
                 />
                 <button
                   type="button"
@@ -347,7 +347,7 @@ function SlotModal({
                     }
                   }}
                   disabled={!repeatClientEmail.trim() || isCheckingCustomer}
-                  className="mt-1 px-4 py-2.5 sm:py-2 text-sm sm:text-base font-semibold text-white bg-slate-900 rounded-xl sm:rounded-2xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400 min-w-[100px]"
+                  className="mt-1 px-4 py-3 sm:py-2 text-base sm:text-base font-semibold text-white bg-slate-900 rounded-xl sm:rounded-2xl hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400 min-w-[100px]"
                 >
                   {isCheckingCustomer ? 'Checking...' : 'Confirm'}
                 </button>
@@ -386,7 +386,7 @@ function SlotModal({
                 value={socialMediaName}
                 onChange={(e) => onSocialMediaNameChange(e.target.value)}
                 placeholder="Enter your FB or IG name"
-                className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="mt-1 w-full rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white px-3 py-3 sm:py-2 text-base sm:text-base touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400"
                 required
               />
               {clientType === 'repeat' && !repeatClientName && hasConfirmedNoRecord && (
@@ -484,7 +484,6 @@ export default function BookingPage() {
   const [repeatClientError, setRepeatClientError] = useState<string | null>(null);
   const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
   const [socialMediaName, setSocialMediaName] = useState('');
-  const [userClosedModal, setUserClosedModal] = useState(false);
   const [showNoRecordModal, setShowNoRecordModal] = useState(false);
   const [searchedValue, setSearchedValue] = useState('');
   const [showRecordFoundModal, setShowRecordFoundModal] = useState(false);
@@ -723,21 +722,7 @@ export default function BookingPage() {
     setSelectedSlot(slot);
   }, []);
 
-  // Auto-select first available slot when date is selected (only if user hasn't manually closed the modal)
-  useEffect(() => {
-    if (selectedDate && availableSlotsForDate.length > 0 && !selectedSlot && !userClosedModal) {
-      // Automatically select the first available slot
-      const firstAvailableSlot = availableSlotsForDate[0];
-      if (firstAvailableSlot && firstAvailableSlot.status === 'available') {
-        handleSelectSlot(firstAvailableSlot);
-      }
-    }
-  }, [selectedDate, availableSlotsForDate, selectedSlot, handleSelectSlot, userClosedModal]);
-
-  // Reset the userClosedModal flag when date changes (user selected a new date, so auto-select is allowed again)
-  useEffect(() => {
-    setUserClosedModal(false);
-  }, [selectedDate]);
+  // Removed auto-select behavior - users must manually click on a time slot to open the modal
 
   // Scroll to show both calendar and slots on mobile when date is selected
   useEffect(() => {
@@ -1118,7 +1103,6 @@ export default function BookingPage() {
         }}
         isBooking={isBooking}
         onClose={() => {
-          setUserClosedModal(true); // Mark that user manually closed the modal
           setSelectedSlot(null);
           setSelectedService('manicure');
           setClientType('new');
