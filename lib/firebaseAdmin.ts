@@ -30,6 +30,22 @@ function getAdminDb(): admin.firestore.Firestore {
   return adminDbInstance;
 }
 
-// Export a getter function instead of direct access to defer initialization
-export const adminDb = getAdminDb();
+// Export a getter function to defer initialization until runtime
+export function getAdminDbInstance(): admin.firestore.Firestore {
+  return getAdminDb();
+}
+
+// Export adminDb with lazy initialization
+// This will only initialize when actually accessed at runtime, not during build
+export const adminDb = new Proxy({} as admin.firestore.Firestore, {
+  get(_target, prop, receiver) {
+    const db = getAdminDb();
+    const value = Reflect.get(db, prop, receiver);
+    // If it's a function, bind it to the db instance
+    if (typeof value === 'function') {
+      return value.bind(db);
+    }
+    return value;
+  }
+});
 
