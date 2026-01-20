@@ -63,7 +63,7 @@ export function BlockDateModal({ open, initialEnd, initialStart, onClose, onSubm
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               required
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-base"
             />
           </label>
 
@@ -73,7 +73,7 @@ export function BlockDateModal({ open, initialEnd, initialStart, onClose, onSubm
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-base"
             />
           </label>
 
@@ -82,7 +82,7 @@ export function BlockDateModal({ open, initialEnd, initialStart, onClose, onSubm
             <select
               value={scope}
               onChange={(e) => setScope(e.target.value as BlockedDate['scope'])}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-base"
             >
               {scopes.map((value) => (
                 <option key={value} value={value}>
@@ -98,7 +98,7 @@ export function BlockDateModal({ open, initialEnd, initialStart, onClose, onSubm
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-base"
             />
           </label>
         </div>

@@ -122,7 +122,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
               value={date}
               required
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
             />
           </label>
 
@@ -132,7 +132,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
               <select
                 value={time}
                 onChange={(e) => setTime(e.target.value as SlotTime)}
-                className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+                className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
                 required
               >
                 {SLOT_TIMES.map((value) => (
@@ -196,7 +196,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as SlotStatus)}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
             >
               {statuses.map((value) => (
                 <option key={value} value={value}>
@@ -211,7 +211,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
             <select
               value={slotType}
               onChange={(e) => setSlotType(e.target.value as 'regular' | 'with_squeeze_fee')}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
             >
               <option value="regular">Regular</option>
               <option value="with_squeeze_fee">With Squeeze in fee</option>
@@ -223,7 +223,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
               rows={3}
             />
           </label>

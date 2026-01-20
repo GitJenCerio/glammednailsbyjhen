@@ -352,7 +352,7 @@ export function ServicesManager() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Type service name, e.g. chrome, removal, charms"
-                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 {searchTerm && (
                   <div className="mt-3 rounded-2xl border-2 border-slate-300 max-h-60 overflow-auto shadow-md">
@@ -390,7 +390,7 @@ export function ServicesManager() {
                   value={customLabel}
                   onChange={(e) => setCustomLabel(e.target.value)}
                   placeholder="e.g. Character art on 2 nails"
-                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <input
                   type="number"
@@ -398,7 +398,7 @@ export function ServicesManager() {
                   value={customPrice}
                   onChange={(e) => setCustomPrice(e.target.value)}
                   placeholder="Price (₱)"
-                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <input
                   type="number"
@@ -406,7 +406,7 @@ export function ServicesManager() {
                   value={customQuantity}
                   onChange={(e) => setCustomQuantity(e.target.value)}
                   placeholder="Quantity"
-                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                  className="w-full rounded-2xl border-2 border-slate-300 px-4 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                 />
                 <button
                   type="button"
@@ -459,7 +459,7 @@ export function ServicesManager() {
                         min="1"
                         value={item.quantity}
                         onChange={(e) => handleQuantityChange(item.id, Number(e.target.value))}
-                        className="w-20 rounded-2xl border border-slate-200 px-3 py-1 text-sm"
+                        className="w-20 rounded-2xl border border-slate-200 px-3 py-1 text-base sm:text-sm"
                       />
                       <button
                         type="button"
@@ -478,7 +478,7 @@ export function ServicesManager() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add inspo references, reminders, or payment terms..."
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:border-slate-900 focus:ring-0 mb-4"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base sm:text-sm focus:border-slate-900 focus:ring-0 mb-4"
               rows={3}
             />
 

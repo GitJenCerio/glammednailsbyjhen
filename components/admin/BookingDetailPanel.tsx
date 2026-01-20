@@ -513,7 +513,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTe
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="500"
-                className="w-full rounded-lg border-2 border-emerald-300 bg-white px-2 py-1.5 text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full rounded-lg border-2 border-emerald-300 bg-white px-2 py-1.5 text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <p className="text-[9px] sm:text-[10px] text-emerald-700 mt-0.5">Leave empty if no deposit received</p>
             </div>
@@ -525,7 +525,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTe
                 <select
                   value={depositPaymentMethod}
                   onChange={(e) => setDepositPaymentMethod(e.target.value as 'PNB' | 'CASH' | 'GCASH')}
-                  className="w-full rounded-lg border-2 border-emerald-300 bg-white px-2 py-1.5 text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full rounded-lg border-2 border-emerald-300 bg-white px-2 py-1.5 text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="CASH">Cash</option>
                   <option value="GCASH">GCash</option>

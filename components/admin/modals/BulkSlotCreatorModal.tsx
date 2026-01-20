@@ -237,7 +237,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
                 value={startDate}
                 required
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+                className="w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
               />
             </div>
             <div>
@@ -251,7 +251,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
                   max="52"
                   value={weeks}
                   onChange={(e) => setWeeks(Number(e.target.value))}
-                  className="w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+                  className="w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
                 />
               ) : (
                 <input
@@ -260,7 +260,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
                   required={!useWeeks}
                   onChange={(e) => setEndDate(e.target.value)}
                   min={startDate}
-                  className="w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+                  className="w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
                 />
               )}
             </div>
@@ -303,7 +303,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
                         setDayConfigs(newConfigs);
                       }}
                       placeholder="Group name (e.g., Monday - Saturday)"
-                      className="text-sm sm:text-base font-medium border-b-2 border-slate-300 focus:border-slate-900 focus:outline-none px-1 py-1 w-full max-w-xs"
+                      className="text-base sm:text-sm font-medium border-b-2 border-slate-300 focus:border-slate-900 focus:outline-none px-1 py-1 w-full max-w-xs"
                     />
                   </div>
                   {dayConfigs.length > 1 && (
@@ -392,7 +392,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as SlotStatus)}
-                className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+                className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
               >
                 <option value="available">Available</option>
                 <option value="pending">Pending</option>
@@ -406,7 +406,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
               <select
                 value={slotType}
                 onChange={(e) => setSlotType(e.target.value as 'regular' | 'with_squeeze_fee')}
-                className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+                className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
               >
                 <option value="regular">Regular</option>
                 <option value="with_squeeze_fee">With Squeeze in fee</option>
@@ -419,7 +419,7 @@ export function BulkSlotCreatorModal({ open, onClose, onSubmit, defaultNailTechI
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-sm sm:text-base"
+              className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
               rows={2}
             />
           </label>

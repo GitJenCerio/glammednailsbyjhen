@@ -599,7 +599,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   setDateRangeEnd('');
                 }
               }}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             >
               <option value="nailTech">Nail tech</option>
               <option value="status">Status</option>
@@ -614,7 +614,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               <select
                 value={localSelectedNailTechId || ''}
                 onChange={(e) => handleNailTechChange(e.target.value || null)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="">All nail techs</option>
                 {nailTechs.map((tech) => (
@@ -632,7 +632,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as PaymentStatus | 'all')}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="all">All</option>
                 <option value="unpaid">Unpaid</option>
@@ -654,7 +654,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     setFilterPeriod(e.target.value as 'all' | 'today' | 'week' | 'month');
                     setUseDateRange(false);
                   }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="all">All time</option>
                   <option value="today">Today</option>
@@ -682,7 +682,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   }
                 }
               }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="all">All months</option>
                   <option value="1">January</option>
@@ -708,7 +708,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     setUseDateRange(false); // Disable date range when using year filter
                     // If year is selected but month is not, keep month as 'all' to show all months for that year
                   }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="all">All years</option>
                   {availableYears.map((year) => (
@@ -756,7 +756,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     value={dateRangeStart}
                     onChange={(e) => setDateRangeStart(e.target.value)}
                     max={dateRangeEnd || undefined}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                   />
                 </div>
                 <div className="flex items-center gap-2">

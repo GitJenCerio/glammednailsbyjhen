@@ -872,7 +872,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search services..."
-                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-xs sm:text-sm mb-2 focus:border-slate-900 focus:ring-0 shadow-sm"
+                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm mb-2 focus:border-slate-900 focus:ring-0 shadow-sm"
               />
               {searchTerm && (
                 <div className="max-h-36 overflow-auto rounded-xl border-2 border-slate-300 shadow-md">
@@ -910,7 +910,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                     value={customLabel}
                     onChange={(e) => setCustomLabel(e.target.value)}
                     placeholder="Service name"
-                    className="sm:flex-[2] rounded-xl border-2 border-slate-300 px-3 py-2 text-xs sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                    className="sm:flex-[2] rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                   />
                   <div className="flex gap-2 sm:flex-1">
                     <input
@@ -918,7 +918,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                       value={customPrice}
                       onChange={(e) => setCustomPrice(e.target.value)}
                       placeholder="Price"
-                      className="flex-1 rounded-xl border-2 border-slate-300 px-3 py-2 text-xs sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                      className="flex-1 rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                     />
                     <input
                       type="number"
@@ -926,7 +926,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                       value={customQuantity}
                       onChange={(e) => setCustomQuantity(e.target.value)}
                       placeholder="Qty"
-                      className="w-20 rounded-xl border-2 border-slate-300 px-3 py-2 text-xs sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                      className="w-20 rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                     />
                   </div>
                 </div>
@@ -947,7 +947,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add any additional notes or instructions..."
                 rows={3}
-                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-xs sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm resize-none"
+                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm resize-none"
               />
             </div>
 
@@ -988,7 +988,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                             onChange={(e) => handleQuantityChange(item.id, Number(e.target.value))}
                             onBlur={(e) => handleQuantityBlur(item.id, e.target.value)}
                             onFocus={(e) => e.target.select()}
-                            className="w-7 text-center text-xs sm:text-sm border-0 focus:outline-none"
+                            className="w-7 text-center text-base sm:text-sm border-0 focus:outline-none"
                           />
                           <button
                             onClick={() => handleQuantityChange(item.id, item.quantity + 1)}

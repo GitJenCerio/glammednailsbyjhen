@@ -1,4 +1,4 @@
-export const SLOT_TIMES = ['08:00', '10:00', '10:30', '13:00', '15:00', '15:30', '19:00', '20:00', '21:00'] as const;
+export const SLOT_TIMES = ['08:00', '10:00', '10:30', '13:00', '15:00', '15:30', '16:00', '19:00', '19:30','20:00', '21:00'] as const;
 
 export type SlotTime = (typeof SLOT_TIMES)[number];
 

@@ -35,7 +35,7 @@ export function CustomerList({ customers, onSelect, selectedId }: CustomerListPr
           placeholder="Search by name, email, or phone..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
         />
       </div>
 

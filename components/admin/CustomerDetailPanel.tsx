@@ -104,7 +104,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -114,7 +114,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                   type="text"
                   value={editFirstName}
                   onChange={(e) => setEditFirstName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
               <div>
@@ -123,7 +123,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                   type="text"
                   value={editLastName}
                   onChange={(e) => setEditLastName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
             </div>
@@ -133,7 +133,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                 type="email"
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
             <div>
@@ -142,7 +142,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                 type="tel"
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 placeholder="Phone number(s)"
               />
             </div>
@@ -152,7 +152,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                 type="text"
                 value={editSocialMediaName}
                 onChange={(e) => setEditSocialMediaName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 placeholder="Social media handle"
               />
             </div>
@@ -162,7 +162,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                 type="text"
                 value={editReferralSource}
                 onChange={(e) => setEditReferralSource(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 placeholder="Referral source"
               />
             </div>
@@ -172,7 +172,7 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
                 value={editNotes}
                 onChange={(e) => setEditNotes(e.target.value)}
                 rows={3}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
             <div className="flex gap-2">

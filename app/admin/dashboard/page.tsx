@@ -383,9 +383,8 @@ function AdminDashboardContent() {
       // Add cache-busting timestamp to prevent stale data in production
       const cacheBuster = `?t=${Date.now()}`;
       
-      // Prioritize calendar data (slots, blocks, nail techs) - load these first
-      // Calendar can render immediately after this
-      const [slotsRes, blocksRes, nailTechsRes] = await Promise.all([
+      // Load calendar data + bookings together so calendar statuses are accurate on first render
+      const [slotsRes, blocksRes, nailTechsRes, bookingsRes, customersRes] = await Promise.all([
         fetch(`/api/slots${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
@@ -407,14 +406,30 @@ function AdminDashboardContent() {
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
+        fetch(`/api/bookings${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()).catch(() => ({ bookings: [] })),
+        fetch(`/api/customers${cacheBuster}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()).catch(() => ({ customers: [] })),
       ]);
       
-      // Set calendar data immediately so calendar can render
+      // Set calendar + booking data together so badges are accurate
       setSlots(slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
       setNailTechs(nailTechsRes.nailTechs || []);
+      setBookings(bookingsRes.bookings || []);
+      setCustomers(customersRes.customers || []);
       
-      // Mark calendar as loaded - it can now render
+      // Mark calendar as loaded after bookings are ready
       setLoadingCalendar(false);
       
       // Default to Ms. Jhen (Owner) for calendar/bookings section only - all existing calendar data belongs to her
@@ -447,30 +462,7 @@ function AdminDashboardContent() {
         }
       }
       
-      // Load bookings and customers in parallel (less critical for calendar display)
-      // These load in the background and don't block calendar rendering
-      Promise.all([
-        fetch(`/api/bookings${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()),
-        fetch(`/api/customers${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()).catch(() => ({ customers: [] })),
-      ]).then(([bookingsRes, customersRes]) => {
-        setBookings(bookingsRes.bookings);
-        setCustomers(customersRes.customers || []);
-      }).catch((error) => {
-        console.error('Failed to load bookings/customers:', error);
-        // Don't show toast for background loading failures
-      });
+      // Bookings/customers already loaded above for consistency
     } catch (error) {
       console.error('Failed to load admin data', error);
       setToast('Unable to load data. Check your backend configuration.');

@@ -201,7 +201,7 @@ export function SplitRescheduleModal({
                     setSelectedNailTech1(e.target.value);
                     setSelectedSlot1(null);
                   }}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="">Select nail tech...</option>
                   {nailTechs.map((tech) => (
@@ -295,7 +295,7 @@ export function SplitRescheduleModal({
                     setSelectedNailTech2(e.target.value);
                     setSelectedSlot2(null);
                   }}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="">Select nail tech...</option>
                   {nailTechs.map((tech) => (

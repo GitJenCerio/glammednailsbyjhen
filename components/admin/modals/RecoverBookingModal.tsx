@@ -86,7 +86,7 @@ export function RecoverBookingModal({ open, onClose, onRecover }: RecoverBooking
                 value={bookingId}
                 onChange={(e) => setBookingId(e.target.value)}
                 placeholder="GN-00001 or GN00001"
-                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-base focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                 disabled={recovering}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !recovering) {

@@ -281,7 +281,7 @@ function NailTechForm({
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
             placeholder="Jhen"
-            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
           <p className="mt-1 text-xs text-slate-500">&quot;Ms.&quot; will be added automatically</p>
         </div>
@@ -292,7 +292,7 @@ function NailTechForm({
             <select
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value as 'Owner' | 'Junior Tech' | 'Senior Tech' })}
-              className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             >
               <option value="Owner">Owner</option>
               <option value="Junior Tech">Junior Tech</option>
@@ -305,7 +305,7 @@ function NailTechForm({
             <select
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as 'Active' | 'Inactive' })}
-              className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             >
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
@@ -323,7 +323,7 @@ function NailTechForm({
                 serviceAvailability: e.target.value as 'Studio only' | 'Home service only' | 'Studio and Home Service',
               })
             }
-            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           >
             <option value="Studio only">Studio only</option>
             <option value="Home service only">Home service only</option>
@@ -375,7 +375,7 @@ function NailTechForm({
               })
             }
             placeholder="15"
-            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
           <p className="mt-1 text-xs text-slate-500">
             Enter a percentage discount this nail tech offers on services (e.g., 15 for 15% off)
@@ -399,7 +399,7 @@ function NailTechForm({
               })
             }
             placeholder="0.3"
-            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
           <p className="mt-1 text-xs text-slate-500">
             Enter the commission rate as a decimal (e.g., 0.3 for 30% commission)
