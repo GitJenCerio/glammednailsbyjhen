@@ -564,6 +564,6 @@ All rights reserved. This project is proprietary software for glammednailsbyjhen
 
 **Built with ❤️ using Next.js, Firebase, and Vercel**
 
-*Last updated: 2024*
+*Last updated: 2026*
 
 </div>
