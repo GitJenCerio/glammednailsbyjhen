@@ -4,7 +4,7 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    minimumCacheTTL: 60,
+    minimumCacheTTL: 31536000, // 1 year - images are static
     // Enable optimization for local images
     unoptimized: false,
     // Ensure all image extensions are supported
@@ -13,6 +13,17 @@ const nextConfig = {
   },
   compress: true,
   poweredByHeader: false,
+  // Performance optimizations
+  swcMinify: true,
+  reactStrictMode: true,
+  // Optimize production builds
+  productionBrowserSourceMaps: false,
+  // Compiler optimizations
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
 }
 
 module.exports = nextConfig

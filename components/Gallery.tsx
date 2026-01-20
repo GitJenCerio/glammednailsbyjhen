@@ -17,23 +17,24 @@ export default function Gallery() {
 
   // Deterministic, varied heights so adjacent items rarely match
   const getTileHeight = (index: number) => {
-    const baseHeights = [180, 210, 240, 270, 300, 330, 360, 390];
+    // Slightly shorter heights so tiles are not too tall on mobile
+    const baseHeights = [150, 180, 210, 240, 260, 280, 300, 320];
     const base = baseHeights[(index * 7 + 3) % baseHeights.length];
     const jitter = ((index * 13) % 40) - 20; // -20..19px
-    return Math.max(160, base + jitter);
+    return Math.max(140, base + jitter);
   };
 
   return (
     <section id="gallery" className="section-padding bg-white">
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-4xl md:text-5xl font-acollia text-center mb-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-acollia text-center mb-3 sm:mb-4 px-3 sm:px-4">
           Gallery
         </h2>
-        <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+        <p className="text-center text-gray-600 mb-8 sm:mb-10 md:mb-12 max-w-2xl mx-auto px-3 sm:px-4 text-sm sm:text-base">
           Browse our latest work and get inspired
         </p>
 
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
+        <div className="columns-2 sm:columns-2 md:columns-3 lg:columns-4 gap-3 sm:gap-4">
           {galleryImages.map((item, index) => (
             <motion.div
               key={index}

@@ -7,24 +7,36 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "create-placeholders": "node scripts/create-placeholders.js"
+    "create-placeholders": "node scripts/create-placeholders.js",
+    "clean-database": "tsx scripts/clean-database.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
+    "date-fns": "^4.1.0",
+    "firebase": "^12.4.0",
+    "firebase-admin": "^12.6.0",
     "framer-motion": "^11.3.24",
+    "googleapis": "^133.0.0",
+    "html2canvas": "^1.4.1",
     "next": "^14.2.13",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-big-calendar": "^1.19.4",
+    "react-calendar": "^6.0.0",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.5.0",
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.1.0",
     "@types/react": "^18.3.4",
+    "@types/react-big-calendar": "^1.16.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.13",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.6",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "tsx": "^4.7.0"
   }
 }
