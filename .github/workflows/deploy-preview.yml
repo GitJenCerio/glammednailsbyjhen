@@ -26,6 +26,10 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+          # Firebase Admin SDK environment variables
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
 
       # Note: Vercel automatically creates preview deployments
       # This workflow ensures the build succeeds before Vercel deploys

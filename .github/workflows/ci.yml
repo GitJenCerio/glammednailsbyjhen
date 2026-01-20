@@ -51,9 +51,11 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          # Add any build-time environment variables here
-          # These are only used during build, not runtime
           NODE_ENV: production
+          # Firebase Admin SDK environment variables
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
