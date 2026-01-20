@@ -1,16 +1,27 @@
 import { NextResponse } from 'next/server';
-import { listSlots, createSlot } from '@/lib/services/slotService';
+import { listSlots, listSlotsByDateRange, createSlot } from '@/lib/services/slotService';
 import { listBlockedDates } from '@/lib/services/blockService';
 
 // Prevent caching in production
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  const nailTechId = searchParams.get('nailTechId') || undefined;
+
+  if ((startDate && !endDate) || (!startDate && endDate)) {
+    return NextResponse.json({ error: 'Both startDate and endDate are required.' }, { status: 400 });
+  }
+
   // Automatic slot release is disabled - use manual release from admin dashboard instead
   // Don't run expired slot cleanup on every request - it's slow and not critical
   // Run it in a background cron job or manually from admin dashboard instead
-  const slots = await listSlots();
+  const slots = startDate && endDate
+    ? await listSlotsByDateRange(startDate, endDate, nailTechId)
+    : await listSlots(nailTechId);
   
   // Prevent caching to ensure fresh data, especially after deletions
   return NextResponse.json({ slots }, {

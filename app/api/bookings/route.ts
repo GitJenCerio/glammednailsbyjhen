@@ -57,17 +57,21 @@ async function syncGoogleSheets() {
   return { processed };
 }
 
-export async function GET() {
-  // Auto-sync Google Sheets when admin loads dashboard
-  // This ensures new form submissions are automatically synced
-  try {
-    const syncResult = await syncGoogleSheets();
-    if (syncResult.processed > 0) {
-      console.log(`Auto-synced ${syncResult.processed} new form responses`);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const shouldSync = searchParams.get('sync') === '1' || searchParams.get('sync') === 'true';
+
+  if (shouldSync) {
+    // Auto-sync Google Sheets when explicitly requested
+    try {
+      const syncResult = await syncGoogleSheets();
+      if (syncResult.processed > 0) {
+        console.log(`Auto-synced ${syncResult.processed} new form responses`);
+      }
+    } catch (error) {
+      // Silently fail - manual sync button is still available
+      console.log('Auto-sync skipped (manual sync available)');
     }
-  } catch (error) {
-    // Silently fail - manual sync button is still available
-    console.log('Auto-sync skipped (manual sync available)');
   }
   
   const bookings = await listBookings();

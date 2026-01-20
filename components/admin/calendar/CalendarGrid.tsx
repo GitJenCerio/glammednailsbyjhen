@@ -55,7 +55,9 @@ export function CalendarGrid({
   // Memoize bookings by slot ID for faster lookups
   const bookingsBySlotId = useMemo(() => {
     const map = new Map<string, Booking>();
-    bookings.forEach(booking => {
+    bookings
+      .filter((booking) => booking.status !== 'cancelled')
+      .forEach((booking) => {
       map.set(booking.slotId, booking);
       // Also map linked slots
       if (booking.linkedSlotIds) {

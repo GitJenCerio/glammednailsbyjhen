@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEligibleBookingsForRelease, manuallyReleaseBookings } from '@/lib/services/bookingService';
+import { extractCustomerInfo, getCustomerById } from '@/lib/services/customerService';
 import { getSlotsByIds } from '@/lib/services/slotService';
 import type { BookingWithSlot, Slot } from '@/lib/types';
 
@@ -11,6 +12,19 @@ import type { BookingWithSlot, Slot } from '@/lib/types';
 export async function GET() {
   try {
     const eligibleBookings = await getEligibleBookingsForRelease();
+
+    const customerIdsToFetch = Array.from(new Set(
+      eligibleBookings
+        .map((booking) => booking.customerId)
+        .filter((id) => id && id !== 'PENDING_FORM_SUBMISSION')
+    ));
+    const customers = await Promise.all(
+      customerIdsToFetch.map(async (id) => {
+        const customer = await getCustomerById(id);
+        return customer ? [id, customer] as const : null;
+      })
+    );
+    const customersById = new Map(customers.filter(Boolean) as Array<readonly [string, any]>);
 
     // PERF: only fetch the specific slots we need (instead of loading all slots)
     const slotIdsToFetch = eligibleBookings.flatMap((b) => [
@@ -34,13 +48,25 @@ export async function GET() {
         const linkedSlots = (booking.linkedSlotIds || [])
           .map((id) => slotsById.get(id))
           .filter((s): s is Slot => !!s);
+
+        const customer = customersById.get(booking.customerId);
+        const customerInfoFromData = booking.customerData
+          ? extractCustomerInfo(booking.customerData, booking.customerDataOrder)
+          : null;
+        const customerNameFromData = customerInfoFromData?.name || null;
+        const socialMediaFromData = customerInfoFromData?.socialMediaName || null;
+        const resolvedCustomerName =
+          (customer?.name && customer.name !== 'Unknown Customer' ? customer.name : null) ||
+          (customerNameFromData && customerNameFromData !== 'Unknown Customer' ? customerNameFromData : null) ||
+          socialMediaFromData;
         
-        const result: BookingWithSlot = {
+        const result = {
           ...booking,
           slot,
           linkedSlots: linkedSlots.length > 0 ? linkedSlots : undefined,
           pairedSlot: linkedSlots[0],
-        };
+          customerName: resolvedCustomerName || undefined,
+        } as BookingWithSlot & { customerName?: string };
         
         return result;
       })

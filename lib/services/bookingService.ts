@@ -1862,20 +1862,22 @@ export async function splitRescheduleBooking(
 /**
  * Get bookings eligible for manual release
  * Returns bookings that are:
- * - Still in 'pending_form' status
- * - No form has been synced (no formResponseId)
+ * - Still in 'pending_form' or 'pending_payment' status
+ * - If pending_form: no form has been synced (no formResponseId)
  */
 export async function getEligibleBookingsForRelease() {
-  const snapshot = await bookingsCollection.where('status', '==', 'pending_form').get();
+  const snapshot = await bookingsCollection
+    .where('status', 'in', ['pending_form', 'pending_payment'])
+    .get();
 
   const eligibleBookings: Booking[] = [];
 
   for (const docSnap of snapshot.docs) {
     const data = docSnap.data();
     
-    // Only include bookings that haven't been synced with a form yet
+    // Only include pending_form bookings that haven't been synced with a form yet
     // If formResponseId exists, it means a form was received and synced
-    if (data.formResponseId) continue;
+    if (data.status === 'pending_form' && data.formResponseId) continue;
 
     eligibleBookings.push(docToBooking(docSnap.id, data));
   }
@@ -1906,9 +1908,9 @@ export async function manuallyReleaseBookings(bookingIds: string[]) {
         }
         const data = bookingSnap.data()!;
         
-        // Only release bookings that are still in pending_form status
-        if (data.status !== 'pending_form') {
-          console.warn(`Booking ${bookingId} is not in pending_form status (${data.status}), skipping release`);
+        // Only release bookings that are still pending (form or payment)
+        if (data.status !== 'pending_form' && data.status !== 'pending_payment') {
+          console.warn(`Booking ${bookingId} is not pending (${data.status}), skipping release`);
           return;
         }
 

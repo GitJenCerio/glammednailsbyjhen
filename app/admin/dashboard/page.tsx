@@ -63,6 +63,7 @@ function AdminDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isUpdatingFromUrl = useRef(false);
+  const hasInitializedDefaultTech = useRef(false);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -259,7 +260,7 @@ function AdminDashboardContent() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentMonth]);
 
   // Subscribe to notifications
   useEffect(() => {
@@ -381,39 +382,55 @@ function AdminDashboardContent() {
       setLoading(true);
       setLoadingCalendar(true);
       // Add cache-busting timestamp to prevent stale data in production
-      const cacheBuster = `?t=${Date.now()}`;
+      const cacheBuster = Date.now().toString();
+      const calendarStart = format(
+        startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }),
+        'yyyy-MM-dd'
+      );
+      const calendarEnd = format(
+        endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 }),
+        'yyyy-MM-dd'
+      );
+      const slotParams = new URLSearchParams({
+        t: cacheBuster,
+        startDate: calendarStart,
+        endDate: calendarEnd,
+      });
+      if (selectedNailTechId) {
+        slotParams.set('nailTechId', selectedNailTechId);
+      }
       
       // Load calendar data + bookings together so calendar statuses are accurate on first render
       const [slotsRes, blocksRes, nailTechsRes, bookingsRes, customersRes] = await Promise.all([
-        fetch(`/api/slots${cacheBuster}`, { 
+        fetch(`/api/slots?${slotParams.toString()}`, { 
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()),
-        fetch(`/api/blocks${cacheBuster}`, { 
+        fetch(`/api/blocks?t=${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()),
-        fetch(`/api/nail-techs${cacheBuster}`, { 
+        fetch(`/api/nail-techs?t=${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
-        fetch(`/api/bookings${cacheBuster}`, { 
+        fetch(`/api/bookings?sync=0&t=${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
           }
         }).then((res) => res.json()).catch(() => ({ bookings: [] })),
-        fetch(`/api/customers${cacheBuster}`, { 
+        fetch(`/api/customers?t=${cacheBuster}`, { 
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -432,34 +449,37 @@ function AdminDashboardContent() {
       // Mark calendar as loaded after bookings are ready
       setLoadingCalendar(false);
       
-      // Default to Ms. Jhen (Owner) for calendar/bookings section only - all existing calendar data belongs to her
+      // Default to Ms. Jhen (Owner) only on first load (avoid resetting on month change)
       // Don't set default for finance section, show all bookings by default
       const nailTechsList = nailTechsRes.nailTechs || [];
-      if (!selectedNailTechId && nailTechsList.length > 0) {
-        // Only set default if we're in bookings/calendar section, not finance
-        if (activeSection === 'bookings' || activeSection === 'overview') {
-          // First try to find Ms. Jhen by name (case insensitive)
-          let defaultTech = nailTechsList.find((tech: NailTech) => 
-            tech.name.toLowerCase().includes('jhen') && 
-            tech.status === 'Active'
-          );
-          
-          // If not found, try any Owner with Active status
-          if (!defaultTech) {
-            defaultTech = nailTechsList.find((tech: NailTech) => 
-              tech.role === 'Owner' && tech.status === 'Active'
+      if (!hasInitializedDefaultTech.current) {
+        if (!selectedNailTechId && nailTechsList.length > 0) {
+          // Only set default if we're in bookings/calendar section, not finance
+          if (activeSection === 'bookings' || activeSection === 'overview') {
+            // First try to find Ms. Jhen by name (case insensitive)
+            let defaultTech = nailTechsList.find((tech: NailTech) => 
+              tech.name.toLowerCase().includes('jhen') && 
+              tech.status === 'Active'
             );
-          }
-          
-          // If still not found, get first active tech
-          if (!defaultTech) {
-            defaultTech = nailTechsList.find((tech: NailTech) => tech.status === 'Active') || nailTechsList[0];
-          }
-          
-          if (defaultTech) {
-            setSelectedNailTechId(defaultTech.id);
+            
+            // If not found, try any Owner with Active status
+            if (!defaultTech) {
+              defaultTech = nailTechsList.find((tech: NailTech) => 
+                tech.role === 'Owner' && tech.status === 'Active'
+              );
+            }
+            
+            // If still not found, get first active tech
+            if (!defaultTech) {
+              defaultTech = nailTechsList.find((tech: NailTech) => tech.status === 'Active') || nailTechsList[0];
+            }
+            
+            if (defaultTech) {
+              setSelectedNailTechId(defaultTech.id);
+            }
           }
         }
+        hasInitializedDefaultTech.current = true;
       }
       
       // Bookings/customers already loaded above for consistency
@@ -607,9 +627,19 @@ function AdminDashboardContent() {
       }
       throw new Error(errorMessage);
     }
-    const savedSlot = await res.json();
-    setEditingSlot(null);
-    await loadData();
+    const savedSlotResponse = await res.json();
+    const savedSlot: Slot = savedSlotResponse.slot ?? savedSlotResponse;
+
+    setSlots((prevSlots) => {
+      const nextSlots = editingSlot
+        ? prevSlots.map((slot) => (slot.id === savedSlot.id ? savedSlot : slot))
+        : [...prevSlots, savedSlot];
+      return nextSlots.sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.time.localeCompare(b.time);
+      });
+    });
     
     // Create notification for slot added/updated
     try {
@@ -648,13 +678,8 @@ function AdminDashboardContent() {
         throw new Error(error.error || 'Failed to delete slot');
       }
       
-      const data = await res.json();
-      
-      // Wait a moment for Firebase to sync
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Force reload data with cache busting
-      await loadData();
+      await res.json();
+      setSlots((prevSlots) => prevSlots.filter((slot) => slot.id !== slotToDelete.id));
       
       // Create notification for slot removed
       try {
@@ -682,7 +707,12 @@ function AdminDashboardContent() {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to delete slots.');
       }
-      await loadData();
+      setSlots((prevSlots) =>
+        prevSlots.filter((slot) => {
+          if (slot.date !== selectedDate) return true;
+          return onlyAvailable ? slot.status !== 'available' : false;
+        })
+      );
       setToast(data.message || `Deleted ${data.deletedCount} slot(s).`);
       setDeleteDaySlotsModalOpen(false);
     } catch (error: any) {
@@ -1155,7 +1185,7 @@ function AdminDashboardContent() {
                 <CalendarGrid
                   referenceDate={currentMonth}
                   slots={calendarSlots}
-                  bookings={bookings}
+                  bookings={bookings.filter((booking) => booking.status !== 'cancelled')}
                   blockedDates={blockedDates}
                   selectedDate={selectedDate}
                   onSelectDate={setSelectedDate}
@@ -1214,9 +1244,9 @@ function AdminDashboardContent() {
                     </div>
                   )}
                   {selectedSlots.map((slot) => {
-                    // Find booking for this slot - check bookings regardless of slot status
-                    // This prevents hiding bookings if slot status is incorrectly set to 'available'
+                    // Find booking for this slot - ignore cancelled bookings so released slots show as available
                     const bookingForSlot = bookingsWithSlots.find((b) => {
+                      if (b.status === 'cancelled') return false;
                           // Check if this slot is the primary slot for this booking
                           if (b.slotId === slot.id) {
                             // Always show the booking details for this slot (pending or confirmed)

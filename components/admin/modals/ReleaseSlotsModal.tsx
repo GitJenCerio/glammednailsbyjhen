@@ -11,8 +11,10 @@ type ReleaseSlotsModalProps = {
   onRelease: (bookingIds: string[]) => Promise<void>;
 };
 
+type ReleaseBooking = BookingWithSlot & { customerName?: string };
+
 export function ReleaseSlotsModal({ open, onClose, onRelease }: ReleaseSlotsModalProps) {
-  const [eligibleBookings, setEligibleBookings] = useState<BookingWithSlot[]>([]);
+  const [eligibleBookings, setEligibleBookings] = useState<ReleaseBooking[]>([]);
   const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -105,7 +107,7 @@ export function ReleaseSlotsModal({ open, onClose, onRelease }: ReleaseSlotsModa
           <div>
             <h2 className="text-xl font-semibold">Release Slots</h2>
             <p className="text-sm text-slate-600 mt-1">
-              Select bookings to release (no form received)
+              Select pending bookings to release (form or payment not completed)
             </p>
           </div>
           <button
@@ -199,14 +201,18 @@ export function ReleaseSlotsModal({ open, onClose, onRelease }: ReleaseSlotsModa
                               <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded">
                                 {booking.serviceType || 'N/A'}
                               </span>
+                              <span className={`text-xs px-2 py-0.5 rounded ${booking.status === 'pending_payment' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                {booking.status === 'pending_payment' ? 'Pending Payment' : 'Pending Form'}
+                              </span>
                             </div>
                             <div className="text-sm text-slate-600 space-y-1">
+                              <p>Customer: {booking.customerName || 'Unknown'}</p>
                               <p>Created: {getTimeAgo(booking.createdAt)}</p>
                               <p>Slot: {slotDate} at {slotTime}</p>
                             </div>
                           </div>
                           <div className="text-right text-sm text-slate-500">
-                            <p>No form synced</p>
+                            <p>{booking.status === 'pending_payment' ? 'Awaiting payment' : 'No form synced'}</p>
                           </div>
                         </div>
                       </div>

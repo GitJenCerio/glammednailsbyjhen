@@ -23,15 +23,12 @@ export async function getSlotsByIds(slotIds: string[]): Promise<Slot[]> {
   return slots;
 }
 
-export async function listSlots(nailTechId?: string): Promise<Slot[]> {
-  // Fetch all slots and filter/sort in memory to avoid requiring composite index
-  const snapshot = await slotCollection.get();
-  
+async function normalizeSlotsFromSnapshot(snapshot: FirebaseFirestore.QuerySnapshot) {
   // Handle backward compatibility: assign default nail tech to slots without one
   const defaultNailTech = await getDefaultNailTech();
   const slots: Slot[] = [];
   const slotsToUpdate: Array<{ ref: FirebaseFirestore.DocumentReference; nailTechId: string }> = [];
-  
+
   // First pass: collect slots and identify which need updates
   for (const doc of snapshot.docs) {
     const data = doc.data();
@@ -43,7 +40,7 @@ export async function listSlots(nailTechId?: string): Promise<Slot[]> {
       slots.push(docToSlot(doc.id, data));
     }
   }
-  
+
   // Batch update slots that need nailTechId (non-blocking, fire and forget)
   if (slotsToUpdate.length > 0) {
     // Use batch write for efficiency (max 500 operations per batch)
@@ -51,7 +48,7 @@ export async function listSlots(nailTechId?: string): Promise<Slot[]> {
     const batches: FirebaseFirestore.WriteBatch[] = [batch];
     let currentBatch = batch;
     let operationCount = 0;
-    
+
     for (const { ref, nailTechId } of slotsToUpdate) {
       if (operationCount >= 500) {
         // Firestore batch limit is 500 operations
@@ -62,20 +59,48 @@ export async function listSlots(nailTechId?: string): Promise<Slot[]> {
       currentBatch.set(ref, { nailTechId }, { merge: true });
       operationCount++;
     }
-    
+
     // Execute all batches in parallel (don't await - let it run in background)
     Promise.all(batches.map(b => b.commit())).catch(err => {
       console.warn('Background slot update failed (non-critical):', err);
     });
   }
-  
+
+  return slots;
+}
+
+export async function listSlots(nailTechId?: string): Promise<Slot[]> {
+  // Fetch all slots and filter/sort in memory to avoid requiring composite index
+  const snapshot = await slotCollection.get();
+  const slots = await normalizeSlotsFromSnapshot(snapshot);
+
   // Filter by nailTechId if provided
   let filteredSlots = slots;
   if (nailTechId) {
     filteredSlots = slots.filter((slot) => slot.nailTechId === nailTechId);
   }
-  
+
   // Sort by date and time
+  return filteredSlots.sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return a.time.localeCompare(b.time);
+  });
+}
+
+export async function listSlotsByDateRange(startDate: string, endDate: string, nailTechId?: string): Promise<Slot[]> {
+  const snapshot = await slotCollection
+    .where('date', '>=', startDate)
+    .where('date', '<=', endDate)
+    .get();
+
+  const slots = await normalizeSlotsFromSnapshot(snapshot);
+
+  let filteredSlots = slots;
+  if (nailTechId) {
+    filteredSlots = slots.filter((slot) => slot.nailTechId === nailTechId);
+  }
+
   return filteredSlots.sort((a, b) => {
     const dateCompare = a.date.localeCompare(b.date);
     if (dateCompare !== 0) return dateCompare;
