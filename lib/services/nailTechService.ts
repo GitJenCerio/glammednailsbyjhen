@@ -4,6 +4,8 @@ import { NailTech, NailTechInput, ServiceAvailability } from '../types';
 
 // Use a getter to avoid touching Firebase at module load time
 const getNailTechsCollection = () => adminDb.collection('nailTechs');
+// Keep direct reference for existing logic that expects a const collection
+const nailTechsCollection = adminDb.collection('nailTechs');
 
 // Helper function to ensure name doesn't have "Ms." prefix (store without prefix)
 function normalizeName(name: string): string {
