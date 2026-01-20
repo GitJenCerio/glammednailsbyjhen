@@ -2,6 +2,9 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../firebaseAdmin';
 import { Customer, CustomerInput } from '../types';
 
+// Use a getter to avoid touching Firebase at module load time in some places
+const getCustomersCollection = () => adminDb.collection('customers');
+// Keep direct reference for existing logic that expects a const collection
 const customersCollection = adminDb.collection('customers');
 
 // Helper to strip undefined values before writing to Firestore
@@ -215,7 +218,7 @@ export async function findOrCreateCustomer(
 
   // Try to find existing customer by email first
   if (email) {
-    const emailSnapshot = await customersCollection.where('email', '==', email).limit(1).get();
+    const emailSnapshot = await getCustomersCollection().where('email', '==', email).limit(1).get();
     if (!emailSnapshot.empty) {
       const existing = docToCustomer(emailSnapshot.docs[0].id, emailSnapshot.docs[0].data());
       // If the same email is used but the name is clearly different (e.g. booking for a sister),
@@ -260,7 +263,7 @@ export async function findOrCreateCustomer(
 
   // Try to find by phone if no email match
   if (phone) {
-    const phoneSnapshot = await customersCollection.where('phone', '==', phone).limit(1).get();
+    const phoneSnapshot = await getCustomersCollection().where('phone', '==', phone).limit(1).get();
     if (!phoneSnapshot.empty) {
       const existing = docToCustomer(phoneSnapshot.docs[0].id, phoneSnapshot.docs[0].data());
       // If the same phone is used but the name is different, create a NEW customer.
@@ -314,7 +317,7 @@ export async function findOrCreateCustomer(
   };
 
   const dataToSave = omitUndefined(newCustomer);
-  const docRef = await customersCollection.add(dataToSave);
+  const docRef = await getCustomersCollection().add(dataToSave);
   return docToCustomer(docRef.id, dataToSave);
 }
 
@@ -322,7 +325,7 @@ export async function findOrCreateCustomer(
  * Get customer by ID
  */
 export async function getCustomerById(id: string): Promise<Customer | null> {
-  const snapshot = await customersCollection.doc(id).get();
+  const snapshot = await getCustomersCollection().doc(id).get();
   if (!snapshot.exists) return null;
   return docToCustomer(snapshot.id, snapshot.data()!);
 }
@@ -335,7 +338,7 @@ export async function getCustomerByEmail(email: string): Promise<Customer | null
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
   
-  const snapshot = await customersCollection
+  const snapshot = await getCustomersCollection()
     .where('email', '==', normalizedEmail)
     .limit(1)
     .get();
@@ -352,7 +355,7 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
   const normalizedPhone = normalizePhone(phone);
   if (!normalizedPhone) return null;
   
-  const snapshot = await customersCollection
+  const snapshot = await getCustomersCollection()
     .where('phone', '==', normalizedPhone)
     .limit(1)
     .get();
@@ -381,7 +384,7 @@ function normalizeEmail(email?: string): string | null {
  * List all customers
  */
 export async function listCustomers(): Promise<Customer[]> {
-  const snapshot = await customersCollection.orderBy('name').get();
+  const snapshot = await getCustomersCollection().orderBy('name').get();
   return snapshot.docs.map((doc) => docToCustomer(doc.id, doc.data()));
 }
 
@@ -414,7 +417,7 @@ export async function updateCustomer(id: string, updates: Partial<CustomerInput>
     ...updates,
     updatedAt: Timestamp.now().toDate().toISOString(),
   });
-  await customersCollection.doc(id).set(updateData, { merge: true });
+  await getCustomersCollection().doc(id).set(updateData, { merge: true });
   const updated = await getCustomerById(id);
   if (!updated) throw new Error('Customer not found after update');
   return updated;
@@ -429,7 +432,7 @@ export async function createCustomer(input: CustomerInput): Promise<Customer> {
     createdAt: Timestamp.now().toDate().toISOString(),
     updatedAt: Timestamp.now().toDate().toISOString(),
   });
-  const docRef = await customersCollection.add(customerData);
+  const docRef = await getCustomersCollection().add(customerData);
   return docToCustomer(docRef.id, customerData);
 }
 
@@ -437,7 +440,7 @@ export async function createCustomer(input: CustomerInput): Promise<Customer> {
  * Delete a customer by ID
  */
 export async function deleteCustomer(id: string): Promise<void> {
-  await customersCollection.doc(id).delete();
+  await getCustomersCollection().doc(id).delete();
 }
 
 function docToCustomer(id: string, data: FirebaseFirestore.DocumentData): Customer {

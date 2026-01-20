@@ -4,6 +4,9 @@ import { BlockedDate, Slot, SlotInput, SlotStatus } from '../types';
 import { preventSlotInBlockedRange } from '../scheduling';
 import { getDefaultNailTech } from './nailTechService';
 
+// Use a getter to avoid touching Firebase at module load time for some usages
+const getSlotCollection = () => adminDb.collection('slots');
+// Keep a direct reference for existing logic that expects a const
 const slotCollection = adminDb.collection('slots');
 const allowedStatuses: SlotStatus[] = ['available', 'blocked', 'pending', 'confirmed'];
 
@@ -11,7 +14,7 @@ export async function getSlotsByIds(slotIds: string[]): Promise<Slot[]> {
   const uniqueIds = Array.from(new Set((slotIds || []).filter(Boolean)));
   if (uniqueIds.length === 0) return [];
 
-  const refs = uniqueIds.map((id) => slotCollection.doc(id));
+  const refs = uniqueIds.map((id) => getSlotCollection().doc(id));
   const snaps = await adminDb.getAll(...refs);
 
   const slots: Slot[] = [];
@@ -71,7 +74,7 @@ async function normalizeSlotsFromSnapshot(snapshot: FirebaseFirestore.QuerySnaps
 
 export async function listSlots(nailTechId?: string): Promise<Slot[]> {
   // Fetch all slots and filter/sort in memory to avoid requiring composite index
-  const snapshot = await slotCollection.get();
+  const snapshot = await getSlotCollection().get();
   const slots = await normalizeSlotsFromSnapshot(snapshot);
 
   // Filter by nailTechId if provided
@@ -89,7 +92,7 @@ export async function listSlots(nailTechId?: string): Promise<Slot[]> {
 }
 
 export async function listSlotsByDateRange(startDate: string, endDate: string, nailTechId?: string): Promise<Slot[]> {
-  const snapshot = await slotCollection
+  const snapshot = await getSlotCollection()
     .where('date', '>=', startDate)
     .where('date', '<=', endDate)
     .get();
@@ -116,12 +119,12 @@ export async function listSlotsByNailTech(nailTechId: string): Promise<Slot[]> {
 export async function listSlotsByStatus(status: Slot['status'], nailTechId?: string): Promise<Slot[]> {
   let snapshot;
   if (nailTechId) {
-    snapshot = await slotCollection
+    snapshot = await getSlotCollection()
       .where('status', '==', status)
       .where('nailTechId', '==', nailTechId)
       .get();
   } else {
-    snapshot = await slotCollection.where('status', '==', status).get();
+    snapshot = await getSlotCollection().where('status', '==', status).get();
   }
   
   // Handle backward compatibility
