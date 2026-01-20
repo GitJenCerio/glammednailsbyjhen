@@ -8,6 +8,10 @@ jobs:
   preview:
     name: Preview Deployment
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     
     steps:
       - name: Checkout code
@@ -43,7 +47,9 @@ jobs:
       - name: Comment PR
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
+        continue-on-error: true  # Don't fail the workflow if commenting fails
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
