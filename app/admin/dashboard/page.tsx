@@ -5,6 +5,9 @@ import { format, startOfMonth, startOfDay, endOfDay, startOfWeek, endOfWeek, sta
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+
+// Prevent static generation - this page requires Firebase client SDK
+export const dynamic = 'force-dynamic';
 import type { BlockedDate, Booking, BookingWithSlot, Invoice, Slot } from '@/lib/types';
 import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
 import { CustomSelect } from '@/components/admin/CustomSelect';
