@@ -3,6 +3,9 @@ import { listBookings } from '@/lib/services/bookingService';
 import { listSlots } from '@/lib/services/slotService';
 import { addDays, format, parseISO } from 'date-fns';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 /**
  * Cron job to check appointments scheduled for tomorrow
  * Email functionality is disabled

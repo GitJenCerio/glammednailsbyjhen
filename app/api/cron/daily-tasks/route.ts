@@ -3,6 +3,9 @@ import { listBookings } from '@/lib/services/bookingService';
 import { listSlots } from '@/lib/services/slotService';
 import { addDays, format, parseISO } from 'date-fns';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 /**
  * Combined daily cron job for Vercel Hobby tier (only 1 cron per day allowed)
  * Runs daily at 9:00 AM and handles:

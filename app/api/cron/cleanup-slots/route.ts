@@ -1,6 +1,9 @@
 import { deleteExpiredSlots } from '@/lib/services/slotService';
 import { NextResponse } from 'next/server';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const deletedCount = await deleteExpiredSlots();

@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl, splitRescheduleBooking, updateServiceType } from '@/lib/services/bookingService';
 import type { Invoice, PaymentStatus, ServiceType } from '@/lib/types';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const url = new URL(request.url);
   const action = url.searchParams.get('action');

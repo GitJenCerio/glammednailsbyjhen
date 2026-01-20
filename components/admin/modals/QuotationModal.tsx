@@ -1332,7 +1332,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], mode = 'edi
             {!isViewOnly && (
             <div className="space-y-2">
               <button
-                onClick={handleGenerateInvoice}
+                onClick={() => handleGenerateInvoice()}
                 disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
                 className="w-full rounded-full bg-rose-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-rose-700 transition-colors"
               >

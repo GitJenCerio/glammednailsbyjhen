@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    // Use dynamic import to avoid loading Firebase Admin during build
+    const { adminDb } = await import('@/lib/firebaseAdmin');
+    
     const eventData = await request.json();
     
     // Add timestamp if not provided

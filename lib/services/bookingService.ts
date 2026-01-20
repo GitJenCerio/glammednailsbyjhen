@@ -10,12 +10,17 @@ import { findOrCreateCustomer, getCustomerById, getCustomerByEmail, getCustomerB
 import { getDefaultNailTech } from './nailTechService';
 // Email functionality disabled - imports removed
 
+// Use getters to avoid touching Firebase at module load time in some places
+const getBookingsCollection = () => adminDb.collection('bookings');
+const getSlotsCollection = () => adminDb.collection('slots');
+const getCustomersCollection = () => adminDb.collection('customers');
+// Keep direct references for existing logic that expects const collections
 const bookingsCollection = adminDb.collection('bookings');
 const slotsCollection = adminDb.collection('slots');
 const customersCollection = adminDb.collection('customers');
 
 export async function listBookings(): Promise<Booking[]> {
-  const snapshot = await bookingsCollection.orderBy('createdAt', 'desc').get();
+  const snapshot = await getBookingsCollection().orderBy('createdAt', 'desc').get();
   
   // Handle backward compatibility: assign default nail tech to bookings without one
   const defaultNailTech = await getDefaultNailTech();
@@ -36,7 +41,7 @@ export async function listBookings(): Promise<Booking[]> {
 }
 
 export async function getBookingById(id: string): Promise<Booking | null> {
-  const snapshot = await bookingsCollection.doc(id).get();
+  const snapshot = await getBookingsCollection().doc(id).get();
   if (!snapshot.exists) return null;
   
   const data = snapshot.data()!;
@@ -80,7 +85,7 @@ export function getRequiredSlotCount(serviceType: ServiceType): number {
  * Only considers sequential IDs (GN-00001, GN-00002, etc.) and ignores old timestamp-based IDs
  */
 async function getNextBookingNumber(): Promise<number> {
-  const snapshot = await bookingsCollection.get();
+  const snapshot = await getBookingsCollection().get();
   let maxNumber = 0;
 
   snapshot.docs.forEach((doc) => {
@@ -189,7 +194,7 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
   let slotNailTechId: string | null = null;
 
   await adminDb.runTransaction(async (transaction) => {
-    const slotRef = slotsCollection.doc(slotId);
+    const slotRef = getSlotsCollection().doc(slotId);
     const slotSnap = await transaction.get(slotRef);
     if (!slotSnap.exists) throw new Error('Slot not found.');
     const slot = docToSlot(slotSnap.id, slotSnap.data()!);
@@ -764,7 +769,7 @@ export async function recoverBookingFromForm(
       if (validPreviousBookings.length > 0) {
         determinedClientType = 'repeat';
         // Also update customer to mark as repeat client
-        await customersCollection.doc(customer.id).set({
+        await getCustomersCollection().doc(customer.id).set({
           isRepeatClient: true,
           updatedAt: Timestamp.now().toDate().toISOString()
         }, { merge: true });
@@ -988,7 +993,7 @@ export async function syncBookingWithForm(
     if (validPreviousBookings.length > 0) {
       determinedClientType = 'repeat';
       // Also update customer to mark as repeat client
-      await customersCollection.doc(customer.id).set({
+      await getCustomersCollection().doc(customer.id).set({
         isRepeatClient: true,
         updatedAt: Timestamp.now().toDate().toISOString()
       }, { merge: true });
@@ -1061,7 +1066,7 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
 
   await adminDb.runTransaction(async (transaction) => {
     // ALL READS MUST HAPPEN FIRST
-    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingRef = getBookingsCollection().doc(bookingId);
     const bookingSnap = await transaction.get(bookingRef);
     if (!bookingSnap.exists) throw new Error('Booking not found.');
     booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
@@ -1147,7 +1152,7 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
 
 export async function updateBookingStatus(bookingId: string, status: BookingStatus, releaseSlot: boolean = true) {
   // Get booking and related data before updating (for email notifications)
-  const bookingSnap = await bookingsCollection.doc(bookingId).get();
+  const bookingSnap = await getBookingsCollection().doc(bookingId).get();
   const booking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
   const slot = booking ? await getSlotById(booking.slotId) : null;
   const customer = booking ? await getCustomerById(booking.customerId) : null;
@@ -1186,8 +1191,8 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
     // Release slots if requested
     if (releaseSlot) {
       await adminDb.runTransaction(async (transaction) => {
-        const bookingRef = bookingsCollection.doc(bookingId);
-        const slotRef = slotsCollection.doc(booking.slotId);
+        const bookingRef = getBookingsCollection().doc(bookingId);
+        const slotRef = getSlotsCollection().doc(booking.slotId);
         
         // Get linked slot IDs
         const linkedSlotIds = booking.linkedSlotIds || [];
@@ -1226,7 +1231,7 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
     }
   }
 
-  await bookingsCollection.doc(bookingId).set(updateData, { merge: true });
+  await getBookingsCollection().doc(bookingId).set(updateData, { merge: true });
 
   // Email functionality disabled
 }
@@ -1234,7 +1239,7 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
 export async function updateServiceType(bookingId: string, newServiceType: ServiceType): Promise<void> {
   await adminDb.runTransaction(async (transaction) => {
     // ALL READS FIRST
-    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingRef = getBookingsCollection().doc(bookingId);
     const bookingSnap = await transaction.get(bookingRef);
     if (!bookingSnap.exists) throw new Error('Booking not found.');
     const booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
@@ -1400,7 +1405,7 @@ export async function updateServiceType(bookingId: string, newServiceType: Servi
 export async function saveInvoice(bookingId: string, invoice: Invoice) {
   // Optimize: Use update() instead of set() with merge for better performance
   // Also, we'll read the booking in parallel with preparing the update data
-  const bookingRef = bookingsCollection.doc(bookingId);
+  const bookingRef = getBookingsCollection().doc(bookingId);
   
   // Prepare base update data first (doesn't depend on current booking)
   const baseUpdateData: any = {
@@ -1497,11 +1502,11 @@ export async function updatePaymentStatus(bookingId: string, paymentStatus: Paym
   }
   
   // Use update() instead of set() with merge - this is faster and more efficient
-  await bookingsCollection.doc(bookingId).update(updateData);
+  await getBookingsCollection().doc(bookingId).update(updateData);
 }
 
 export async function updateDepositAmount(bookingId: string, depositAmount: number, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
-  const bookingRef = bookingsCollection.doc(bookingId);
+  const bookingRef = getBookingsCollection().doc(bookingId);
   const bookingSnap = await bookingRef.get();
   const currentBooking = bookingSnap.exists ? docToBooking(bookingSnap.id, bookingSnap.data()!) : null;
   
@@ -1542,7 +1547,7 @@ export async function updateDepositAmount(bookingId: string, depositAmount: numb
 export async function rescheduleBooking(bookingId: string, newSlotId: string, linkedSlotIds?: string[]) {
   await adminDb.runTransaction(async (transaction) => {
     // ALL READS FIRST
-    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingRef = getBookingsCollection().doc(bookingId);
     const bookingSnap = await transaction.get(bookingRef);
     if (!bookingSnap.exists) throw new Error('Booking not found.');
     const booking = docToBooking(bookingSnap.id, bookingSnap.data()!);
@@ -1671,7 +1676,7 @@ export async function splitRescheduleBooking(
 
   await adminDb.runTransaction(async (transaction) => {
     // Get original booking
-    const bookingRef = bookingsCollection.doc(bookingId);
+    const bookingRef = getBookingsCollection().doc(bookingId);
     const bookingSnap = await transaction.get(bookingRef);
     if (!bookingSnap.exists) throw new Error('Booking not found.');
 
@@ -1790,7 +1795,7 @@ export async function splitRescheduleBooking(
     if (booking.depositPaymentMethod) booking1Data.depositPaymentMethod = booking.depositPaymentMethod;
     if (booking.paidPaymentMethod) booking1Data.paidPaymentMethod = booking.paidPaymentMethod;
 
-    const booking1Ref = bookingsCollection.doc();
+    const booking1Ref = getBookingsCollection().doc();
     transaction.set(booking1Ref, booking1Data);
 
     // Create booking 2 (Pedicure)
@@ -1824,7 +1829,7 @@ export async function splitRescheduleBooking(
     if (booking.depositPaymentMethod) booking2Data.depositPaymentMethod = booking.depositPaymentMethod;
     if (booking.paidPaymentMethod) booking2Data.paidPaymentMethod = booking.paidPaymentMethod;
 
-    const booking2Ref = bookingsCollection.doc();
+    const booking2Ref = getBookingsCollection().doc();
     transaction.set(booking2Ref, booking2Data);
 
     // Release old slots
@@ -1866,7 +1871,7 @@ export async function splitRescheduleBooking(
  * - If pending_form: no form has been synced (no formResponseId)
  */
 export async function getEligibleBookingsForRelease() {
-  const snapshot = await bookingsCollection
+  const snapshot = await getBookingsCollection()
     .where('status', 'in', ['pending_form', 'pending_payment'])
     .get();
 
@@ -1899,7 +1904,7 @@ export async function manuallyReleaseBookings(bookingIds: string[]) {
   await Promise.all(
     bookingIds.map(async (bookingId) => {
       try {
-        const bookingRef = bookingsCollection.doc(bookingId);
+        const bookingRef = getBookingsCollection().doc(bookingId);
         const bookingSnap = await bookingRef.get();
         
         if (!bookingSnap.exists) {
@@ -1976,7 +1981,7 @@ export async function releaseExpiredPendingBookings(maxAgeMinutes = 30) {
   // This function is deprecated - use manuallyReleaseBookings instead
   // Keeping it for backward compatibility but it won't be called automatically
   const cutoff = Date.now() - maxAgeMinutes * 60 * 1000;
-  const snapshot = await bookingsCollection.where('status', '==', 'pending_form').get();
+  const snapshot = await getBookingsCollection().where('status', '==', 'pending_form').get();
 
   await Promise.all(
     snapshot.docs.map(async (docSnap) => {
@@ -1986,8 +1991,8 @@ export async function releaseExpiredPendingBookings(maxAgeMinutes = 30) {
       if (Number.isNaN(createdAt) || createdAt >= cutoff) return;
 
       await adminDb.runTransaction(async (transaction) => {
-        const bookingRef = bookingsCollection.doc(docSnap.id);
-        const slotRef = slotsCollection.doc(data.slotId);
+        const bookingRef = getBookingsCollection().doc(docSnap.id);
+        const slotRef = getSlotsCollection().doc(data.slotId);
         const slotSnap = await transaction.get(slotRef);
 
         const linkedSlotIds: string[] = Array.isArray(data.linkedSlotIds)

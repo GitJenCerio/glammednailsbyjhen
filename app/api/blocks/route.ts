@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createBlockedDate, listBlockedDates } from '@/lib/services/blockService';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const blockedDates = await listBlockedDates();
   

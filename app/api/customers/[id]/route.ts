@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getCustomerById, updateCustomer, getBookingsByCustomer, calculateCustomerLifetimeValue } from '@/lib/services/customerService';
 import type { CustomerInput } from '@/lib/types';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const customer = await getCustomerById(params.id);

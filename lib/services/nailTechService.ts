@@ -2,6 +2,9 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../firebaseAdmin';
 import { NailTech, NailTechInput, ServiceAvailability } from '../types';
 
+// Use a getter to avoid touching Firebase at module load time
+const getNailTechsCollection = () => adminDb.collection('nailTechs');
+// Keep direct reference for existing logic that expects a const collection
 const nailTechsCollection = adminDb.collection('nailTechs');
 
 // Helper function to ensure name doesn't have "Ms." prefix (store without prefix)
@@ -15,14 +18,14 @@ function normalizeName(name: string): string {
 }
 
 export async function listNailTechs(): Promise<NailTech[]> {
-  const snapshot = await nailTechsCollection.get();
+  const snapshot = await getNailTechsCollection().get();
   const allTechs = snapshot.docs.map((doc) => docToNailTech(doc.id, doc.data()));
   return allTechs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function listActiveNailTechs(): Promise<NailTech[]> {
   // Fetch all nail techs and filter/sort in memory to avoid requiring a composite index
-  const snapshot = await nailTechsCollection.get();
+  const snapshot = await getNailTechsCollection().get();
   const allTechs = snapshot.docs.map((doc) => docToNailTech(doc.id, doc.data()));
   return allTechs
     .filter((tech) => tech.status === 'Active')
@@ -30,14 +33,14 @@ export async function listActiveNailTechs(): Promise<NailTech[]> {
 }
 
 export async function getNailTechById(id: string): Promise<NailTech | null> {
-  const snapshot = await nailTechsCollection.doc(id).get();
+  const snapshot = await getNailTechsCollection().doc(id).get();
   if (!snapshot.exists) return null;
   return docToNailTech(snapshot.id, snapshot.data()!);
 }
 
 export async function getDefaultNailTech(): Promise<NailTech | null> {
   // Find the default nail tech (Ms. Jhen - Owner)
-  const snapshot = await nailTechsCollection
+  const snapshot = await getNailTechsCollection()
     .where('role', '==', 'Owner')
     .where('status', '==', 'Active')
     .limit(1)

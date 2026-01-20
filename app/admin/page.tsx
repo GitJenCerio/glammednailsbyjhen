@@ -7,6 +7,9 @@ import { auth } from '@/lib/firebase';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 
+// Prevent static generation - this page requires Firebase client SDK
+export const dynamic = 'force-dynamic';
+
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
