@@ -831,13 +831,13 @@ export default function BookingPage() {
     <main className="min-h-screen bg-white">
       <Header />
       
-      <section className="pt-[70px] sm:pt-[80px] md:pt-[90px] px-2 sm:px-6 pb-8 sm:pb-12">
+      <section className="pt-[80px] sm:pt-[90px] md:pt-[100px] lg:pt-[130px] px-2 sm:px-6 pb-8 sm:pb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="max-w-7xl mx-auto"
         >
-          <h1 id="booking-heading" className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4 text-slate-900 scroll-mt-24 sm:scroll-mt-28">
+          <h1 id="booking-heading" className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-acollia text-center mb-3 sm:mb-4 px-2 sm:px-4 text-slate-900 scroll-mt-28 sm:scroll-mt-32 lg:scroll-mt-36">
             Book Your Appointment
           </h1>
 
@@ -904,23 +904,24 @@ export default function BookingPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.2fr,1fr]">
-                <div id="booking-calendar" className="scroll-mt-24">
-                  <CalendarGrid
-                    referenceDate={currentMonth}
-                    slots={slots.filter((slot) => slot.status === 'available')}
-                    blockedDates={blockedDates}
-                    selectedDate={selectedDate}
-                    onSelectDate={setSelectedDate}
-                    onChangeMonth={setCurrentMonth}
-                    nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
-                  />
-                </div>
+              <div className="max-w-4xl mx-auto px-2 sm:px-4">
+                <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.8fr,1fr]">
+                  <div id="booking-calendar" className="scroll-mt-24">
+                    <CalendarGrid
+                      referenceDate={currentMonth}
+                      slots={slots.filter((slot) => slot.status === 'available')}
+                      blockedDates={blockedDates}
+                      selectedDate={selectedDate}
+                      onSelectDate={setSelectedDate}
+                      onChangeMonth={setCurrentMonth}
+                      nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
+                    />
+                  </div>
 
-                <section 
-                  ref={slotsSectionRef}
-                  className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-4 sm:p-6 shadow-md shadow-slate-900/10 scroll-mt-24"
-                >
+                  <section 
+                    ref={slotsSectionRef}
+                    className="rounded-2xl sm:rounded-3xl border-2 border-slate-300 bg-slate-100 p-4 sm:p-6 shadow-md shadow-slate-900/10 scroll-mt-24"
+                  >
                   <header className="mb-3 sm:mb-4">
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-slate-500">Available slots</p>
@@ -974,6 +975,7 @@ export default function BookingPage() {
                     ))}
                   </div>
                 </section>
+                </div>
               </div>
 
               <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-gray-600 px-2 sm:px-4">
