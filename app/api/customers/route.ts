@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { listCustomers, createCustomer } from '@/lib/services/customerService';
 import type { CustomerInput } from '@/lib/types';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const customers = await listCustomers();

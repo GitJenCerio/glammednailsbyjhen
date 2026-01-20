@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getNailTechById, updateNailTech, deleteNailTech } from '@/lib/services/nailTechService';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }

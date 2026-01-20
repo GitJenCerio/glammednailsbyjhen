@@ -4,6 +4,9 @@ import { extractCustomerInfo, getCustomerById } from '@/lib/services/customerSer
 import { getSlotsByIds } from '@/lib/services/slotService';
 import type { BookingWithSlot, Slot } from '@/lib/types';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 /**
  * GET: Get bookings eligible for manual release
  * Returns bookings that are pending_form status and no form synced

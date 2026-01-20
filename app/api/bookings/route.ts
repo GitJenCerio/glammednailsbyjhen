@@ -3,6 +3,9 @@ import { createBooking, listBookings } from '@/lib/services/bookingService';
 import { fetchSheetRows } from '@/lib/googleSheets';
 import { syncBookingWithForm } from '@/lib/services/bookingService';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 async function syncGoogleSheets() {
   const range = process.env.GOOGLE_SHEETS_RANGE ?? "'Form Responses 1'!A:Z";
   const bookingIdColumn = process.env.GOOGLE_SHEETS_BOOKING_ID_COLUMN ?? 'bookingId';

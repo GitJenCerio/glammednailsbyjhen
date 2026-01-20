@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { listNailTechs, listActiveNailTechs, createNailTech } from '@/lib/services/nailTechService';
 
+// Mark this route as dynamic to prevent static analysis during build
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
