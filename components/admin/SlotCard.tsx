@@ -433,7 +433,7 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
                           <span>View Form</span>
                         </button>
                       )}
-                      {onMakeQuotation && (
+                      {onMakeQuotation && !booking.invoice && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -444,7 +444,7 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
                           className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-rose-700 hover:bg-rose-50 transition-colors"
                         >
                           <IoDocumentTextOutline className="w-4 h-4" />
-                          <span>{booking.invoice ? 'Requote' : 'Make Quotation'}</span>
+                          <span>Make Quotation</span>
                         </button>
                       )}
                     </>

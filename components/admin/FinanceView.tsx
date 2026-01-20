@@ -5,7 +5,8 @@ import { format, parseISO } from 'date-fns';
 import type { Booking, BookingWithSlot, PaymentStatus, Customer, NailTech } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { PaymentModal } from './modals/PaymentModal';
-import { IoEllipsisVertical, IoCreateOutline } from 'react-icons/io5';
+import { IoEllipsisVertical, IoCreateOutline, IoSearchOutline, IoClose, IoDocumentTextOutline, IoCashOutline, IoEyeOutline } from 'react-icons/io5';
+import { createPortal } from 'react-dom';
 
 type FinanceViewProps = {
   bookings: Booking[];
@@ -15,6 +16,7 @@ type FinanceViewProps = {
   selectedNailTechId?: string | null;
   onNailTechChange?: (nailTechId: string | null) => void;
   onMakeQuotation?: (bookingId: string) => void;
+  onViewInvoice?: (bookingId: string) => void;
   onUpdatePayment?: (bookingId: string, paymentStatus: PaymentStatus, paidAmount?: number, tipAmount?: number, paidPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') => Promise<void>;
 };
 
@@ -36,21 +38,20 @@ const paymentStatusColors: Record<PaymentStatus, string> = {
   forfeited: 'bg-amber-100 text-amber-800 border-amber-200',
 };
 
-export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onMakeQuotation, onUpdatePayment }: FinanceViewProps) {
+export function FinanceView({ bookings, slots, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onMakeQuotation, onViewInvoice, onUpdatePayment }: FinanceViewProps) {
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
   const [yearFilter, setYearFilter] = useState<number | 'all'>('all');
-  const [dateRangeStart, setDateRangeStart] = useState<string>('');
-  const [dateRangeEnd, setDateRangeEnd] = useState<string>('');
-  const [useDateRange, setUseDateRange] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<Record<string, 'up' | 'down'>>({});
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; right: number } | null>(null);
   const [localSelectedNailTechId, setLocalSelectedNailTechId] = useState<string | null>(selectedNailTechId || null);
   const [activeFilterField, setActiveFilterField] = useState<'nailTech' | 'status' | 'date'>('status');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Sync local state with prop
   useEffect(() => {
@@ -232,6 +233,85 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     return booking.bookingId;
   };
 
+  const getCustomerPhone = (booking: BookingWithSlot): string => {
+    if (booking.customerData && Object.keys(booking.customerData).length > 0) {
+      const findPhoneField = (keywords: string[]): string | null => {
+        const lowerKeywords = keywords.map(k => k.toLowerCase());
+        for (const [key, value] of Object.entries(booking.customerData!)) {
+          const lowerKey = key.toLowerCase();
+          if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw) && value && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        return null;
+      };
+
+      const phone = findPhoneField([
+        'contact number',
+        'phone number',
+        'phone',
+        'contact',
+        'mobile',
+        'cell',
+        'telephone',
+        'tel',
+      ]);
+      if (phone) return phone;
+    }
+
+    if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+      const customer = customers.find(c => c.id === booking.customerId);
+      if (customer?.phone) return customer.phone;
+    }
+
+    return 'N/A';
+  };
+
+  const getTimeRange = (booking: BookingWithSlot): string => {
+    if (!booking.slot) return 'N/A';
+    if (booking.linkedSlots && booking.linkedSlots.length > 0) {
+      const lastSlot = booking.linkedSlots[booking.linkedSlots.length - 1];
+      return `${formatTime12Hour(booking.slot.time)} - ${formatTime12Hour(lastSlot.time)}`;
+    }
+    if (booking.pairedSlot) {
+      return `${formatTime12Hour(booking.slot.time)} - ${formatTime12Hour(booking.pairedSlot.time)}`;
+    }
+    return formatTime12Hour(booking.slot.time);
+  };
+
+  const matchesSearch = useCallback((booking: BookingWithSlot, query: string): boolean => {
+    if (!query.trim()) return true;
+    const lowerQuery = query.toLowerCase().trim();
+
+    if (booking.bookingId.toLowerCase().includes(lowerQuery)) return true;
+
+    const customerName = getCustomerName(booking).toLowerCase();
+    if (customerName.includes(lowerQuery)) return true;
+
+    const phone = getCustomerPhone(booking).toLowerCase();
+    if (phone.includes(lowerQuery)) return true;
+
+    if (booking.serviceType && booking.serviceType.toLowerCase().includes(lowerQuery)) return true;
+
+    if (booking.slot) {
+      const dateStr = format(parseISO(booking.slot.date), 'MMM d, yyyy').toLowerCase();
+      if (dateStr.includes(lowerQuery)) return true;
+    }
+
+    if (booking.slot) {
+      const timeStr = getTimeRange(booking).toLowerCase();
+      if (timeStr.includes(lowerQuery)) return true;
+    }
+
+    if (booking.customerData) {
+      for (const value of Object.values(booking.customerData)) {
+        if (String(value).toLowerCase().includes(lowerQuery)) return true;
+      }
+    }
+
+    return false;
+  }, [getCustomerName, getCustomerPhone, getTimeRange]);
+
   // Helper function to get the relevant date (always service date for revenue recognition)
   const getRelevantDate = useCallback((booking: BookingWithSlot): Date => {
     return parseISO(booking.slot.date);
@@ -303,17 +383,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       });
     }
 
-    // Date range filter
-    if (useDateRange && dateRangeStart && dateRangeEnd) {
-      const startDate = new Date(dateRangeStart);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(dateRangeEnd);
-      endDate.setHours(23, 59, 59, 999);
-      
-      filtered = filtered.filter((booking) => {
-        const bookingDate = getRelevantDate(booking);
-        return bookingDate >= startDate && bookingDate <= endDate;
-      });
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((booking) => matchesSearch(booking, searchQuery));
     }
 
     return filtered.sort((a, b) => {
@@ -322,7 +393,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       const dateB = getRelevantDate(b).getTime();
       return dateA - dateB;
     });
-  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, dateRangeStart, dateRangeEnd, useDateRange, getRelevantDate]);
+  }, [bookingsWithSlots, filterStatus, filterPeriod, monthFilter, yearFilter, getRelevantDate, searchQuery, matchesSearch]);
 
   // Get available years from bookings data
   const availableYears = useMemo(() => {
@@ -438,31 +509,34 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
   // Close dropdown when clicking outside and calculate position
   useEffect(() => {
+    if (!openDropdownId) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (openDropdownId) {
-        const dropdown = dropdownRefs.current[openDropdownId];
-        if (dropdown && !dropdown.contains(event.target as Node)) {
-          setOpenDropdownId(null);
-        }
+      const allRefs = Object.values(dropdownRefs.current);
+      const clickedInside = allRefs.some(
+        (ref) => ref && ref.contains(event.target as Node)
+      );
+      const target = event.target as HTMLElement;
+      const isDropdownMenu = target.closest('.dropdown-menu');
+      if (!clickedInside && !isDropdownMenu) {
+        setOpenDropdownId(null);
+        setDropdownCoords(null);
       }
     };
 
     // Calculate dropdown position when it opens
-    if (openDropdownId) {
-      const dropdown = dropdownRefs.current[openDropdownId];
-      if (dropdown) {
-        const rect = dropdown.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        const spaceBelow = viewportHeight - rect.bottom;
-        const spaceAbove = rect.top;
-        const dropdownHeight = 100; // Approximate dropdown height
-        
-        // If not enough space below but enough space above, open upward
-        if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
-          setDropdownPosition(prev => ({ ...prev, [openDropdownId]: 'up' }));
-        } else {
-          setDropdownPosition(prev => ({ ...prev, [openDropdownId]: 'down' }));
-        }
+    const dropdown = dropdownRefs.current[openDropdownId];
+    if (dropdown) {
+      const rect = dropdown.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const dropdownHeight = 160; // Approximate dropdown height
+      
+      if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
+        setDropdownPosition(prev => ({ ...prev, [openDropdownId]: 'up' }));
+      } else {
+        setDropdownPosition(prev => ({ ...prev, [openDropdownId]: 'down' }));
       }
     }
 
@@ -485,13 +559,14 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
         const appointmentDate = parseISO(booking.slot.date);
         return appointmentDate >= today && appointmentDate < tomorrow;
       })
+      .filter((booking) => !searchQuery.trim() || matchesSearch(booking, searchQuery))
       .sort((a, b) => {
         const dateA = parseISO(a.slot.date).getTime();
         const dateB = parseISO(b.slot.date).getTime();
         // Sort ascending (earliest first)
         return dateA - dateB;
       });
-  }, [bookingsWithSlots, filterStatus]);
+  }, [bookingsWithSlots, filterStatus, searchQuery, matchesSearch]);
   
   // Calculate this week's bookings (excluding today's bookings to avoid duplicates)
   const thisWeekBookings = useMemo(() => {
@@ -521,13 +596,14 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
         // Include rest of the week
         return appointmentDate >= startOfWeek && appointmentDate < endOfWeek;
       })
+      .filter((booking) => !searchQuery.trim() || matchesSearch(booking, searchQuery))
       .sort((a, b) => {
         const dateA = parseISO(a.slot.date).getTime();
         const dateB = parseISO(b.slot.date).getTime();
         // Sort ascending (earliest first)
         return dateA - dateB;
       });
-  }, [bookingsWithSlots, filterStatus]);
+  }, [bookingsWithSlots, filterStatus, searchQuery, matchesSearch]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -571,13 +647,38 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
         </div>
       </div>
 
+      {/* Search Input */}
+      <div className="relative">
+        <IoSearchOutline className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by booking ID, name, phone, service, date, time..."
+          className="w-full pl-10 pr-10 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Clear search"
+          >
+            <IoClose className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="space-y-2">
         <p className="text-[11px] sm:text-xs text-slate-500 font-semibold">Filter by:</p>
-        <div className="flex flex-wrap gap-3 items-start sm:items-center">
+        <div
+          className={`flex gap-3 items-start sm:items-center ${
+            activeFilterField === 'status' ? 'flex-nowrap overflow-x-auto' : 'flex-wrap'
+          }`}
+        >
           {/* Filter field selector */}
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Field:</label>
+          <div className="flex items-center gap-2 flex-nowrap">
+            <label className="hidden sm:inline text-[11px] sm:text-xs text-slate-500 font-medium">Field:</label>
             <select
               value={activeFilterField}
               onChange={(e) => {
@@ -594,12 +695,9 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   setFilterPeriod('all');
                   setMonthFilter('all');
                   setYearFilter('all');
-                  setUseDateRange(false);
-                  setDateRangeStart('');
-                  setDateRangeEnd('');
                 }
               }}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+              className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
             >
               <option value="nailTech">Nail tech</option>
               <option value="status">Status</option>
@@ -614,7 +712,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               <select
                 value={localSelectedNailTechId || ''}
                 onChange={(e) => handleNailTechChange(e.target.value || null)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="">All nail techs</option>
                 {nailTechs.map((tech) => (
@@ -627,12 +725,12 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
           )}
 
           {activeFilterField === 'status' && (
-            <div className="flex items-center gap-2">
-              <label className="text-[11px] sm:text-xs text-slate-500 font-medium">Status:</label>
+            <div className="flex items-center gap-2 flex-nowrap">
+              <label className="hidden sm:inline text-[11px] sm:text-xs text-slate-500 font-medium">Status:</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as PaymentStatus | 'all')}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="all">All</option>
                 <option value="unpaid">Unpaid</option>
@@ -652,9 +750,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   value={filterPeriod}
                   onChange={(e) => {
                     setFilterPeriod(e.target.value as 'all' | 'today' | 'week' | 'month');
-                    setUseDateRange(false);
                   }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="all">All time</option>
                   <option value="today">Today</option>
@@ -671,7 +768,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   value={monthFilter}
               onChange={(e) => {
                 setMonthFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as MonthFilter));
-                setUseDateRange(false); // Disable date range when using month filter
                 // If month is selected but year is not, suggest current year
                 if (e.target.value !== 'all' && yearFilter === 'all') {
                   const currentYear = new Date().getFullYear();
@@ -682,7 +778,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   }
                 }
               }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="all">All months</option>
                   <option value="1">January</option>
@@ -705,10 +801,9 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                   value={yearFilter}
                   onChange={(e) => {
                     setYearFilter(e.target.value === 'all' ? 'all' : Number(e.target.value));
-                    setUseDateRange(false); // Disable date range when using year filter
                     // If year is selected but month is not, keep month as 'all' to show all months for that year
                   }}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+                  className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value="all">All years</option>
                   {availableYears.map((year) => (
@@ -722,67 +817,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
           </div>
           )}
 
-          {/* Date Range Filter */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-3 sm:mt-0">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="useDateRange"
-                checked={useDateRange}
-                onChange={(e) => {
-                  setUseDateRange(e.target.checked);
-                  if (!e.target.checked) {
-                    setDateRangeStart('');
-                    setDateRangeEnd('');
-                  } else {
-                    // Disable period and month/year filters when using date range
-                    setFilterPeriod('all');
-                    setMonthFilter('all');
-                    setYearFilter('all');
-                  }
-                }}
-                className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-slate-900"
-              />
-              <label htmlFor="useDateRange" className="text-[11px] sm:text-xs text-slate-700 font-medium">
-                Custom Date Range
-              </label>
-            </div>
-            {useDateRange && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] sm:text-xs text-slate-500 whitespace-nowrap">From:</label>
-                  <input
-                    type="date"
-                    value={dateRangeStart}
-                    onChange={(e) => setDateRangeStart(e.target.value)}
-                    max={dateRangeEnd || undefined}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] sm:text-xs text-slate-500 whitespace-nowrap">To:</label>
-                  <input
-                    type="date"
-                    value={dateRangeEnd}
-                    onChange={(e) => setDateRangeEnd(e.target.value)}
-                    min={dateRangeStart || undefined}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-                {(dateRangeStart || dateRangeEnd) && (
-                  <button
-                    onClick={() => {
-                      setDateRangeStart('');
-                      setDateRangeEnd('');
-                    }}
-                    className="text-[11px] sm:text-xs text-slate-500 hover:text-slate-700 underline"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -798,20 +832,128 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
           <div className="lg:hidden space-y-3">
             {todayBookings.map((booking) => (
               <div key={booking.id} className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4 shadow-sm">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start justify-between mb-3 gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
                     </div>
                     <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
                   </div>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
-                      paymentStatusColors[getEffectivePaymentStatus(booking)]
-                    }`}
-                  >
-                    {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
-                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border ${
+                        paymentStatusColors[getEffectivePaymentStatus(booking)]
+                      }`}
+                    >
+                      {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
+                    </span>
+                    <div
+                      className="relative"
+                      ref={(el: HTMLDivElement | null) => {
+                        dropdownRefs.current[`mobile-${booking.id}`] = el;
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          const button = e.currentTarget;
+                          const rect = button.getBoundingClientRect();
+                          if (openDropdownId === `mobile-${booking.id}`) {
+                            setOpenDropdownId(null);
+                            setDropdownCoords(null);
+                          } else {
+                            setOpenDropdownId(`mobile-${booking.id}`);
+                            const buttonCenterY = rect.top + rect.height / 2;
+                            setDropdownCoords({
+                              top: buttonCenterY,
+                              right: window.innerWidth - rect.right,
+                            });
+                          }
+                        }}
+                        className="inline-flex items-center justify-center p-0.5 text-slate-600 hover:text-slate-900 transition-colors focus:outline-none touch-manipulation active:scale-[0.98]"
+                        aria-label="Actions menu"
+                      >
+                        <IoEllipsisVertical className="w-5 h-5" />
+                      </button>
+                      {openDropdownId === `mobile-${booking.id}` && dropdownCoords && typeof window !== 'undefined' && createPortal(
+                        <div
+                          className="dropdown-menu fixed w-48 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                          style={{
+                            top: `${Math.max(12, Math.min(window.innerHeight - 200, dropdownCoords.top))}px`,
+                            right: `${Math.max(12, dropdownCoords.right + 8)}px`,
+                            transform: 'translateY(-50%)',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <div className="py-1">
+                            {booking.invoice && onViewInvoice && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewInvoice(booking.id);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoEyeOutline className="w-4 h-4" />
+                                View Invoice
+                              </button>
+                            )}
+                            {onMakeQuotation && !booking.invoice && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMakeQuotation(booking.id);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
+                                Quote
+                              </button>
+                            )}
+                            {booking.invoice && booking.paymentStatus !== 'paid' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBookingForPayment(booking);
+                                  setPaymentModalOpen(true);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoCashOutline className="w-4 h-4" />
+                                Update Payment
+                              </button>
+                            )}
+                            {booking.invoice && booking.paymentStatus === 'paid' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdatePayment(booking.id, 'refunded');
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2 touch-manipulation"
+                              >
+                                Refund
+                              </button>
+                            )}
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2 text-xs sm:text-sm">
                   <div className="flex justify-between">
@@ -864,42 +1006,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         })()}
                       </span>
                     </div>
-                  )}
-                </div>
-                <div className="mt-3 pt-3 border-t border-blue-200 flex flex-wrap gap-2">
-                  {booking.invoice && booking.paymentStatus === 'paid' ? (
-                    <button
-                      onClick={() => handleUpdatePayment(booking.id, 'refunded')}
-                      className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
-                    >
-                      Refund
-                    </button>
-                  ) : (
-                    <>
-                      {onMakeQuotation && (
-                        <button
-                          onClick={() => onMakeQuotation(booking.id)}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
-                            booking.invoice
-                              ? 'bg-rose-600 hover:bg-rose-700'
-                              : 'bg-green-600 hover:bg-green-700'
-                          }`}
-                        >
-                          {booking.invoice ? 'Requote' : 'Quote'}
-                        </button>
-                      )}
-                      {booking.invoice && (
-                        <button
-                          onClick={() => {
-                            setSelectedBookingForPayment(booking);
-                            setPaymentModalOpen(true);
-                          }}
-                          className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
-                        >
-                          Update Payment
-                        </button>
-                      )}
-                    </>
                   )}
                 </div>
               </div>
@@ -974,16 +1080,14 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                             >
                               Refund
                             </button>
-                          ) : onMakeQuotation ? (
+                          ) : onMakeQuotation && !booking.invoice ? (
                             <button
                               onClick={() => onMakeQuotation(booking.id)}
                               className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${
-                                booking.invoice
-                                  ? 'bg-rose-600 hover:bg-rose-700'
-                                  : 'bg-green-600 hover:bg-green-700'
+                                'bg-green-600 hover:bg-green-700'
                               }`}
                             >
-                              {booking.invoice ? 'Requote' : 'Quote'}
+                              Quote
                             </button>
                           ) : (
                             <button
@@ -1019,20 +1123,128 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
           <div className="lg:hidden space-y-3">
             {thisWeekBookings.map((booking) => (
               <div key={booking.id} className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start justify-between mb-3 gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
                     </div>
                     <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
                   </div>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
-                      paymentStatusColors[getEffectivePaymentStatus(booking)]
-                    }`}
-                  >
-                    {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
-                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border ${
+                        paymentStatusColors[getEffectivePaymentStatus(booking)]
+                      }`}
+                    >
+                      {paymentStatusLabels[getEffectivePaymentStatus(booking)]}
+                    </span>
+                    <div
+                      className="relative"
+                      ref={(el: HTMLDivElement | null) => {
+                        dropdownRefs.current[`mobile-${booking.id}`] = el;
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          const button = e.currentTarget;
+                          const rect = button.getBoundingClientRect();
+                          if (openDropdownId === `mobile-${booking.id}`) {
+                            setOpenDropdownId(null);
+                            setDropdownCoords(null);
+                          } else {
+                            setOpenDropdownId(`mobile-${booking.id}`);
+                            const buttonCenterY = rect.top + rect.height / 2;
+                            setDropdownCoords({
+                              top: buttonCenterY,
+                              right: window.innerWidth - rect.right,
+                            });
+                          }
+                        }}
+                        className="inline-flex items-center justify-center p-0.5 text-slate-600 hover:text-slate-900 transition-colors focus:outline-none touch-manipulation active:scale-[0.98]"
+                        aria-label="Actions menu"
+                      >
+                        <IoEllipsisVertical className="w-5 h-5" />
+                      </button>
+                      {openDropdownId === `mobile-${booking.id}` && dropdownCoords && typeof window !== 'undefined' && createPortal(
+                        <div
+                          className="dropdown-menu fixed w-48 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                          style={{
+                            top: `${Math.max(12, Math.min(window.innerHeight - 200, dropdownCoords.top))}px`,
+                            right: `${Math.max(12, dropdownCoords.right + 8)}px`,
+                            transform: 'translateY(-50%)',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <div className="py-1">
+                            {booking.invoice && onViewInvoice && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewInvoice(booking.id);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoEyeOutline className="w-4 h-4" />
+                                View Invoice
+                              </button>
+                            )}
+                            {onMakeQuotation && !booking.invoice && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMakeQuotation(booking.id);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
+                                Quote
+                              </button>
+                            )}
+                            {booking.invoice && booking.paymentStatus !== 'paid' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBookingForPayment(booking);
+                                  setPaymentModalOpen(true);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoCashOutline className="w-4 h-4" />
+                                Update Payment
+                              </button>
+                            )}
+                            {booking.invoice && booking.paymentStatus === 'paid' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdatePayment(booking.id, 'refunded');
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2 touch-manipulation"
+                              >
+                                Refund
+                              </button>
+                            )}
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2 text-xs sm:text-sm">
                   <div className="flex justify-between">
@@ -1085,42 +1297,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                         })()}
                       </span>
                     </div>
-                  )}
-                </div>
-                <div className="mt-3 pt-3 border-t border-emerald-200 flex flex-wrap gap-2">
-                  {booking.invoice && booking.paymentStatus === 'paid' ? (
-                    <button
-                      onClick={() => handleUpdatePayment(booking.id, 'refunded')}
-                      className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
-                    >
-                      Refund
-                    </button>
-                  ) : (
-                    <>
-                      {onMakeQuotation && (
-                        <button
-                          onClick={() => onMakeQuotation(booking.id)}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
-                            booking.invoice
-                              ? 'bg-rose-600 hover:bg-rose-700'
-                              : 'bg-green-600 hover:bg-green-700'
-                          }`}
-                        >
-                          {booking.invoice ? 'Requote' : 'Quote'}
-                        </button>
-                      )}
-                      {booking.invoice && (
-                        <button
-                          onClick={() => {
-                            setSelectedBookingForPayment(booking);
-                            setPaymentModalOpen(true);
-                          }}
-                          className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
-                        >
-                          Update Payment
-                        </button>
-                      )}
-                    </>
                   )}
                 </div>
               </div>
@@ -1195,16 +1371,14 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                             >
                               Refund
                             </button>
-                          ) : onMakeQuotation ? (
+                          ) : onMakeQuotation && !booking.invoice ? (
                             <button
                               onClick={() => onMakeQuotation(booking.id)}
                               className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${
-                                booking.invoice
-                                  ? 'bg-rose-600 hover:bg-rose-700'
-                                  : 'bg-green-600 hover:bg-green-700'
+                                'bg-green-600 hover:bg-green-700'
                               }`}
                             >
-                              {booking.invoice ? 'Requote' : 'Quote'}
+                              Quote
                             </button>
                           ) : (
                             <button
@@ -1237,20 +1411,128 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
         ) : (
           filteredBookings.map((booking) => (
             <div key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between mb-3">
+              <div className="flex items-start justify-between mb-3 gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{booking.bookingId}</span>
                   </div>
                   <div className="text-xs text-slate-600">{getCustomerName(booking)}</div>
                 </div>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${
-                    paymentStatusColors[booking.paymentStatus || 'unpaid']
-                  }`}
-                >
-                  {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
-                </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border ${
+                      paymentStatusColors[booking.paymentStatus || 'unpaid']
+                    }`}
+                  >
+                    {paymentStatusLabels[booking.paymentStatus || 'unpaid']}
+                  </span>
+                  <div
+                    className="relative"
+                    ref={(el: HTMLDivElement | null) => {
+                      dropdownRefs.current[`mobile-${booking.id}`] = el;
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const button = e.currentTarget;
+                        const rect = button.getBoundingClientRect();
+                        if (openDropdownId === `mobile-${booking.id}`) {
+                          setOpenDropdownId(null);
+                          setDropdownCoords(null);
+                        } else {
+                          setOpenDropdownId(`mobile-${booking.id}`);
+                          const buttonCenterY = rect.top + rect.height / 2;
+                          setDropdownCoords({
+                            top: buttonCenterY,
+                            right: window.innerWidth - rect.right,
+                          });
+                        }
+                      }}
+                      className="inline-flex items-center justify-center p-0.5 text-slate-600 hover:text-slate-900 transition-colors focus:outline-none touch-manipulation active:scale-[0.98]"
+                      aria-label="Actions menu"
+                    >
+                      <IoEllipsisVertical className="w-5 h-5" />
+                    </button>
+                    {openDropdownId === `mobile-${booking.id}` && dropdownCoords && typeof window !== 'undefined' && createPortal(
+                      <div
+                        className="dropdown-menu fixed w-48 rounded-lg border border-slate-200 bg-white shadow-2xl z-[9999]"
+                        style={{
+                          top: `${Math.max(12, Math.min(window.innerHeight - 200, dropdownCoords.top))}px`,
+                          right: `${Math.max(12, dropdownCoords.right + 8)}px`,
+                          transform: 'translateY(-50%)',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="py-1">
+                          {booking.invoice && onViewInvoice && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onViewInvoice(booking.id);
+                                setOpenDropdownId(null);
+                                setDropdownCoords(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                            >
+                              <IoEyeOutline className="w-4 h-4" />
+                              View Invoice
+                            </button>
+                          )}
+                          {onMakeQuotation && !booking.invoice && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMakeQuotation(booking.id);
+                                setOpenDropdownId(null);
+                                setDropdownCoords(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                            >
+                              <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
+                              Quote
+                            </button>
+                          )}
+                          {booking.invoice && booking.paymentStatus !== 'paid' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBookingForPayment(booking);
+                                setPaymentModalOpen(true);
+                                setOpenDropdownId(null);
+                                setDropdownCoords(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 touch-manipulation"
+                            >
+                              <IoCashOutline className="w-4 h-4" />
+                              Update Payment
+                            </button>
+                          )}
+                          {booking.invoice && booking.paymentStatus === 'paid' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdatePayment(booking.id, 'refunded');
+                                setOpenDropdownId(null);
+                                setDropdownCoords(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-red-700 hover:bg-red-50 flex items-center gap-2 touch-manipulation"
+                            >
+                              Refund
+                            </button>
+                          )}
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="space-y-2 text-xs sm:text-sm">
                 <div className="flex justify-between">
@@ -1320,42 +1602,6 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                       ₱{booking.tipAmount.toLocaleString('en-PH')}
                     </span>
                   </div>
-                )}
-              </div>
-              <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2">
-                          {booking.invoice && booking.paymentStatus === 'paid' ? (
-                  <button
-                    onClick={() => handleUpdatePayment(booking.id, 'refunded')}
-                    className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 touch-manipulation active:scale-[0.98] hover:bg-red-50"
-                  >
-                    Refund
-                  </button>
-                ) : (
-                  <>
-                    {onMakeQuotation && (
-                      <button
-                        onClick={() => onMakeQuotation(booking.id)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] ${
-                          booking.invoice
-                            ? 'bg-rose-600 hover:bg-rose-700'
-                            : 'bg-green-600 hover:bg-green-700'
-                        }`}
-                      >
-                        {booking.invoice ? 'Requote' : 'Quote'}
-                      </button>
-                    )}
-                    {booking.invoice && (
-                      <button
-                        onClick={() => {
-                          setSelectedBookingForPayment(booking);
-                          setPaymentModalOpen(true);
-                        }}
-                        className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white touch-manipulation active:scale-[0.98] hover:bg-green-700"
-                      >
-                        Update Payment
-                      </button>
-                    )}
-                  </>
                 )}
               </div>
             </div>
@@ -1518,7 +1764,10 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     <td className="px-4 xl:px-6 py-3">
                       <div className="relative inline-block" ref={(el) => { dropdownRefs.current[booking.id] = el; }}>
                         <button
-                          onClick={() => setOpenDropdownId(openDropdownId === booking.id ? null : booking.id)}
+                          onClick={() => {
+                            setOpenDropdownId(openDropdownId === booking.id ? null : booking.id);
+                            setDropdownCoords(null);
+                          }}
                           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                           aria-label="Actions"
                         >
@@ -1534,8 +1783,21 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                                 : `${Math.min((typeof window !== 'undefined' ? window.innerHeight : 1000) - 120, (dropdownRefs.current[booking.id]?.getBoundingClientRect().bottom || 0) + 4)}px`,
                             }}
                           >
-                            {/* Quote/Requote Action */}
-                            {onMakeQuotation && (
+                          {/* View Invoice Action */}
+                          {booking.invoice && onViewInvoice && (
+                            <button
+                              onClick={() => {
+                                onViewInvoice(booking.id);
+                                setOpenDropdownId(null);
+                              }}
+                              className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors border-b border-slate-100"
+                            >
+                              View Invoice
+                            </button>
+                          )}
+
+                          {/* Quote Action */}
+                          {onMakeQuotation && !booking.invoice && (
                               <button
                                 onClick={() => {
                                   onMakeQuotation(booking.id);
@@ -1543,7 +1805,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                                 }}
                                 className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors border-b border-slate-100"
                               >
-                                {booking.invoice ? 'Requote' : 'Quote'}
+                              Quote
                               </button>
                             )}
                             

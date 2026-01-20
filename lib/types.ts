@@ -17,6 +17,10 @@ export interface Invoice {
   items: QuoteItem[];
   total: number;
   notes?: string;
+  customerName?: string;
+  squeezeInFee?: number;
+  discountRate?: number;
+  discountAmount?: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -5,7 +5,7 @@ import { format, startOfMonth, startOfDay, endOfDay, startOfWeek, endOfWeek, sta
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import type { BlockedDate, Booking, BookingWithSlot, Slot } from '@/lib/types';
+import type { BlockedDate, Booking, BookingWithSlot, Invoice, Slot } from '@/lib/types';
 import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
 import { CustomSelect } from '@/components/admin/CustomSelect';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
@@ -99,6 +99,7 @@ function AdminDashboardContent() {
   const [bookingFilterPeriod, setBookingFilterPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
+  const [quotationModalMode, setQuotationModalMode] = useState<'edit' | 'view'>('edit');
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [reschedulingBookingId, setReschedulingBookingId] = useState<string | null>(null);
   const [splitRescheduleModalOpen, setSplitRescheduleModalOpen] = useState(false);
@@ -1006,10 +1007,17 @@ function AdminDashboardContent() {
 
   function handleMakeQuotation(id: string) {
     setSelectedBookingId(id);
+    setQuotationModalMode('edit');
     setQuotationModalOpen(true);
   }
 
-  async function handleSendInvoice(bookingId: string, invoiceData: { items: any[]; total: number; notes: string }) {
+  function handleViewInvoice(id: string) {
+    setSelectedBookingId(id);
+    setQuotationModalMode('view');
+    setQuotationModalOpen(true);
+  }
+
+  async function handleSendInvoice(bookingId: string, invoiceData: Invoice) {
     // Note: Invoice is already saved in QuotationModal, so we just need to update local state
     // This is much faster than reloading all data
     try {
@@ -1655,6 +1663,7 @@ function AdminDashboardContent() {
               selectedNailTechId={selectedNailTechId}
               onNailTechChange={(id) => setSelectedNailTechId(id)}
               onMakeQuotation={handleMakeQuotation}
+              onViewInvoice={handleViewInvoice}
               onUpdatePayment={async (bookingId, paymentStatus, paidAmount, tipAmount, paidPaymentMethod) => {
                 const res = await fetch(`/api/bookings/${bookingId}`, {
                   method: 'PATCH',
@@ -1818,7 +1827,13 @@ function AdminDashboardContent() {
             selectedBooking?.slot ? `${selectedBooking.slot.date} · ${formatTime12Hour(selectedBooking.slot.time)}` : undefined
           }
           nailTechs={nailTechs}
-          onClose={() => setQuotationModalOpen(false)}
+          customerName={customers.find((customer) => customer.id === selectedBooking.customerId)?.name}
+          mode={quotationModalMode}
+          onRequestEdit={() => setQuotationModalMode('edit')}
+          onClose={() => {
+            setQuotationModalOpen(false);
+            setQuotationModalMode('edit');
+          }}
           onSendInvoice={handleSendInvoice}
         />
       )}

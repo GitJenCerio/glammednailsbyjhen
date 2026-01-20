@@ -927,7 +927,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                         View Response
                       </button>
                     )}
-                    {onMakeQuotation && (
+                    {onMakeQuotation && !booking.invoice && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -938,7 +938,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                         className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
                       >
                         <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
-                        {booking.invoice ? 'Requote' : 'Quotation'}
+                        Quotation
                       </button>
                     )}
                     {onReschedule && (
@@ -1203,7 +1203,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               View Response
                             </button>
                           )}
-                          {onMakeQuotation && (
+                          {onMakeQuotation && !booking.invoice && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1214,7 +1214,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
                             >
                               <IoDocumentTextOutline className="w-4 h-4 text-rose-600" />
-                              {booking.invoice ? 'Requote' : 'Quotation'}
+                              Quotation
                             </button>
                           )}
                           {onReschedule && (

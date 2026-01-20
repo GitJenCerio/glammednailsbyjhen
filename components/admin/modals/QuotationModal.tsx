@@ -33,11 +33,24 @@ type QuotationModalProps = {
   booking: Booking | BookingWithSlot | null;
   slotLabel?: string;
   nailTechs?: NailTech[];
+  mode?: 'edit' | 'view';
   onClose: () => void;
-  onSendInvoice?: (bookingId: string, invoiceData: { items: QuoteItem[]; total: number; notes: string }) => Promise<void>;
+  customerName?: string;
+  onRequestEdit?: () => void;
+  onSendInvoice?: (bookingId: string, invoiceData: {
+    items: QuoteItem[];
+    total: number;
+    notes: string;
+    createdAt: string;
+    updatedAt: string;
+    customerName?: string;
+    squeezeInFee?: number;
+    discountRate?: number;
+    discountAmount?: number;
+  }) => Promise<void>;
 };
 
-export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, onSendInvoice }: QuotationModalProps) {
+export function QuotationModal({ booking, slotLabel, nailTechs = [], mode = 'edit', customerName, onClose, onRequestEdit, onSendInvoice }: QuotationModalProps) {
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [customLabel, setCustomLabel] = useState('');
   const [customPrice, setCustomPrice] = useState('');
@@ -48,8 +61,13 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
   const [priceMap, setPriceMap] = useState<Record<string, PriceSheetRow>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [generatingImage, setGeneratingImage] = useState(false);
-  const [savingQuotation, setSavingQuotation] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successTitle, setSuccessTitle] = useState('Invoice Saved');
+  const [successMessage, setSuccessMessage] = useState('The invoice has been saved.');
+  const [showNotesField, setShowNotesField] = useState(false);
+  const [showCustomItem, setShowCustomItem] = useState(false);
+
+  const isViewOnly = mode === 'view';
 
   const quoteCardRef = useRef<HTMLDivElement>(null);
   const lastBookingIdRef = useRef<string | null>(null);
@@ -68,7 +86,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
       setNotes('');
       lastBookingIdRef.current = null;
       setGeneratingImage(false);
-      setSavingQuotation(false);
+      setShowSuccess(false);
       return;
     }
 
@@ -81,8 +99,6 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     
     // Reset loading states when booking changes
     setGeneratingImage(false);
-    setSavingQuotation(false);
-    
     // Load existing invoice if it exists
     if (booking.invoice) {
       // Convert invoice items to quote items (add IDs if missing)
@@ -180,11 +196,42 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     return priceSheet.filter((row) => row.name.toLowerCase().includes(needle)).slice(0, 12);
   }, [priceSheet, searchTerm]);
 
-  const getCustomerName = () => {
+  const customerDisplayName = useMemo(() => {
+    if (customerName && customerName.trim()) return customerName.trim();
     if (!booking?.customerData) return 'Customer';
     const name = booking.customerData['Name'] || booking.customerData['name'] || booking.customerData['Full Name'] || booking.customerData['fullName'] || '';
     const surname = booking.customerData['Surname'] || booking.customerData['surname'] || booking.customerData['Last Name'] || booking.customerData['lastName'] || '';
     return `${name}${name && surname ? ' ' : ''}${surname}`.trim() || 'Customer';
+  }, [booking?.customerData, customerName]);
+
+  const buildInvoiceData = () => {
+    const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
+    const recalculatedDiscountAmount =
+      discountRate > 0 && discountRate < 100 ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) : 0;
+    const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
+    const normalizedCustomerName = customerDisplayName !== 'Customer' ? customerDisplayName : undefined;
+
+    return {
+      items: quoteItems,
+      total: recalculatedTotal,
+      notes,
+      customerName: normalizedCustomerName,
+      squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
+      discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined,
+      discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined,
+      createdAt: booking?.invoice?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  };
+
+  const triggerSuccess = (title: string, message: string, delayMs: number) => {
+    setSuccessTitle(title);
+    setSuccessMessage(message);
+    setShowSuccess(true);
+    setTimeout(() => {
+      onClose();
+    }, delayMs);
   };
 
   const addQuoteItemFromRow = (label: string, row?: PriceSheetRow | null) => {
@@ -239,7 +286,13 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     }
   };
 
-  const handleGenerateInvoice = async () => {
+  const handleGenerateInvoice = async (options?: {
+    save?: boolean;
+    showSuccess?: boolean;
+    successTitle?: string;
+    successMessage?: string;
+    closeDelayMs?: number;
+  }) => {
     if ((!quoteItems.length && !hasSqueezeFee) || !booking) {
       alert('Unable to generate invoice. Please add at least one item or enable squeeze-in fee.');
       return;
@@ -314,6 +367,8 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
     (element as HTMLElement).style.visibility = 'visible';
     (element as HTMLElement).style.opacity = '1';
     
+    const shouldSave = options?.save !== false;
+    const shouldShowSuccess = options?.showSuccess !== false;
     try {
       // Preload QR code images to ensure they're fully loaded
       if (!element || !element.querySelectorAll) {
@@ -700,47 +755,34 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
       link.download = `invoice-${booking.bookingId}-${Date.now()}.jpg`;
       link.click();
 
-      // Show success state and auto-close modal after 0.5s
-      setShowSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 500);
+      const invoiceData = buildInvoiceData();
 
-      // Recalculate total to ensure it's correct before saving
-      const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-      const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
-      const recalculatedDiscountAmount = discountRate > 0 && discountRate < 100 
-        ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) 
-        : 0;
-      const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
-      
-      // Save invoice to booking (squeeze-in fee is included in total, not as a separate item)
-      const invoiceData = {
-        items: quoteItems,
-        total: recalculatedTotal, // Use recalculated total to ensure accuracy (includes discount)
-        notes,
-        squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined, // Store squeeze-in fee separately for reference
-        discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined, // Store discount rate for reference
-        discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined, // Store discount amount for reference
-        createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date if editing
-        updatedAt: new Date().toISOString(),
-      };
+      if (shouldSave) {
+        const res = await fetch(`/api/bookings/${booking.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save_invoice',
+            invoice: invoiceData,
+          }),
+        });
 
-      const res = await fetch(`/api/bookings/${booking.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'save_invoice',
-          invoice: invoiceData,
-        }),
-      });
+        if (!res.ok) {
+          throw new Error('Failed to save invoice');
+        }
 
-      if (!res.ok) {
-        throw new Error('Failed to save invoice');
+        if (onSendInvoice) {
+          await onSendInvoice(booking.id, invoiceData);
+        }
       }
 
-      if (onSendInvoice) {
-        await onSendInvoice(booking.id, invoiceData);
+      if (shouldShowSuccess) {
+        const successDelay = options?.closeDelayMs ?? (isMobile ? 1400 : 800);
+        triggerSuccess(
+          options?.successTitle || 'Invoice Saved',
+          options?.successMessage || 'The invoice has been saved. Download should start automatically.',
+          successDelay
+        );
       }
     } catch (error) {
       console.error('Failed to generate invoice', error);
@@ -796,17 +838,14 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
         (finalElement as HTMLElement).style.position = originalElementPosition || '';
         (finalElement as HTMLElement).style.zIndex = originalElementZIndex || '';
       }
-      // Only reset generatingImage if we're not showing success (success will close modal)
-      if (!showSuccess) {
       setGeneratingImage(false);
-      }
     }
   };
 
   if (!booking) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
       {/* Success Notification */}
       {showSuccess && (
         <motion.div
@@ -821,8 +860,8 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-2">Invoice Generated Successfully!</h3>
-            <p className="text-slate-600 mb-6">The invoice has been downloaded and saved.</p>
+            <h3 className="text-2xl font-bold text-slate-900 mb-2">{successTitle}</h3>
+            <p className="text-slate-600 mb-6">{successMessage}</p>
             <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: '100%' }}
@@ -838,19 +877,23 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: showSuccess ? 0.3 : 1 }}
-        className="bg-white rounded-none sm:rounded-2xl w-full max-w-full sm:max-w-6xl p-4 sm:p-6 shadow-xl max-h-[100vh] sm:max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-none sm:rounded-2xl w-full max-w-full sm:max-w-6xl p-4 sm:p-6 shadow-xl max-h-[calc(100svh-2rem)] sm:max-h-[90svh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <div>
-            <h3 className="text-xl sm:text-2xl font-semibold leading-tight">
-              {booking.invoice ? 'Edit Invoice' : 'Create Invoice'}
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-snug">
-              {getCustomerName()} · {booking.bookingId} · {slotLabel}
-            </p>
+            {!isViewOnly && (
+              <>
+                <h3 className="text-xl sm:text-2xl font-semibold leading-tight">
+                  {booking.invoice ? 'Edit Invoice' : 'Create Invoice'}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-snug">
+                  {customerDisplayName} · {booking.bookingId} · {slotLabel}
+                </p>
+              </>
+            )}
             {booking.invoice && (
               <p className="text-xs text-slate-400 mt-1">
-                Last updated: {format(new Date(booking.invoice.updatedAt), 'MMM d, yyyy h:mm a')}
+                Last updated: {format(new Date(booking.invoice.updatedAt), "MMM d, yyyy 'at' h:mm a")}
               </p>
             )}
           </div>
@@ -862,10 +905,11 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
           </button>
         </div>
 
-        <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+        <div className={`grid gap-4 sm:gap-6 ${isViewOnly ? '' : 'md:grid-cols-2'}`}>
           {/* Left: Quote Builder */}
+          {!isViewOnly && (
           <div className="space-y-4">
-            <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-4 shadow-lg shadow-slate-200/50">
+            <div className="bg-white p-0">
               <h4 className="font-semibold mb-2 text-slate-900 text-sm sm:text-base">Add Services</h4>
               <input
                 type="text"
@@ -900,62 +944,120 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
               )}
             </div>
 
-            <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-4 shadow-lg shadow-slate-200/50">
-              <h4 className="font-semibold mb-2 text-slate-900 text-sm sm:text-base">Custom Item</h4>
-              <div className="space-y-2">
-                {/* Service name, price, quantity: responsive row (no horizontal scroll) */}
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={customLabel}
-                    onChange={(e) => setCustomLabel(e.target.value)}
-                    placeholder="Service name"
-                    className="sm:flex-[2] rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
-                  />
-                  <div className="flex gap-2 sm:flex-1">
+            <div className="bg-white p-0">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-slate-900 text-sm sm:text-base">Custom Item</h4>
+                {!showCustomItem && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomItem(true)}
+                    className="text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 underline"
+                  >
+                    Add Custom Item
+                  </button>
+                )}
+              </div>
+              {showCustomItem && (
+                <div className="mt-2 space-y-2">
+                  {/* Service name, price, quantity: responsive row (no horizontal scroll) */}
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
-                      type="number"
-                      value={customPrice}
-                      onChange={(e) => setCustomPrice(e.target.value)}
-                      placeholder="Price"
-                      className="flex-1 rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                      type="text"
+                      value={customLabel}
+                      onChange={(e) => setCustomLabel(e.target.value)}
+                      placeholder="Service name"
+                      className="sm:flex-[2] rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
                     />
-                    <input
-                      type="number"
-                      min="1"
-                      value={customQuantity}
-                      onChange={(e) => setCustomQuantity(e.target.value)}
-                      placeholder="Qty"
-                      className="w-20 rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
-                    />
+                    <div className="flex gap-2 sm:flex-1">
+                      <input
+                        type="number"
+                        value={customPrice}
+                        onChange={(e) => setCustomPrice(e.target.value)}
+                        placeholder="Price"
+                        className="flex-1 rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        value={customQuantity}
+                        onChange={(e) => setCustomQuantity(e.target.value)}
+                        placeholder="Qty"
+                        className="w-20 rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAddCustom}
+                      disabled={!customLabel.trim() || !customPrice}
+                      className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs sm:text-sm font-semibold text-white disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomLabel('');
+                        setCustomPrice('');
+                        setCustomQuantity('1');
+                        setShowCustomItem(false);
+                      }}
+                      className="text-xs sm:text-sm text-slate-500 hover:text-slate-700 underline"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={handleAddCustom}
-                  disabled={!customLabel.trim() || !customPrice}
-                  className="w-full rounded-full bg-slate-900 px-4 py-2 text-xs sm:text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  Add
-                </button>
-              </div>
+              )}
             </div>
 
-            <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-4 shadow-lg shadow-slate-200/50">
-              <h4 className="font-semibold mb-2 text-slate-900 text-sm sm:text-base">Notes</h4>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any additional notes or instructions..."
-                rows={3}
-                className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm resize-none"
-              />
+            <div className="bg-white p-0">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-slate-900 text-sm sm:text-base">Notes</h4>
+                {!showNotesField && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNotesField(true)}
+                    className="text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 underline"
+                  >
+                    Add Notes
+                  </button>
+                )}
+              </div>
+              {showNotesField && (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add any additional notes or instructions..."
+                    rows={3}
+                    className="w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-slate-900 focus:ring-0 shadow-sm resize-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotes('');
+                      setShowNotesField(false);
+                    }}
+                    className="text-xs sm:text-sm text-slate-500 hover:text-slate-700 underline"
+                  >
+                    Remove Notes
+                  </button>
+                </div>
+              )}
             </div>
 
           </div>
+          )}
 
           {/* Right: Quote Items (top) + Invoice Preview */}
-          <div className="space-y-4">
-            {quoteItems.length > 0 && (
+          <div className={`space-y-4 ${isViewOnly ? 'md:col-span-2' : ''}`}>
+            {isViewOnly && !booking.invoice && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs sm:text-sm text-slate-500">
+                No invoice saved for this booking.
+              </div>
+            )}
+            {!isViewOnly && quoteItems.length > 0 && (
               <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 sm:p-5 md:p-4 shadow-lg shadow-slate-200/50">
                 <h4 className="font-semibold mb-2 text-slate-900 text-sm sm:text-base md:text-sm">Quote Items</h4>
                 <div className="space-y-2 max-h-56 overflow-auto">
@@ -1024,9 +1126,6 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                   ))}
                 </div>
                 <div className="mt-2 pt-2 border-t border-slate-200 space-y-0.5">
-                  <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">
-                    Services Subtotal: ₱{servicesSubtotal.toLocaleString('en-PH')}
-                  </p>
                   {hasSqueezeFee && (
                     <p className="text-xs sm:text-sm font-semibold text-purple-700 leading-snug">
                       Squeeze-in Fee: ₱{SQUEEZE_IN_FEE.toLocaleString('en-PH')}
@@ -1064,7 +1163,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
             <div
               ref={quoteCardRef}
               data-invoice-card
-              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-4 sm:p-5 shadow-xl shadow-slate-300/50 overflow-visible max-w-sm mx-auto"
+              className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-[#f7f7f7] to-white p-4 sm:p-5 shadow-xl shadow-slate-300/50 overflow-visible w-full max-w-full sm:max-w-sm mx-auto"
               style={{ boxSizing: 'border-box' }}
             >
               <header className="mb-2 text-center">
@@ -1075,7 +1174,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
               </header>
 
               <div className="mb-2 text-xs sm:text-sm space-y-0.5 leading-snug">
-                <p className="font-semibold text-xs sm:text-sm leading-snug">{getCustomerName()}</p>
+                <p className="font-semibold text-xs sm:text-sm leading-snug">{customerDisplayName}</p>
                 <p className="text-[11px] sm:text-xs text-slate-500 leading-tight">{booking.bookingId}</p>
                 {slotLabel && (
                   <p className="text-[11px] sm:text-xs text-slate-500 leading-tight">{slotLabel}</p>
@@ -1107,12 +1206,6 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
               </div>
 
               <div className="border-t-2 border-slate-200 pt-2 mb-2 space-y-0.5">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-xs sm:text-sm leading-snug">Services Subtotal:</span>
-                  <span className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">
-                    ₱{servicesSubtotal.toLocaleString('en-PH')}
-                  </span>
-                </div>
                 {hasSqueezeFee && (
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-xs sm:text-sm text-purple-700 leading-snug">
@@ -1173,12 +1266,12 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                 </p>
                 <div
                   data-qr-row
-                  className="flex justify-start sm:justify-center gap-2 sm:gap-3 flex-nowrap overflow-x-auto py-1 -mx-1 px-1"
+                  className="flex justify-center gap-3 flex-nowrap overflow-x-auto py-1 px-3"
                 >
                   <div className="text-center flex-shrink-0">
                     <div
                       data-qr-container
-                      className="w-32 h-44 sm:w-40 sm:h-52 md:w-48 md:h-60 mx-auto border-2 border-slate-300 rounded-lg overflow-visible flex items-center justify-center bg-white shadow-sm p-2"
+                      className="w-28 h-40 sm:w-32 sm:h-44 md:w-40 md:h-52 mx-auto border-2 border-slate-300 rounded-lg overflow-visible flex items-center justify-center bg-white shadow-sm p-2"
                     >
                       <Image 
                         src="/images/QR-Gcash.jpg" 
@@ -1195,7 +1288,7 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
                   <div className="text-center flex-shrink-0">
                     <div
                       data-qr-container
-                      className="w-32 h-44 sm:w-40 sm:h-52 md:w-48 md:h-60 mx-auto border-2 border-slate-300 rounded-lg overflow-visible flex items-center justify-center bg-white shadow-sm p-2"
+                      className="w-28 h-40 sm:w-32 sm:h-44 md:w-40 md:h-52 mx-auto border-2 border-slate-300 rounded-lg overflow-visible flex items-center justify-center bg-white shadow-sm p-2"
                     >
                       <Image 
                         src="/images/QR-PNB.jpg" 
@@ -1216,80 +1309,37 @@ export function QuotationModal({ booking, slotLabel, nailTechs = [], onClose, on
               
             </div>
 
+            {isViewOnly && booking.invoice && (
+              <div className="flex flex-row gap-2">
+                {onRequestEdit && (
+                  <button
+                    onClick={onRequestEdit}
+                    className="flex-1 rounded-full bg-rose-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white hover:bg-rose-700 transition-colors"
+                  >
+                    Update Invoice
+                  </button>
+                )}
+                <button
+                  onClick={() => handleGenerateInvoice({ save: false, showSuccess: false })}
+                  disabled={generatingImage}
+                  className="flex-1 rounded-full bg-slate-900 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-slate-800 transition-colors"
+                >
+                  {generatingImage ? 'Generating...' : 'Download Invoice'}
+                </button>
+              </div>
+            )}
+
+            {!isViewOnly && (
             <div className="space-y-2">
               <button
                 onClick={handleGenerateInvoice}
-                disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage || savingQuotation}
+                disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage}
                 className="w-full rounded-full bg-rose-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-rose-700 transition-colors"
               >
                 {generatingImage ? 'Generating...' : (booking.invoice ? 'Update & Download Invoice' : 'Generate & Download Invoice')}
               </button>
-              {booking.invoice && (
-                <button
-                  onClick={async () => {
-                    // Save quotation without generating/downloading image
-                    if ((!quoteItems.length && !hasSqueezeFee) || !booking) {
-                      alert('Please add at least one item or enable squeeze-in fee.');
-                      return;
-                    }
-                    
-                    // Set loading state immediately
-                    setSavingQuotation(true);
-                    
-                    try {
-                      // Recalculate total to ensure it's correct
-                      const recalculatedServicesTotal = quoteItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-                      const recalculatedSubtotalBeforeDiscount = recalculatedServicesTotal + (hasSqueezeFee ? SQUEEZE_IN_FEE : 0);
-                      const recalculatedDiscountAmount = discountRate > 0 && discountRate < 100 
-                        ? Math.round(recalculatedSubtotalBeforeDiscount * (discountRate / 100)) 
-                        : 0;
-                      const recalculatedTotal = recalculatedSubtotalBeforeDiscount - recalculatedDiscountAmount;
-                      
-                      const invoiceData = {
-                        items: quoteItems,
-                        total: recalculatedTotal, // Use recalculated total (includes discount)
-                        notes,
-                        squeezeInFee: hasSqueezeFee ? SQUEEZE_IN_FEE : undefined,
-                        discountRate: discountRate > 0 && discountRate < 100 ? discountRate : undefined, // Store discount rate for reference
-                        discountAmount: recalculatedDiscountAmount > 0 ? recalculatedDiscountAmount : undefined, // Store discount amount for reference
-                        createdAt: booking.invoice?.createdAt || new Date().toISOString(), // Preserve original creation date or use current date
-                        updatedAt: new Date().toISOString(),
-                      };
-
-                      const res = await fetch(`/api/bookings/${booking.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          action: 'save_invoice',
-                          invoice: invoiceData,
-                        }),
-                      });
-
-      if (!res.ok) {
-        throw new Error('Failed to save invoice');
-      }
-
-      // Don't call onSendInvoice - invoice is already saved above
-      // This prevents duplicate saves and makes it faster
-      
-      // Show success and close
-      setShowSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 500);
-                    } catch (error) {
-                      console.error('Failed to save invoice', error);
-                      alert('Failed to save invoice. Please try again.');
-                      setSavingQuotation(false);
-                    }
-                  }}
-                  disabled={(!quoteItems.length && !hasSqueezeFee) || generatingImage || savingQuotation}
-                  className="w-full rounded-full bg-slate-600 px-4 py-2.5 text-sm sm:text-base font-semibold text-white disabled:opacity-40 hover:bg-slate-700 transition-colors"
-                >
-                  {savingQuotation ? 'Saving...' : 'Save Quotation (No Download)'}
-                </button>
-              )}
             </div>
+            )}
           </div>
         </div>
       </motion.div>
