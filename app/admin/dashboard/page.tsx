@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense, useRef } from 'react';
-import { format, startOfMonth, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth as startOfMonthFn, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfMonth, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth as startOfMonthFn, endOfMonth, parseISO, isWithinInterval, addMonths, subMonths } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -64,6 +64,9 @@ function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const isUpdatingFromUrl = useRef(false);
   const hasInitializedDefaultTech = useRef(false);
+  const hasLoadedCalendar = useRef(false);
+  const slotCacheRef = useRef<Map<string, Slot[]>>(new Map());
+  const bookingSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -123,6 +126,18 @@ function AdminDashboardContent() {
     ).length,
     [bookings],
   );
+
+  const getCalendarRange = (monthDate: Date) => {
+    const rangeStart = format(
+      startOfWeek(startOfMonth(monthDate), { weekStartsOn: 0 }),
+      'yyyy-MM-dd'
+    );
+    const rangeEnd = format(
+      endOfWeek(endOfMonth(monthDate), { weekStartsOn: 0 }),
+      'yyyy-MM-dd'
+    );
+    return { rangeStart, rangeEnd };
+  };
 
   const customerStats = useMemo(() => {
     const totalCustomers = customers.length;
@@ -257,10 +272,49 @@ function AdminDashboardContent() {
     };
   }, [bookings, slots]);
 
+  async function syncBookingsInBackground() {
+    try {
+      const cacheBuster = Date.now().toString();
+      const res = await fetch(`/api/bookings?sync=1&t=${cacheBuster}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setBookings(data.bookings || []);
+    } catch (error) {
+      console.warn('Background booking sync failed:', error);
+    }
+  }
+
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonth]);
+  }, [currentMonth, selectedNailTechId]);
+
+  useEffect(() => {
+    if (activeSection !== 'bookings' && activeSection !== 'overview') {
+      if (bookingSyncIntervalRef.current) {
+        clearInterval(bookingSyncIntervalRef.current);
+        bookingSyncIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Sync immediately and keep it fresh in the background
+    syncBookingsInBackground();
+    bookingSyncIntervalRef.current = setInterval(syncBookingsInBackground, 20000);
+
+    return () => {
+      if (bookingSyncIntervalRef.current) {
+        clearInterval(bookingSyncIntervalRef.current);
+        bookingSyncIntervalRef.current = null;
+      }
+    };
+  }, [activeSection]);
 
   // Subscribe to notifications
   useEffect(() => {
@@ -379,18 +433,14 @@ function AdminDashboardContent() {
 
   async function loadData() {
     try {
-      setLoading(true);
-      setLoadingCalendar(true);
+      const isFirstLoad = !hasLoadedCalendar.current;
+      setLoading(isFirstLoad);
+      if (isFirstLoad) {
+        setLoadingCalendar(true);
+      }
       // Add cache-busting timestamp to prevent stale data in production
       const cacheBuster = Date.now().toString();
-      const calendarStart = format(
-        startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }),
-        'yyyy-MM-dd'
-      );
-      const calendarEnd = format(
-        endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 }),
-        'yyyy-MM-dd'
-      );
+      const { rangeStart: calendarStart, rangeEnd: calendarEnd } = getCalendarRange(currentMonth);
       const slotParams = new URLSearchParams({
         t: cacheBuster,
         startDate: calendarStart,
@@ -398,6 +448,11 @@ function AdminDashboardContent() {
       });
       if (selectedNailTechId) {
         slotParams.set('nailTechId', selectedNailTechId);
+      }
+      const slotCacheKey = `${selectedNailTechId || 'all'}:${calendarStart}:${calendarEnd}`;
+      const cachedSlots = slotCacheRef.current.get(slotCacheKey);
+      if (cachedSlots && cachedSlots.length > 0) {
+        setSlots(cachedSlots);
       }
       
       // Load calendar data + bookings together so calendar statuses are accurate on first render
@@ -441,6 +496,7 @@ function AdminDashboardContent() {
       
       // Set calendar + booking data together so badges are accurate
       setSlots(slotsRes.slots);
+      slotCacheRef.current.set(slotCacheKey, slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
       setNailTechs(nailTechsRes.nailTechs || []);
       setBookings(bookingsRes.bookings || []);
@@ -448,6 +504,7 @@ function AdminDashboardContent() {
       
       // Mark calendar as loaded after bookings are ready
       setLoadingCalendar(false);
+      hasLoadedCalendar.current = true;
       
       // Default to Ms. Jhen (Owner) only on first load (avoid resetting on month change)
       // Don't set default for finance section, show all bookings by default
@@ -483,6 +540,37 @@ function AdminDashboardContent() {
       }
       
       // Bookings/customers already loaded above for consistency
+      const prefetchSlotsForMonth = async (monthDate: Date) => {
+        const { rangeStart, rangeEnd } = getCalendarRange(monthDate);
+        const prefetchKey = `${selectedNailTechId || 'all'}:${rangeStart}:${rangeEnd}`;
+        if (slotCacheRef.current.has(prefetchKey)) return;
+        const prefetchParams = new URLSearchParams({
+          t: Date.now().toString(),
+          startDate: rangeStart,
+          endDate: rangeEnd,
+        });
+        if (selectedNailTechId) {
+          prefetchParams.set('nailTechId', selectedNailTechId);
+        }
+        try {
+          const prefetchRes = await fetch(`/api/slots?${prefetchParams.toString()}`, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+            }
+          });
+          if (!prefetchRes.ok) return;
+          const prefetchData = await prefetchRes.json();
+          slotCacheRef.current.set(prefetchKey, prefetchData.slots || []);
+        } catch (error) {
+          console.warn('Prefetch slots failed:', error);
+        }
+      };
+
+      // Prefetch adjacent months to avoid empty gaps on next/prev navigation
+      prefetchSlotsForMonth(addMonths(currentMonth, 1));
+      prefetchSlotsForMonth(subMonths(currentMonth, 1));
     } catch (error) {
       console.error('Failed to load admin data', error);
       setToast('Unable to load data. Check your backend configuration.');
