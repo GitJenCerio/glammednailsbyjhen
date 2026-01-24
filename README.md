@@ -94,6 +94,256 @@ graph TB
 
 ---
 
+## 🗄️ Database Schema
+
+The application uses **Firebase Firestore** (NoSQL) as the primary database. All collections are stored in a single Firestore database with the following structure:
+
+### Firestore Collections
+
+```mermaid
+erDiagram
+    BOOKINGS ||--o{ SLOTS : "references"
+    BOOKINGS ||--|| CUSTOMERS : "references"
+    BOOKINGS ||--|| NAIL_TECHS : "references"
+    SLOTS ||--|| NAIL_TECHS : "references"
+    
+    BOOKINGS {
+        string id PK
+        string slotId FK
+        string customerId FK
+        string nailTechId FK
+        string bookingId
+        string status
+        string serviceType
+        object invoice
+        string paymentStatus
+        number paidAmount
+        number depositAmount
+        number tipAmount
+        timestamp createdAt
+        timestamp updatedAt
+    }
+    
+    SLOTS {
+        string id PK
+        string date
+        string time
+        string status
+        string nailTechId FK
+        string slotType
+        string notes
+        timestamp createdAt
+        timestamp updatedAt
+    }
+    
+    CUSTOMERS {
+        string id PK
+        string name
+        string email
+        string phone
+        string socialMediaName
+        boolean isRepeatClient
+        timestamp createdAt
+        timestamp updatedAt
+    }
+    
+    NAIL_TECHS {
+        string id PK
+        string name
+        string role
+        string serviceAvailability
+        array workingDays
+        number discount
+        number commissionRate
+        string status
+        timestamp createdAt
+        timestamp updatedAt
+    }
+    
+    BLOCKED_DATES {
+        string id PK
+        string startDate
+        string endDate
+        string reason
+        string scope
+        timestamp createdAt
+        timestamp updatedAt
+    }
+    
+    NOTIFICATIONS {
+        string id PK
+        string type
+        string title
+        string message
+        boolean read
+        string relatedId
+        string relatedType
+        timestamp createdAt
+        timestamp updatedAt
+    }
+    
+    ANALYTICS_EVENTS {
+        string id PK
+        string type
+        string page
+        string referrer
+        string userAgent
+        timestamp timestamp
+        string sessionId
+        string bookingId
+        timestamp createdAt
+    }
+```
+
+### Collection Details
+
+#### 📅 **`bookings`** Collection
+Stores all booking records with customer and slot associations.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `slotId` | `string` | Reference to primary slot |
+| `linkedSlotIds` | `string[]` | References to additional slots (for multi-slot services) |
+| `bookingId` | `string` | Human-readable booking ID (e.g., "GN-00001") |
+| `customerId` | `string` | Reference to customer document |
+| `nailTechId` | `string` | Reference to nail technician |
+| `status` | `string` | `pending_form` \| `pending_payment` \| `confirmed` \| `cancelled` |
+| `serviceType` | `string` | `manicure` \| `pedicure` \| `mani_pedi` \| `home_service_2slots` \| `home_service_3slots` |
+| `serviceLocation` | `string` | `homebased_studio` \| `home_service` |
+| `clientType` | `string` | `new` \| `repeat` |
+| `invoice` | `object` | Invoice/quotation details (items, total, notes) |
+| `paymentStatus` | `string` | `unpaid` \| `partial` \| `paid` \| `refunded` \| `forfeited` |
+| `paidAmount` | `number` | Total amount paid |
+| `depositAmount` | `number` | Deposit amount |
+| `tipAmount` | `number` | Tip amount |
+| `depositPaymentMethod` | `string` | `PNB` \| `CASH` \| `GCASH` |
+| `paidPaymentMethod` | `string` | `PNB` \| `CASH` \| `GCASH` |
+| `depositDate` | `string` | ISO date string when deposit was paid |
+| `paidDate` | `string` | ISO date string when payment was made |
+| `tipDate` | `string` | ISO date string when tip was received |
+| `customerData` | `object` | Legacy form data (for backward compatibility) |
+| `formResponseId` | `string` | Google Forms response ID |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+#### ⏰ **`slots`** Collection
+Stores available time slots for appointments.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `date` | `string` | Date in `YYYY-MM-DD` format |
+| `time` | `string` | Time in `HH:mm` format (24-hour) |
+| `status` | `string` | `available` \| `blocked` \| `pending` \| `confirmed` |
+| `slotType` | `string` | `regular` \| `with_squeeze_fee` \| `null` |
+| `notes` | `string` | Optional notes about the slot |
+| `nailTechId` | `string` | Reference to nail technician (required) |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+#### 👥 **`customers`** Collection
+Stores customer information and profiles.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `name` | `string` | Full name |
+| `firstName` | `string` | First name (optional) |
+| `lastName` | `string` | Last name (optional) |
+| `email` | `string` | Email address (optional) |
+| `phone` | `string` | Phone number (optional) |
+| `socialMediaName` | `string` | Facebook/Instagram handle |
+| `referralSource` | `string` | How customer found the business |
+| `isRepeatClient` | `boolean` | Whether customer is a repeat client |
+| `notes` | `string` | Additional notes about customer |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+#### 👨‍💼 **`nailTechs`** Collection
+Stores nail technician profiles and settings.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `name` | `string` | Name without "Ms." prefix (e.g., "Jhen") |
+| `role` | `string` | `Owner` \| `Junior Tech` \| `Senior Tech` |
+| `serviceAvailability` | `string` | `Studio only` \| `Home service only` \| `Studio and Home Service` |
+| `workingDays` | `string[]` | Array of day names: `['Monday', 'Tuesday', ...]` |
+| `discount` | `number` | Discount percentage (e.g., 15 for 15%) |
+| `commissionRate` | `number` | Commission rate (e.g., 0.3 for 30%) |
+| `status` | `string` | `Active` \| `Inactive` |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+#### 🚫 **`blockedDates`** Collection
+Stores date ranges that are blocked (holidays, closures, etc.).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `startDate` | `string` | Start date in `YYYY-MM-DD` format |
+| `endDate` | `string` | End date in `YYYY-MM-DD` format |
+| `reason` | `string` | Reason for blocking (optional) |
+| `scope` | `string` | `single` \| `range` \| `month` |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+#### 🔔 **`notifications`** Collection
+Stores admin notifications for real-time alerts.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `type` | `string` | `booking_created` \| `booking_pending` \| `booking_confirmed` \| `booking_cancelled` \| `slot_added` \| `slot_removed` \| `slot_updated` |
+| `title` | `string` | Notification title |
+| `message` | `string` | Notification message |
+| `read` | `boolean` | Whether notification has been read |
+| `relatedId` | `string` | ID of related entity (bookingId, slotId, etc.) |
+| `relatedType` | `string` | `booking` \| `slot` |
+| `section` | `string` | Admin section to navigate to (e.g., 'bookings', 'overview') |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+#### 📊 **`analytics_events`** Collection
+Stores analytics events for tracking user behavior.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Document ID (auto-generated) |
+| `type` | `string` | `page_view` \| `book_now_click` \| `booking_started` \| `booking_completed` |
+| `page` | `string` | Page URL where event occurred |
+| `referrer` | `string` | Referrer URL |
+| `userAgent` | `string` | User agent string |
+| `timestamp` | `timestamp` | Event timestamp |
+| `sessionId` | `string` | Session identifier |
+| `bookingId` | `string` | Related booking ID (if applicable) |
+| `createdAt` | `timestamp` | Creation timestamp |
+
+### Database Relationships
+
+- **Bookings → Slots**: One booking can reference multiple slots (via `slotId` and `linkedSlotIds`)
+- **Bookings → Customers**: Many-to-one relationship (multiple bookings per customer)
+- **Bookings → Nail Techs**: Many-to-one relationship (multiple bookings per technician)
+- **Slots → Nail Techs**: Many-to-one relationship (multiple slots per technician)
+- **Notifications → Bookings/Slots**: Optional relationships via `relatedId` and `relatedType`
+
+### Indexes
+
+Firestore automatically creates indexes for:
+- Single-field queries (e.g., `status`, `date`, `customerId`)
+- Composite queries used in the application (e.g., `date + status`, `nailTechId + date`)
+
+### Data Validation
+
+- All timestamps are stored as Firestore `Timestamp` objects
+- Date strings follow `YYYY-MM-DD` format
+- Time strings follow `HH:mm` format (24-hour)
+- Required fields are enforced at the application level
+- Foreign key relationships are maintained through application logic
+
+---
+
 ## 📋 Booking Flow
 
 ```mermaid
