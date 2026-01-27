@@ -163,3 +163,121 @@ export interface Notification {
   updatedAt: string;
 }
 
+export interface User {
+  uid: string;
+  email: string;
+  displayName?: string;
+  emailVerified: boolean;
+  disabled: boolean;
+  role?: UserRole;
+  nailTechId?: string; // For staff role - assigned nail tech ID
+  createdAt: string;
+  lastSignInTime?: string;
+  providerData?: Array<{
+    providerId: string;
+    uid: string;
+    email?: string;
+    displayName?: string;
+  }>;
+}
+
+export type UserRole = 'admin' | 'manager' | 'staff' | 'viewer';
+
+export interface UserPermissions {
+  canViewOverview: boolean;
+  canViewBookings: boolean;
+  canManageBookings: boolean;
+  canViewFinance: boolean;
+  canManageFinance: boolean;
+  canViewCustomers: boolean;
+  canManageCustomers: boolean;
+  canViewServices: boolean;
+  canManageServices: boolean;
+  canViewNailTechs: boolean;
+  canManageNailTechs: boolean;
+  canViewUsers: boolean;
+  canManageUsers: boolean;
+  canManageSlots: boolean;
+}
+
+export const ROLE_PERMISSIONS: Record<UserRole, UserPermissions> = {
+  admin: {
+    canViewOverview: true,
+    canViewBookings: true,
+    canManageBookings: true,
+    canViewFinance: true,
+    canManageFinance: true,
+    canViewCustomers: true,
+    canManageCustomers: true,
+    canViewServices: true,
+    canManageServices: true,
+    canViewNailTechs: true,
+    canManageNailTechs: true,
+    canViewUsers: true,
+    canManageUsers: true,
+    canManageSlots: true,
+  },
+  manager: {
+    canViewOverview: true,
+    canViewBookings: true,
+    canManageBookings: true,
+    canViewFinance: true,
+    canManageFinance: true,
+    canViewCustomers: true,
+    canManageCustomers: true,
+    canViewServices: true,
+    canManageServices: true,
+    canViewNailTechs: true,
+    canManageNailTechs: false,
+    canViewUsers: false,
+    canManageUsers: false,
+    canManageSlots: true,
+  },
+  staff: {
+    canViewOverview: false,
+    canViewBookings: true,
+    canManageBookings: true,
+    canViewFinance: false,
+    canManageFinance: false,
+    canViewCustomers: true,
+    canManageCustomers: true,
+    canViewServices: false,
+    canManageServices: false,
+    canViewNailTechs: false,
+    canManageNailTechs: false,
+    canViewUsers: false,
+    canManageUsers: false,
+    canManageSlots: true,
+  },
+  viewer: {
+    canViewOverview: true,
+    canViewBookings: true,
+    canManageBookings: false,
+    canViewFinance: true,
+    canManageFinance: false,
+    canViewCustomers: true,
+    canManageCustomers: false,
+    canViewServices: true,
+    canManageServices: false,
+    canViewNailTechs: true,
+    canManageNailTechs: false,
+    canViewUsers: false,
+    canManageUsers: false,
+    canManageSlots: false,
+  },
+};
+
+export function getUserPermissions(role: UserRole = 'viewer'): UserPermissions {
+  return ROLE_PERMISSIONS[role];
+}
+
+export interface UserInvite {
+  id: string;
+  email: string;
+  invitedBy: string; // UID of admin who sent the invite
+  invitedByName?: string;
+  status: 'pending' | 'accepted' | 'expired';
+  createdAt: string;
+  expiresAt: string;
+}
+

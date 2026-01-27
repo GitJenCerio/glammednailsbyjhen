@@ -12,7 +12,7 @@ import type { BlockedDate, Booking, BookingWithSlot, Invoice, Slot } from '@/lib
 import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
 import { CustomSelect } from '@/components/admin/CustomSelect';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
-import { IoStatsChart, IoCalendar, IoCash, IoPeople, IoSparkles, IoChevronBack, IoChevronForward, IoLogOutOutline, IoMenu, IoClose } from 'react-icons/io5';
+import { IoStatsChart, IoCalendar, IoCash, IoPeople, IoSparkles, IoChevronBack, IoChevronForward, IoLogOutOutline, IoMenu, IoClose, IoLockClosed } from 'react-icons/io5';
 import Image from 'next/image';
 import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
@@ -36,6 +36,8 @@ import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
 import { AnalyticsDashboard } from '@/components/admin/analytics/AnalyticsDashboard';
 import { NailTechManager } from '@/components/admin/NailTechManager';
+import { UserManager } from '@/components/admin/UserManager';
+import { useUserRole } from '@/lib/hooks/useUserRole';
 import type { Customer, NailTech, Notification } from '@/lib/types';
 import { IoPerson } from 'react-icons/io5';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -58,6 +60,7 @@ const navItems = [
   { id: 'customers', label: 'Customers', icon: IoPeople },
   { id: 'services', label: 'Services', icon: IoSparkles },
   { id: 'nail-techs', label: 'Nail Technicians', icon: IoPerson },
+  { id: 'users', label: 'Users', icon: IoLockClosed },
 ] as const;
 
 type AdminSection = (typeof navItems)[number]['id'];
@@ -65,14 +68,59 @@ type AdminSection = (typeof navItems)[number]['id'];
 function AdminDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { permissions, loading: roleLoading, nailTechId, role } = useUserRole();
   const isUpdatingFromUrl = useRef(false);
   const hasInitializedDefaultTech = useRef(false);
   const hasLoadedCalendar = useRef(false);
   const slotCacheRef = useRef<Map<string, Slot[]>>(new Map());
   const bookingSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Filter nav items based on permissions
+  const filteredNavItems = useMemo(() => {
+    // If permissions are not loaded yet, show all items (for initial setup)
+    if (!permissions) return navItems;
+    
+    return navItems.filter((item) => {
+      switch (item.id) {
+        case 'overview':
+          return permissions.canViewOverview;
+        case 'bookings':
+          return permissions.canViewBookings;
+        case 'finance':
+          return permissions.canViewFinance;
+        case 'customers':
+          return permissions.canViewCustomers;
+        case 'services':
+          return permissions.canViewServices;
+        case 'nail-techs':
+          return permissions.canViewNailTechs;
+        case 'users':
+          // Allow access to users section if no role is set (initial setup) or if user has permission
+          return permissions.canViewUsers;
+        default:
+          return true;
+      }
+    });
+  }, [permissions]);
+  
   const [slots, setSlots] = useState<Slot[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  
+  // Filter bookings and slots for staff based on assigned nail tech
+  const filteredBookings = useMemo(() => {
+    if (role !== 'staff' || !nailTechId) {
+      return bookings;
+    }
+    return bookings.filter(booking => booking.nailTechId === nailTechId);
+  }, [bookings, role, nailTechId]);
+
+  const filteredSlots = useMemo(() => {
+    if (role !== 'staff' || !nailTechId) {
+      return slots;
+    }
+    return slots.filter(slot => slot.nailTechId === nailTechId);
+  }, [slots, role, nailTechId]);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [slotModalOpen, setSlotModalOpen] = useState(false);
@@ -610,10 +658,10 @@ function AdminDashboardContent() {
   // Memoize filtered slots for calendar (by nail tech) - used for calendar display
   const calendarSlots = useMemo(() => {
     if (selectedNailTechId) {
-      return slots.filter(s => s.nailTechId === selectedNailTechId);
+      return filteredSlots.filter(s => s.nailTechId === selectedNailTechId);
     }
-    return slots;
-  }, [slots, selectedNailTechId]);
+    return filteredSlots;
+  }, [filteredSlots, selectedNailTechId]);
 
   const selectedSlots = useMemo(() => {
     // PRIORITIZE ALL SLOTS: Include all slot statuses (available, pending, confirmed, blocked)
@@ -698,10 +746,23 @@ function AdminDashboardContent() {
     const url = editingSlot ? `/api/slots/${editingSlot.id}` : '/api/slots';
     const method = editingSlot ? 'PATCH' : 'POST';
     
-    // When creating a new slot, include the selected nail tech ID (defaults to Ms. Jhen)
+    // For staff users, validate they can only edit/create slots for their assigned nail tech
+    if (role === 'staff' && nailTechId) {
+      if (editingSlot && editingSlot.nailTechId !== nailTechId) {
+        throw new Error('You can only edit slots for your assigned nail technician.');
+      }
+    }
+    
+    // For staff users, always use their assigned nail tech ID
+    // For other roles, use selected nail tech ID or default
+    const nailTechIdForSlot = role === 'staff' && nailTechId 
+      ? nailTechId 
+      : (selectedNailTechId || null);
+    
+    // When creating a new slot, include the nail tech ID
     const requestPayload = editingSlot 
       ? payload 
-      : { ...payload, nailTechId: selectedNailTechId || null };
+      : { ...payload, nailTechId: nailTechIdForSlot };
     
     const res = await fetch(url, {
       method,
@@ -1165,8 +1226,8 @@ function AdminDashboardContent() {
         </div>
       ) : bookingsView === 'list' ? (
         <BookingsView
-          bookings={bookings}
-          slots={slots}
+          bookings={filteredBookings}
+          slots={filteredSlots}
           selectedDate={selectedDate}
           customers={customers}
           nailTechs={nailTechs}
@@ -1223,35 +1284,42 @@ function AdminDashboardContent() {
           {/* Nail Tech Selector */}
           <div className="rounded-xl sm:rounded-2xl border-2 border-slate-300 bg-white p-3 sm:p-4">
             <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">
-              Select Nail Technician Calendar
+              {role === 'staff' && nailTechId ? 'Your Assigned Nail Technician' : 'Select Nail Technician Calendar'}
             </label>
-            <div className="relative">
-              <CustomSelect
-                value={selectedNailTechId || ''}
-                onChange={(newNailTechId) => {
-                  const value = newNailTechId || null;
-                  setSelectedNailTechId(value);
-                  // Reset selected date when switching techs for clarity
-                  setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
-                }}
-                options={[
-                  { value: '', label: 'All Nail Techs' },
-                  ...nailTechs.sort((a, b) => a.name.localeCompare(b.name)).map((tech) => ({
-                    value: tech.id,
-                    label: `Ms. ${tech.name} (${tech.role})`,
-                  })),
-                ]}
-                placeholder={nailTechs.length === 0 ? 'Loading nail techs...' : 'Select nail tech...'}
-                className="w-full sm:w-auto"
-                allNailTechIds={[...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id)}
-              />
-              {selectedNailTechId && nailTechs.find(t => t.id === selectedNailTechId) && (() => {
-                const sortedTechIds = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
-                return (
-                  <div className={`absolute right-8 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 ${getNailTechColorClasses(selectedNailTechId, sortedTechIds)} pointer-events-none`} />
-                );
-              })()}
-            </div>
+            {role === 'staff' && nailTechId ? (
+              <div className="text-sm text-slate-600">
+                <p className="font-medium">Ms. {nailTechs.find(t => t.id === nailTechId)?.name || 'Unknown'}</p>
+                <p className="text-xs text-slate-500 mt-1">You can only view bookings and slots for your assigned nail technician.</p>
+              </div>
+            ) : (
+              <div className="relative">
+                <CustomSelect
+                  value={selectedNailTechId || ''}
+                  onChange={(newNailTechId) => {
+                    const value = newNailTechId || null;
+                    setSelectedNailTechId(value);
+                    // Reset selected date when switching techs for clarity
+                    setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
+                  }}
+                  options={[
+                    { value: '', label: 'All Nail Techs' },
+                    ...nailTechs.sort((a, b) => a.name.localeCompare(b.name)).map((tech) => ({
+                      value: tech.id,
+                      label: `Ms. ${tech.name} (${tech.role})`,
+                    })),
+                  ]}
+                  placeholder={nailTechs.length === 0 ? 'Loading nail techs...' : 'Select nail tech...'}
+                  className="w-full sm:w-auto"
+                  allNailTechIds={[...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id)}
+                />
+                {selectedNailTechId && nailTechs.find(t => t.id === selectedNailTechId) && (() => {
+                  const sortedTechIds = [...nailTechs].sort((a, b) => a.name.localeCompare(b.name)).map(t => t.id);
+                  return (
+                    <div className={`absolute right-8 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 ${getNailTechColorClasses(selectedNailTechId, sortedTechIds)} pointer-events-none`} />
+                  );
+                })()}
+              </div>
+            )}
             {selectedNailTechId && (
               <p className="mt-2 text-xs text-slate-600">
                 Viewing calendar for: <strong>Ms. {nailTechs.find(t => t.id === selectedNailTechId)?.name || selectedNailTechId}</strong>
@@ -1284,7 +1352,7 @@ function AdminDashboardContent() {
                 <CalendarGrid
                   referenceDate={currentMonth}
                   slots={calendarSlots}
-                  bookings={bookings.filter((booking) => booking.status !== 'cancelled')}
+                  bookings={filteredBookings.filter((booking) => booking.status !== 'cancelled')}
                   blockedDates={blockedDates}
                   selectedDate={selectedDate}
                   onSelectDate={setSelectedDate}
@@ -1509,7 +1577,7 @@ function AdminDashboardContent() {
       {mobileMenuOpen && (
         <div className="lg:hidden fixed top-14 inset-x-0 z-30 bg-white border-b border-slate-200 px-4 py-4 shadow-lg max-h-[calc(100vh-3.5rem)] overflow-y-auto">
           <nav className="space-y-2">
-            {navItems.map((item) => (
+            {filteredNavItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => {
@@ -1591,7 +1659,7 @@ function AdminDashboardContent() {
             </button>
           </div>
           <nav className="space-y-2 flex-1">
-            {navItems.map((item) => (
+            {filteredNavItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
@@ -1656,9 +1724,16 @@ function AdminDashboardContent() {
           )}
 
           {activeSection === 'bookings' ? (
-            renderBookingsSection()
+            permissions?.canViewBookings ? (
+              renderBookingsSection()
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
           ) : activeSection === 'finance' ? (
-            <FinanceView 
+            permissions?.canViewFinance ? (
+              <FinanceView 
               bookings={bookings} 
               slots={slots} 
               customers={customers}
@@ -1708,8 +1783,14 @@ function AdminDashboardContent() {
                 }
               }}
             />
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
           ) : activeSection === 'customers' ? (
-            <div className="space-y-4 sm:space-y-6">
+            permissions?.canViewCustomers ? (
+              <div className="space-y-4 sm:space-y-6">
               {/* Customers overview stats */}
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 <div className="rounded-2xl border-2 border-slate-300 bg-white p-4 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-slate-300/50 transition-shadow">
@@ -1765,13 +1846,45 @@ function AdminDashboardContent() {
                 </div>
               </div>
             </div>
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
           ) : activeSection === 'services' ? (
-            <ServicesManager />
+            permissions?.canViewServices ? (
+              <ServicesManager />
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
           ) : activeSection === 'nail-techs' ? (
-            <NailTechManager />
+            permissions?.canViewNailTechs ? (
+              <NailTechManager />
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
+          ) : activeSection === 'users' ? (
+            // Allow access during initial setup (when permissions are null) or if user has permission
+            (!permissions || permissions.canViewUsers) ? (
+              <UserManager />
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
           ) : (
             /* Overview tab - Analytics Dashboard */
-            <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />
+            permissions?.canViewOverview ? (
+              <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-slate-600">You don't have permission to view this section.</p>
+              </div>
+            )
           )}
         </main>
       </div>
@@ -1793,7 +1906,7 @@ function AdminDashboardContent() {
           setBulkSlotModalOpen(false);
         }}
         onSubmit={handleSaveSlot}
-        defaultNailTechId={selectedNailTechId}
+        defaultNailTechId={role === 'staff' && nailTechId ? nailTechId : selectedNailTechId}
       />
 
       <BlockDateModal

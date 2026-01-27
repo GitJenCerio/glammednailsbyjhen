@@ -24,6 +24,15 @@ const nextConfig = {
       exclude: ['error', 'warn'],
     } : false,
   },
+  // Webpack configuration to fix es-toolkit/compat/get import issue
+  webpack: (config, { isServer }) => {
+    const path = require('path');
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'es-toolkit/compat/get': path.resolve(__dirname, 'node_modules/es-toolkit/dist/compat/object/get.js'),
+    };
+    return config;
+  },
 }
 
 module.exports = nextConfig
