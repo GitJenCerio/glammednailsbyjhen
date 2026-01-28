@@ -342,7 +342,10 @@ export async function getSlotsByDate(date: string, nailTechId?: string): Promise
   return slots;
 }
 
-export async function deleteSlotsByDate(date: string, options?: { onlyAvailable?: boolean }): Promise<{ deletedCount: number; slotsDeleted: Slot[] }> {
+export async function deleteSlotsByDate(
+  date: string,
+  options?: { onlyAvailable?: boolean; nailTechId?: string | null }
+): Promise<{ deletedCount: number; slotsDeleted: Slot[] }> {
   const nailTechId = options?.nailTechId;
   const snapshot = nailTechId
     ? await slotCollection.where('date', '==', date).where('nailTechId', '==', nailTechId).get()
