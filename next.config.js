@@ -29,7 +29,7 @@ const nextConfig = {
     const path = require('path');
     config.resolve.alias = {
       ...config.resolve.alias,
-      'es-toolkit/compat/get': path.resolve(__dirname, 'node_modules/es-toolkit/dist/compat/object/get.js'),
+      'es-toolkit/compat/get': path.resolve(__dirname, 'node_modules/es-toolkit/compat/get.js'),
     };
     return config;
   },
