@@ -1728,7 +1728,7 @@ function AdminDashboardContent() {
               renderBookingsSection()
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           ) : activeSection === 'finance' ? (
@@ -1785,7 +1785,7 @@ function AdminDashboardContent() {
             />
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           ) : activeSection === 'customers' ? (
@@ -1848,7 +1848,7 @@ function AdminDashboardContent() {
             </div>
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           ) : activeSection === 'services' ? (
@@ -1856,7 +1856,7 @@ function AdminDashboardContent() {
               <ServicesManager />
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           ) : activeSection === 'nail-techs' ? (
@@ -1864,7 +1864,7 @@ function AdminDashboardContent() {
               <NailTechManager />
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           ) : activeSection === 'users' ? (
@@ -1873,7 +1873,7 @@ function AdminDashboardContent() {
               <UserManager />
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           ) : (
@@ -1882,7 +1882,7 @@ function AdminDashboardContent() {
               <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />
             ) : (
               <div className="p-6 text-center">
-                <p className="text-slate-600">You don't have permission to view this section.</p>
+                <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
               </div>
             )
           )}

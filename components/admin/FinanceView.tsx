@@ -138,7 +138,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     return booking.paymentStatus || 'unpaid';
   };
 
-  const getCustomerName = (booking: Booking) => {
+  const getCustomerName = useCallback((booking: Booking) => {
     // 1) Always prefer the name the client typed in the form (per booking)
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
       // Helper function to find field by fuzzy matching key names
@@ -231,9 +231,9 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
     // 3) Last fallback: bookingId
     return booking.bookingId;
-  };
+  }, [customers]);
 
-  const getCustomerPhone = (booking: BookingWithSlot): string => {
+  const getCustomerPhone = useCallback((booking: BookingWithSlot): string => {
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
       const findPhoneField = (keywords: string[]): string | null => {
         const lowerKeywords = keywords.map(k => k.toLowerCase());
@@ -265,9 +265,9 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     }
 
     return 'N/A';
-  };
+  }, [customers]);
 
-  const getTimeRange = (booking: BookingWithSlot): string => {
+  const getTimeRange = useCallback((booking: BookingWithSlot): string => {
     if (!booking.slot) return 'N/A';
     if (booking.linkedSlots && booking.linkedSlots.length > 0) {
       const lastSlot = booking.linkedSlots[booking.linkedSlots.length - 1];
@@ -277,7 +277,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       return `${formatTime12Hour(booking.slot.time)} - ${formatTime12Hour(booking.pairedSlot.time)}`;
     }
     return formatTime12Hour(booking.slot.time);
-  };
+  }, []);
 
   const matchesSearch = useCallback((booking: BookingWithSlot, query: string): boolean => {
     if (!query.trim()) return true;

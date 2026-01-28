@@ -326,7 +326,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
   }, [getFinanceSummary]);
 
   // Helper functions for search (defined early so they can be used in matchesSearch)
-  const getCustomerName = (booking: BookingWithSlot): string => {
+  const getCustomerName = useCallback((booking: BookingWithSlot): string => {
     // Priority 1: Get customer name from form data (for bookings with submitted forms)
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
       // Helper function to find field by fuzzy matching key names
@@ -446,9 +446,9 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     
     // Last resort: return bookingId
     return booking.bookingId;
-  };
+  }, [customers]);
 
-  const getCustomerPhone = (booking: BookingWithSlot): string => {
+  const getCustomerPhone = useCallback((booking: BookingWithSlot): string => {
     // Priority 1: Try to get phone from form data (for bookings with submitted forms)
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
       // Helper function to find field by fuzzy matching key names
@@ -488,17 +488,17 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
     }
     
     return 'N/A';
-  };
+  }, [customers]);
 
-  const formatTime = (time: string): string => {
+  const formatTime = useCallback((time: string): string => {
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
-  };
+  }, []);
 
-  const getTimeRange = (booking: BookingWithSlot): string => {
+  const getTimeRange = useCallback((booking: BookingWithSlot): string => {
     if (!booking.slot) return 'N/A';
     if (booking.linkedSlots && booking.linkedSlots.length > 0) {
       const lastSlot = booking.linkedSlots[booking.linkedSlots.length - 1];
@@ -508,7 +508,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       return `${formatTime(booking.slot.time)} - ${formatTime(booking.pairedSlot.time)}`;
     }
     return formatTime(booking.slot.time);
-  };
+  }, [formatTime]);
 
   // Search function to filter bookings by query
   const matchesSearch = useCallback((booking: BookingWithSlot, query: string): boolean => {
