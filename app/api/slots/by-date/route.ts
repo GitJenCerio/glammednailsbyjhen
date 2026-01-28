@@ -9,12 +9,13 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
+    const nailTechId = searchParams.get('nailTechId') || undefined;
     
     if (!date) {
       return NextResponse.json({ error: 'Date parameter is required.' }, { status: 400 });
     }
     
-    const slots = await getSlotsByDate(date);
+    const slots = await getSlotsByDate(date, nailTechId);
     return NextResponse.json({ slots, count: slots.length });
   } catch (error: any) {
     const errorMessage = error.message || 'Failed to get slots by date.';
@@ -27,12 +28,13 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
     const onlyAvailable = searchParams.get('onlyAvailable') === 'true';
+    const nailTechId = searchParams.get('nailTechId') || undefined;
     
     if (!date) {
       return NextResponse.json({ error: 'Date parameter is required.' }, { status: 400 });
     }
     
-    const result = await deleteSlotsByDate(date, { onlyAvailable });
+    const result = await deleteSlotsByDate(date, { onlyAvailable, nailTechId });
     return NextResponse.json({ 
       success: true, 
       deletedCount: result.deletedCount,

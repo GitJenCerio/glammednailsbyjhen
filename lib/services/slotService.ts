@@ -215,6 +215,10 @@ export async function deleteSlot(id: string) {
   if (!slotDoc.exists) {
     throw new Error('Slot not found.');
   }
+  const slotData = slotDoc.data();
+  if (slotData?.status === 'confirmed') {
+    throw new Error('Cannot delete a confirmed slot. Please cancel the booking instead.');
+  }
 
   // Check for active bookings (not cancelled) that use this slot
   const { adminDb } = await import('../firebaseAdmin');
@@ -339,13 +343,21 @@ export async function getSlotsByDate(date: string, nailTechId?: string): Promise
 }
 
 export async function deleteSlotsByDate(date: string, options?: { onlyAvailable?: boolean }): Promise<{ deletedCount: number; slotsDeleted: Slot[] }> {
-  const snapshot = await slotCollection.where('date', '==', date).get();
+  const nailTechId = options?.nailTechId;
+  const snapshot = nailTechId
+    ? await slotCollection.where('date', '==', date).where('nailTechId', '==', nailTechId).get()
+    : await slotCollection.where('date', '==', date).get();
   
   let slotsToDelete = snapshot.docs.map((doc) => ({
     id: doc.id,
     slot: docToSlot(doc.id, doc.data()),
   }));
   
+  const confirmedSlots = slotsToDelete.filter((item) => item.slot.status === 'confirmed');
+  if (!options?.onlyAvailable && confirmedSlots.length > 0) {
+    throw new Error('Cannot delete confirmed slots. Please cancel the bookings first.');
+  }
+
   // Filter by status if onlyAvailable is true
   if (options?.onlyAvailable) {
     slotsToDelete = slotsToDelete.filter((item) => item.slot.status === 'available');

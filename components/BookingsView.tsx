@@ -25,6 +25,7 @@ interface BookingsViewProps {
   onReschedule?: (bookingId: string) => void;
   onSplitReschedule?: (bookingId: string) => void;
   onMakeQuotation?: (bookingId: string) => void;
+  onViewInvoice?: (bookingId: string) => void;
   onConfirm?: (bookingId: string) => void;
   onUpdatePayment?: (bookingId: string, paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded', paidAmount?: number, tipAmount?: number) => void;
   onServiceTypeChange?: () => void;
@@ -51,7 +52,7 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 pax)',
 };
 
-export function BookingsView({ bookings, slots, selectedDate, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onCancel, onReschedule, onSplitReschedule, onMakeQuotation, onConfirm, onUpdatePayment, onServiceTypeChange }: BookingsViewProps) {
+export function BookingsView({ bookings, slots, selectedDate, customers = [], nailTechs = [], selectedNailTechId = null, onNailTechChange, onCancel, onReschedule, onSplitReschedule, onMakeQuotation, onViewInvoice, onConfirm, onUpdatePayment, onServiceTypeChange }: BookingsViewProps) {
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [monthFilter, setMonthFilter] = useState<MonthFilter>('all');
@@ -927,6 +928,20 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                         View Response
                       </button>
                     )}
+                    {onViewInvoice && booking.invoice && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewInvoice(booking.id);
+                          setOpenDropdownId(null);
+                          setDropdownPosition(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                      >
+                        <IoDocumentTextOutline className="w-4 h-4 text-slate-700" />
+                        View Quotation
+                      </button>
+                    )}
                     {onMakeQuotation && !booking.invoice && (
                       <button
                         onClick={(e) => {
@@ -988,7 +1003,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                         </button>
                       ) : null;
                     })()}
-                    {booking.status !== 'cancelled' && (
+                    {onServiceTypeChange && booking.status !== 'cancelled' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1145,7 +1160,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
           <div className="flex justify-center items-center w-full">
             {!isDone && (
               <>
-                {(onMakeQuotation || onReschedule || onCancel || (booking.customerData && Object.keys(booking.customerData).length > 0)) && (
+                {(onMakeQuotation || onViewInvoice || onReschedule || onCancel || (booking.customerData && Object.keys(booking.customerData).length > 0)) && (
                   <div
                     className="relative"
                     ref={(el: HTMLDivElement | null) => {
@@ -1201,6 +1216,20 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                             >
                               <IoEyeOutline className="w-4 h-4" />
                               View Response
+                            </button>
+                          )}
+                          {onViewInvoice && booking.invoice && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onViewInvoice(booking.id);
+                                setOpenDropdownId(null);
+                                setDropdownPosition(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                            >
+                              <IoDocumentTextOutline className="w-4 h-4 text-slate-700" />
+                              View Quotation
                             </button>
                           )}
                           {onMakeQuotation && !booking.invoice && (
@@ -1264,7 +1293,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                               </button>
                             ) : null;
                           })()}
-                          {booking.status !== 'cancelled' && (
+                          {onServiceTypeChange && booking.status !== 'cancelled' && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

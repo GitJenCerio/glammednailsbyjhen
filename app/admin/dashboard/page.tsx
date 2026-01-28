@@ -179,6 +179,14 @@ function AdminDashboardContent() {
     [bookings],
   );
 
+  useEffect(() => {
+    if (role === 'staff' && nailTechId && selectedNailTechId !== nailTechId) {
+      setSelectedNailTechId(nailTechId);
+    }
+  }, [role, nailTechId, selectedNailTechId]);
+
+  const isStaffRestricted = role === 'staff' && !!nailTechId;
+
   const getCalendarRange = (monthDate: Date) => {
     const rangeStart = format(
       startOfWeek(startOfMonth(monthDate), { weekStartsOn: 0 }),
@@ -558,11 +566,15 @@ function AdminDashboardContent() {
       setLoadingCalendar(false);
       hasLoadedCalendar.current = true;
       
-      // Default to Ms. Jhen (Owner) only on first load (avoid resetting on month change)
+      // Default to staff-assigned tech or Ms. Jhen (Owner) only on first load
       // Don't set default for finance section, show all bookings by default
       const nailTechsList = nailTechsRes.nailTechs || [];
       if (!hasInitializedDefaultTech.current) {
-        if (!selectedNailTechId && nailTechsList.length > 0) {
+        if (role === 'staff' && nailTechId) {
+          setSelectedNailTechId(nailTechId);
+          hasInitializedDefaultTech.current = true;
+        }
+        if (role !== 'staff' && !selectedNailTechId && nailTechsList.length > 0) {
           // Only set default if we're in bookings/calendar section, not finance
           if (activeSection === 'bookings' || activeSection === 'overview') {
             // First try to find Ms. Jhen by name (case insensitive)
@@ -854,7 +866,10 @@ function AdminDashboardContent() {
 
   async function handleDeleteDaySlots(onlyAvailable: boolean) {
     try {
-      const url = `/api/slots/by-date?date=${selectedDate}${onlyAvailable ? '&onlyAvailable=true' : ''}`;
+      const effectiveNailTechId = role === 'staff' ? nailTechId : selectedNailTechId;
+      const url = `/api/slots/by-date?date=${selectedDate}${onlyAvailable ? '&onlyAvailable=true' : ''}${
+        effectiveNailTechId ? `&nailTechId=${effectiveNailTechId}` : ''
+      }`;
       const res = await fetch(url, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) {
@@ -863,6 +878,7 @@ function AdminDashboardContent() {
       setSlots((prevSlots) =>
         prevSlots.filter((slot) => {
           if (slot.date !== selectedDate) return true;
+          if (effectiveNailTechId && slot.nailTechId !== effectiveNailTechId) return true;
           return onlyAvailable ? slot.status !== 'available' : false;
         })
       );
@@ -1190,24 +1206,28 @@ function AdminDashboardContent() {
           >
             New slot
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setBulkSlotModalOpen(true);
-            }}
-            className="rounded-full bg-blue-300 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-blue-800 hover:bg-blue-400 touch-manipulation"
-          >
-            <span className="hidden sm:inline">Bulk create slots</span>
-            <span className="sm:hidden">Bulk create</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setReleaseSlotsModalOpen(true)}
-            className="rounded-full border border-amber-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-amber-700 hover:border-amber-600 hover:bg-amber-50 touch-manipulation"
-          >
-            <span className="hidden sm:inline">Release Slots</span>
-            <span className="sm:hidden">Release</span>
-          </button>
+          {!isStaffRestricted && (
+            <button
+              type="button"
+              onClick={() => {
+                setBulkSlotModalOpen(true);
+              }}
+              className="rounded-full bg-blue-300 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-blue-800 hover:bg-blue-400 touch-manipulation"
+            >
+              <span className="hidden sm:inline">Bulk create slots</span>
+              <span className="sm:hidden">Bulk create</span>
+            </button>
+          )}
+          {!isStaffRestricted && (
+            <button
+              type="button"
+              onClick={() => setReleaseSlotsModalOpen(true)}
+              className="rounded-full border border-amber-200 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-amber-700 hover:border-amber-600 hover:bg-amber-50 touch-manipulation"
+            >
+              <span className="hidden sm:inline">Release Slots</span>
+              <span className="sm:hidden">Release</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -1231,15 +1251,16 @@ function AdminDashboardContent() {
           selectedDate={selectedDate}
           customers={customers}
           nailTechs={nailTechs}
-          onServiceTypeChange={loadData}
+          onServiceTypeChange={isStaffRestricted ? undefined : loadData}
           selectedNailTechId={selectedNailTechId}
           onNailTechChange={setSelectedNailTechId}
-          onCancel={handleCancelBooking}
-          onReschedule={handleRescheduleBooking}
-          onSplitReschedule={handleSplitRescheduleBooking}
-          onMakeQuotation={handleMakeQuotation}
-          onConfirm={handleConfirmBooking}
-          onUpdatePayment={async (bookingId, paymentStatus, paidAmount, tipAmount) => {
+          onCancel={isStaffRestricted ? undefined : handleCancelBooking}
+          onReschedule={isStaffRestricted ? undefined : handleRescheduleBooking}
+          onSplitReschedule={isStaffRestricted ? undefined : handleSplitRescheduleBooking}
+          onMakeQuotation={isStaffRestricted ? undefined : handleMakeQuotation}
+          onViewInvoice={handleViewInvoice}
+          onConfirm={isStaffRestricted ? undefined : handleConfirmBooking}
+          onUpdatePayment={isStaffRestricted ? undefined : async (bookingId, paymentStatus, paidAmount, tipAmount) => {
             const res = await fetch(`/api/bookings/${bookingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -1617,7 +1638,7 @@ function AdminDashboardContent() {
       )}
 
       <div className="flex min-h-screen pt-14 sm:pt-16">
-        <aside className={`hidden sm:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 pt-14 sm:pt-16 ${
+        <aside className={`hidden sm:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 pt-14 sm:pt-16 overflow-y-auto max-h-[calc(100vh-3.5rem)] ${
           sidebarCollapsed ? 'w-14 sm:w-16 px-1.5 sm:px-2 py-4 sm:py-6' : 'w-40 sm:w-48 md:w-52 lg:w-56 xl:w-72 px-2 sm:px-3 md:px-4 lg:px-6 py-4 sm:py-6 md:py-7 lg:py-8'
         }`}>
           <div className="mb-8 flex items-center justify-between gap-2">
@@ -1699,7 +1720,7 @@ function AdminDashboardContent() {
               </button>
             ))}
           </nav>
-          <div className="mt-auto pt-4 border-t border-slate-200">
+          <div className="mt-auto pt-4 border-t border-slate-200 sticky bottom-4 bg-white">
             <button
               onClick={handleLogout}
               className={`flex w-full items-center ${sidebarCollapsed ? 'justify-center' : 'gap-1.5 md:gap-2'} rounded-xl md:rounded-2xl px-2 md:px-3 lg:px-4 py-2 md:py-2.5 lg:py-3 text-xs md:text-sm font-semibold text-rose-600 hover:bg-rose-50 transition border border-rose-200`}
