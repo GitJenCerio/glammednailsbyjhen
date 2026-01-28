@@ -47,6 +47,16 @@ async function setUserNailTechId(uid: string, nailTechId: string | null): Promis
   );
 }
 
+// Helper function to set user role in Firestore
+async function setUserRole(uid: string, role: UserRole): Promise<void> {
+  const { getAdminDbInstance } = await import('@/lib/firebaseAdmin');
+  const db = getAdminDbInstance();
+  await db.collection('users').doc(uid).set(
+    { role, updatedAt: new Date().toISOString() },
+    { merge: true }
+  );
+}
+
 // Initialize Firebase Admin if not already initialized
 function getAuth() {
   if (admin.apps.length === 0) {
