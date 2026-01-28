@@ -21,6 +21,8 @@ export default function AdminLoginPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
+        setGoogleLoading(false);
+        setLoading(false);
         router.push('/admin/dashboard');
       }
     });
@@ -43,6 +45,23 @@ export default function AdminLoginPage() {
     }
   }
 
+  function getGoogleSignInErrorMessage(error: any) {
+    const code = error?.code || '';
+    if (code === 'auth/popup-closed-by-user') {
+      return 'Sign-in was cancelled. Please try again.';
+    }
+    if (code === 'auth/cancelled-popup-request') {
+      return 'Sign-in was cancelled. Please try again.';
+    }
+    if (code === 'auth/popup-blocked') {
+      return 'Popup was blocked by the browser. Please allow popups and try again.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+      return 'This domain is not authorized for Google sign-in.';
+    }
+    return error?.message || 'Failed to sign in with Google. Please try again.';
+  }
+
   async function handleGoogleSignIn() {
     setGoogleLoading(true);
     setError('');
@@ -52,17 +71,18 @@ export default function AdminLoginPage() {
       await signInWithPopup(auth, provider);
       router.push('/admin/dashboard');
     } catch (error: any) {
-      setError(error.message || 'Failed to sign in with Google. Please try again.');
+      setError(getGoogleSignInErrorMessage(error));
+    } finally {
       setGoogleLoading(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <main className="min-h-screen w-full bg-gray-50 grid place-items-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-lg shadow-xl max-w-md w-full p-8"
+        className="bg-white rounded-lg shadow-xl max-w-md w-full mx-auto p-8"
       >
         <div className="text-center mb-8">
           <Image
@@ -132,11 +152,12 @@ export default function AdminLoginPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading || googleLoading}
-            className="mt-4 w-full px-4 py-2 bg-white text-gray-700 font-medium border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-          >
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={loading || googleLoading}
+              className="w-full max-w-sm px-4 py-2 bg-white text-gray-700 font-medium border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            >
             {googleLoading ? (
               <>
                 <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -156,7 +177,8 @@ export default function AdminLoginPage() {
                 <span>Sign in with Google</span>
               </>
             )}
-          </button>
+            </button>
+          </div>
         </div>
       </motion.div>
     </main>
