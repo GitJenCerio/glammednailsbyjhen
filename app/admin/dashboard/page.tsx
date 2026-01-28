@@ -1557,6 +1557,7 @@ function AdminDashboardContent() {
     customers: 'See relationship insights and client history.',
     services: 'Manage offerings, durations, and pricing.',
     'nail-techs': 'Manage nail technicians, their schedules, and availability.',
+    users: 'Manage user access, roles, and permissions.',
   };
 
   return (
