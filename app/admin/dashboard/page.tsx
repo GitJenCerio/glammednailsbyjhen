@@ -20,6 +20,7 @@ import { BulkSlotCreatorModal } from '@/components/admin/modals/BulkSlotCreatorM
 import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
 import { DeleteSlotModal } from '@/components/admin/modals/DeleteSlotModal';
 import { DeleteDaySlotsModal } from '@/components/admin/modals/DeleteDaySlotsModal';
+import { MakeHiddenSlotsVisibleModal } from '@/components/admin/modals/MakeHiddenSlotsVisibleModal';
 import { BookingList } from '@/components/admin/BookingList';
 import { BookingDetailPanel } from '@/components/admin/BookingDetailPanel';
 import { BookingsView } from '@/components/BookingsView';
@@ -103,7 +104,8 @@ function AdminDashboardContent() {
     });
   }, [permissions]);
   
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const [slots, setSlots] = useState<Slot[]>([]); // Date-filtered slots for calendar view only
+  const [allSlots, setAllSlots] = useState<Slot[]>([]); // All slots for modals and other views
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   
@@ -121,6 +123,14 @@ function AdminDashboardContent() {
     }
     return slots.filter(slot => slot.nailTechId === nailTechId);
   }, [slots, role, nailTechId]);
+
+  // All slots filtered by nail tech (for modals and other views)
+  const filteredAllSlots = useMemo(() => {
+    if (role !== 'staff' || !nailTechId) {
+      return allSlots;
+    }
+    return allSlots.filter(slot => slot.nailTechId === nailTechId);
+  }, [allSlots, role, nailTechId]);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [slotModalOpen, setSlotModalOpen] = useState(false);
@@ -148,6 +158,8 @@ function AdminDashboardContent() {
     viewFromUrl === 'calendar' || viewFromUrl === 'list' ? viewFromUrl : 'calendar'
   );
   const [bookingFilterPeriod, setBookingFilterPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [makeVisibleModalOpen, setMakeVisibleModalOpen] = useState(false);
+  const [isMakingSlotsVisible, setIsMakingSlotsVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quotationModalOpen, setQuotationModalOpen] = useState(false);
   const [quotationModalMode, setQuotationModalMode] = useState<'edit' | 'view'>('edit');
@@ -350,6 +362,33 @@ function AdminDashboardContent() {
     }
   }
 
+  // Load all slots when nail tech changes (for modals and views)
+  useEffect(() => {
+    async function loadAllSlots() {
+      try {
+        const cacheBuster = Date.now().toString();
+        const allSlotsParams = new URLSearchParams({
+          t: cacheBuster,
+        });
+        if (selectedNailTechId) {
+          allSlotsParams.set('nailTechId', selectedNailTechId);
+        }
+        const allSlotsRes = await fetch(`/api/slots?${allSlotsParams.toString()}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json());
+        setAllSlots(allSlotsRes.slots);
+      } catch (error) {
+        console.error('Failed to load all slots:', error);
+      }
+    }
+    loadAllSlots();
+  }, [selectedNailTechId]);
+
+  // Load calendar slots when month or nail tech changes
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -516,8 +555,23 @@ function AdminDashboardContent() {
       }
       
       // Load calendar data + bookings together so calendar statuses are accurate on first render
-      const [slotsRes, blocksRes, nailTechsRes, bookingsRes, customersRes] = await Promise.all([
+      // Load all slots separately for modals and other views (no date filtering)
+      const allSlotsParams = new URLSearchParams({
+        t: cacheBuster,
+      });
+      if (selectedNailTechId) {
+        allSlotsParams.set('nailTechId', selectedNailTechId);
+      }
+
+      const [slotsRes, allSlotsRes, blocksRes, nailTechsRes, bookingsRes, customersRes] = await Promise.all([
         fetch(`/api/slots?${slotParams.toString()}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }).then((res) => res.json()),
+        fetch(`/api/slots?${allSlotsParams.toString()}`, { 
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -555,7 +609,8 @@ function AdminDashboardContent() {
       ]);
       
       // Set calendar + booking data together so badges are accurate
-      setSlots(slotsRes.slots);
+      setSlots(slotsRes.slots); // Date-filtered slots for calendar
+      setAllSlots(allSlotsRes.slots); // All slots for modals and other views
       slotCacheRef.current.set(slotCacheKey, slotsRes.slots);
       setBlockedDates(blocksRes.blockedDates);
       setNailTechs(nailTechsRes.nailTechs || []);
@@ -668,20 +723,26 @@ function AdminDashboardContent() {
   }, [selectedCustomerId]);
 
   // Memoize filtered slots for calendar (by nail tech) - used for calendar display
+  // Always show hidden slots in admin view
   const calendarSlots = useMemo(() => {
+    let slots = filteredSlots;
     if (selectedNailTechId) {
-      return filteredSlots.filter(s => s.nailTechId === selectedNailTechId);
+      slots = slots.filter(s => s.nailTechId === selectedNailTechId);
     }
-    return filteredSlots;
+    // Always show all slots including hidden ones in admin view
+    return slots;
   }, [filteredSlots, selectedNailTechId]);
 
   const selectedSlots = useMemo(() => {
     // PRIORITIZE ALL SLOTS: Include all slot statuses (available, pending, confirmed, blocked)
     // This ensures confirmed slots are always visible
-    let filteredSlots = slots.filter((slot) => slot.date === selectedDate);
+    // Use allSlots instead of date-filtered slots
+    // Always show hidden slots in admin view
+    let filteredSlots = filteredAllSlots.filter((slot) => slot.date === selectedDate);
     if (selectedNailTechId) {
       filteredSlots = filteredSlots.filter((slot) => slot.nailTechId === selectedNailTechId);
     }
+    // Always show all slots including hidden ones in admin view
     
     // Log for debugging: check if confirmed slots are being filtered out
     const confirmedSlots = filteredSlots.filter(s => s.status === 'confirmed');
@@ -691,7 +752,7 @@ function AdminDashboardContent() {
     
     // Sort slots by time to ensure consistent display order
     return filteredSlots.sort((a, b) => a.time.localeCompare(b.time));
-  }, [slots, selectedDate, selectedNailTechId]);
+  }, [filteredAllSlots, selectedDate, selectedNailTechId]);
 
   const bookingsWithSlots = useMemo<BookingWithSlot[]>(() => {
     const list: BookingWithSlot[] = [];
@@ -754,7 +815,7 @@ function AdminDashboardContent() {
     ? bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? null
     : null;
 
-  async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string }) {
+  async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string; isHidden?: boolean }) {
     const url = editingSlot ? `/api/slots/${editingSlot.id}` : '/api/slots';
     const method = editingSlot ? 'PATCH' : 'POST';
     
@@ -795,7 +856,7 @@ function AdminDashboardContent() {
     const savedSlotResponse = await res.json();
     const savedSlot: Slot = savedSlotResponse.slot ?? savedSlotResponse;
 
-    setSlots((prevSlots) => {
+    const updateSlots = (prevSlots: Slot[]) => {
       const nextSlots = editingSlot
         ? prevSlots.map((slot) => (slot.id === savedSlot.id ? savedSlot : slot))
         : [...prevSlots, savedSlot];
@@ -804,7 +865,10 @@ function AdminDashboardContent() {
         if (dateCompare !== 0) return dateCompare;
         return a.time.localeCompare(b.time);
       });
-    });
+    };
+    
+    setSlots(updateSlots);
+    setAllSlots(updateSlots);
     
     // Create notification for slot added/updated
     try {
@@ -818,6 +882,49 @@ function AdminDashboardContent() {
     }
     
     setToast('Slot saved.');
+  }
+
+  async function handleMakeHiddenSlotsVisible(month: string) {
+    setIsMakingSlotsVisible(true);
+    try {
+      // Find all hidden slots for the selected month
+      const hiddenSlotsForMonth = allSlots.filter((slot) => {
+        const slotMonth = slot.date.substring(0, 7); // YYYY-MM
+        return slot.isHidden && slotMonth === month;
+      });
+
+      if (hiddenSlotsForMonth.length === 0) {
+        setToast('No hidden slots found for this month.');
+        setIsMakingSlotsVisible(false);
+        return;
+      }
+
+      // Update all hidden slots to make them visible
+      const updatePromises = hiddenSlotsForMonth.map((slot) =>
+        fetch(`/api/slots/${slot.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isHidden: false }),
+        })
+      );
+
+      const results = await Promise.all(updatePromises);
+      const failed = results.filter((res) => !res.ok);
+
+      if (failed.length > 0) {
+        throw new Error(`Failed to update ${failed.length} slot(s).`);
+      }
+
+      setToast(`Made ${hiddenSlotsForMonth.length} hidden slot(s) visible for ${format(new Date(month + '-01'), 'MMMM yyyy')}.`);
+      setMakeVisibleModalOpen(false);
+      
+      // Reload data to reflect changes
+      await loadData();
+    } catch (error: any) {
+      setToast(`Error: ${error.message || 'Failed to make slots visible'}`);
+    } finally {
+      setIsMakingSlotsVisible(false);
+    }
   }
 
   function handleDeleteSlot(slot: Slot) {
@@ -844,7 +951,9 @@ function AdminDashboardContent() {
       }
       
       await res.json();
-      setSlots((prevSlots) => prevSlots.filter((slot) => slot.id !== slotToDelete.id));
+      const filterSlot = (slot: Slot) => slot.id !== slotToDelete.id;
+      setSlots((prevSlots) => prevSlots.filter(filterSlot));
+      setAllSlots((prevSlots) => prevSlots.filter(filterSlot));
       
       // Create notification for slot removed
       try {
@@ -875,13 +984,13 @@ function AdminDashboardContent() {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to delete slots.');
       }
-      setSlots((prevSlots) =>
-        prevSlots.filter((slot) => {
-          if (slot.date !== selectedDate) return true;
-          if (effectiveNailTechId && slot.nailTechId !== effectiveNailTechId) return true;
-          return onlyAvailable ? slot.status !== 'available' : false;
-        })
-      );
+      const filterDaySlots = (slot: Slot) => {
+        if (slot.date !== selectedDate) return true;
+        if (effectiveNailTechId && slot.nailTechId !== effectiveNailTechId) return true;
+        return onlyAvailable ? slot.status !== 'available' : false;
+      };
+      setSlots((prevSlots) => prevSlots.filter(filterDaySlots));
+      setAllSlots((prevSlots) => prevSlots.filter(filterDaySlots));
       setToast(data.message || `Deleted ${data.deletedCount} slot(s).`);
       setDeleteDaySlotsModalOpen(false);
     } catch (error: any) {
@@ -1198,6 +1307,14 @@ function AdminDashboardContent() {
         <div className="mb-4 sm:mb-6 flex flex-wrap gap-2 sm:gap-3">
           <button
             type="button"
+            onClick={() => setMakeVisibleModalOpen(true)}
+            className="rounded-full bg-blue-500 hover:bg-blue-600 px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold text-white transition-colors touch-manipulation"
+          >
+            <span className="hidden sm:inline">Make Hidden Slots Visible</span>
+            <span className="sm:hidden">Make Visible</span>
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setEditingSlot(null);
               setSlotModalOpen(true);
@@ -1247,7 +1364,7 @@ function AdminDashboardContent() {
       ) : bookingsView === 'list' ? (
         <BookingsView
           bookings={filteredBookings}
-          slots={filteredSlots}
+          slots={filteredAllSlots}
           selectedDate={selectedDate}
           customers={customers}
           nailTechs={nailTechs}
@@ -1391,7 +1508,7 @@ function AdminDashboardContent() {
                     {format(new Date(selectedDate), 'EEEE, MMM d')}
                   </h2>
                 </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     {selectedSlots.length > 0 && (
                       <button
                         type="button"
@@ -1757,7 +1874,7 @@ function AdminDashboardContent() {
             permissions?.canViewFinance ? (
               <FinanceView 
               bookings={bookings} 
-              slots={slots} 
+              slots={filteredAllSlots} 
               customers={customers}
               nailTechs={nailTechs}
               selectedNailTechId={selectedNailTechId}
@@ -1901,7 +2018,7 @@ function AdminDashboardContent() {
           ) : (
             /* Overview tab - Analytics Dashboard */
             permissions?.canViewOverview ? (
-              <AnalyticsDashboard bookings={bookings} slots={slots} customers={customers} />
+              <AnalyticsDashboard bookings={bookings} slots={filteredAllSlots} customers={customers} />
             ) : (
               <div className="p-6 text-center">
                 <p className="text-slate-600">You don&apos;t have permission to view this section.</p>
@@ -1937,6 +2054,14 @@ function AdminDashboardContent() {
         initialEnd={blockDefaults.end ?? selectedDate}
         onClose={() => setBlockModalOpen(false)}
         onSubmit={handleBlockDates}
+      />
+
+      <MakeHiddenSlotsVisibleModal
+        open={makeVisibleModalOpen}
+        allSlots={allSlots}
+        onClose={() => setMakeVisibleModalOpen(false)}
+        onConfirm={handleMakeHiddenSlotsVisible}
+        isProcessing={isMakingSlotsVisible}
       />
 
       <DeleteSlotModal
@@ -1980,13 +2105,14 @@ function AdminDashboardContent() {
         <RescheduleModal
           open={rescheduleModalOpen}
           booking={bookings.find(b => b.id === reschedulingBookingId) || null}
-          slots={slots}
+          slots={filteredAllSlots}
           blockedDates={blockedDates}
           onClose={() => {
             setRescheduleModalOpen(false);
             setReschedulingBookingId(null);
           }}
           onReschedule={handleRescheduleConfirm}
+          onSlotsUpdate={loadData}
         />
       )}
 
@@ -1994,7 +2120,7 @@ function AdminDashboardContent() {
         <SplitRescheduleModal
           open={splitRescheduleModalOpen}
           booking={bookings.find(b => b.id === splitReschedulingBookingId) || null}
-          slots={slots}
+          slots={filteredAllSlots}
           blockedDates={blockedDates}
           nailTechs={nailTechs}
           onClose={() => {

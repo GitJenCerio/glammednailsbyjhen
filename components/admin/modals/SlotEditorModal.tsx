@@ -8,16 +8,17 @@ type SlotEditorModalProps = {
   slot?: Slot | null;
   defaultDate?: string | null;
   onClose: () => void;
-  onSubmit: (payload: { date: string; time: string; status: SlotStatus; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string }) => Promise<void>;
+  onSubmit: (payload: { date: string; time: string; status: SlotStatus; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string; isHidden?: boolean }) => Promise<void>;
 };
 
-const statuses: SlotStatus[] = ['available', 'pending', 'confirmed', 'blocked'];
+// Slot visibility options
+type SlotVisibility = 'visible' | 'hidden';
 
 export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: SlotEditorModalProps) {
   const [date, setDate] = useState('');
   const [time, setTime] = useState<SlotTime>(SLOT_TIMES[0]);
   const [selectedTimes, setSelectedTimes] = useState<Set<SlotTime>>(new Set());
-  const [status, setStatus] = useState<SlotStatus>('available');
+  const [slotVisibility, setSlotVisibility] = useState<SlotVisibility>('visible');
   const [slotType, setSlotType] = useState<'regular' | 'with_squeeze_fee'>('regular');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -32,14 +33,15 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
         setDate(slot.date);
         setTime(slot.time as SlotTime);
         setSelectedTimes(new Set([slot.time as SlotTime]));
-        setStatus(slot.status);
+        // Map isHidden to slotVisibility
+        setSlotVisibility(slot.isHidden ? 'hidden' : 'visible');
         setSlotType(slot.slotType ?? 'regular');
         setNotes(slot.notes ?? '');
       } else if (defaultDate) {
         setDate(defaultDate);
         setTime(SLOT_TIMES[0]);
         setSelectedTimes(new Set());
-        setStatus('available');
+        setSlotVisibility('visible');
         setSlotType('regular');
         setNotes('');
       }
@@ -89,9 +91,14 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
     setSaving(true);
     setError(null);
     try {
+      // New slots are always created with status='available'
+      // Visibility is controlled by isHidden
+      const status: SlotStatus = 'available';
+      const isHidden = slotVisibility === 'hidden';
+      
       // Create slots sequentially for each selected time
       for (const timeValue of timesToCreate) {
-        await onSubmit({ date, time: timeValue, status, slotType, notes });
+        await onSubmit({ date, time: timeValue, status, slotType, notes, isHidden });
       }
       onClose();
     } catch (err: any) {
@@ -192,18 +199,20 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
           )}
 
           <label className="block text-xs sm:text-sm font-medium">
-            Status
+            Visibility
             <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as SlotStatus)}
+              value={slotVisibility}
+              onChange={(e) => setSlotVisibility(e.target.value as SlotVisibility)}
               className="mt-1 w-full rounded-xl sm:rounded-2xl border border-slate-200 px-3 py-2 text-base sm:text-sm"
             >
-              {statuses.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
+              <option value="visible">Visible</option>
+              <option value="hidden">Hidden</option>
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {slotVisibility === 'hidden' 
+                ? 'Hidden slots are not visible to customers but can be made visible later.'
+                : 'Visible slots are available for customers to book. Status is automatically set to "available".'}
+            </p>
           </label>
 
           <label className="block text-xs sm:text-sm font-medium">
@@ -227,6 +236,7 @@ export function SlotEditorModal({ open, slot, defaultDate, onClose, onSubmit }: 
               rows={3}
             />
           </label>
+
         </div>
 
         <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">

@@ -384,6 +384,7 @@ function docToSlot(id: string, data: FirebaseFirestore.DocumentData): Slot {
     status: data.status,
     slotType: data.slotType ?? null,
     notes: data.notes ?? null,
+    isHidden: data.isHidden ?? false, // Default to false for backward compatibility
     nailTechId: data.nailTechId, // Required - should be set before calling this function
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,

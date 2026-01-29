@@ -12,6 +12,8 @@ type CalendarGridProps = {
   onSelectDate: (date: string) => void;
   onChangeMonth: (newDate: Date) => void;
   nailTechName?: string; // Optional: name of the nail tech whose calendar is being displayed
+  noAvailableSlotsDates?: string[]; // Optional: dates with no available slots (for client booking page)
+  disablePastDates?: boolean; // Optional: disable past dates (for client booking page)
 };
 
 export function CalendarGrid({
@@ -23,6 +25,8 @@ export function CalendarGrid({
   onSelectDate,
   onChangeMonth,
   nailTechName,
+  noAvailableSlotsDates = [],
+  disablePastDates = false,
 }: CalendarGridProps) {
   // Memoize calendar structure calculations
   const { weeks, today } = useMemo(() => {
@@ -108,7 +112,11 @@ export function CalendarGrid({
         
         const availableCount = daySlots.filter((slot) => {
           const booking = bookingsBySlotId.get(slot.id);
-          return !booking && slot.status === 'available';
+          return !booking && slot.status === 'available' && !slot.isHidden;
+        }).length;
+        
+        const hiddenCount = daySlots.filter((slot) => {
+          return slot.isHidden;
         }).length;
         
         const pendingSlotCount = daySlots.filter((slot) => {
@@ -151,6 +159,13 @@ export function CalendarGrid({
             badges.push({ 
               label: `${pendingSlotCount}`,
               color: 'bg-amber-500 text-white border border-amber-600' 
+            });
+          }
+          // Show hidden slots count with light gray badge
+          if (hiddenCount > 0) {
+            badges.push({ 
+              label: `${hiddenCount}`,
+              color: 'bg-gray-300 text-gray-700 border border-gray-400' 
             });
           }
         }
@@ -211,18 +226,25 @@ export function CalendarGrid({
               const isSelected = selectedDate === isoDate;
               const isToday = isSameDay(date, new Date());
               const isPast = isoDate < today;
+              const hasNoAvailableSlots = noAvailableSlotsDates.includes(isoDate);
+              const isDisabled = disablePastDates && isPast;
 
               return (
                 <button
                   key={isoDate}
                   type="button"
-                  onClick={() => onSelectDate(isoDate)}
+                  onClick={() => {
+                    if (isDisabled) return;
+                    onSelectDate(isoDate);
+                  }}
+                  disabled={isDisabled}
                   className={[
                     'flex flex-col gap-0.5 sm:gap-0.5 md:gap-1 rounded-lg sm:rounded-xl md:rounded-2xl border-2 p-0.5 sm:p-1 md:p-1.5 lg:p-2 xl:p-2.5 text-left transition-all shadow-sm min-h-[2.5rem] sm:min-h-[3rem] md:min-h-[3.5rem] lg:min-h-[4rem] xl:min-h-[4.5rem]',
-                    isPast ? 'opacity-60' : '',
-                    'touch-manipulation active:scale-95',
+                    isDisabled ? 'opacity-40 cursor-not-allowed' : 'touch-manipulation active:scale-95',
                     isCurrentMonth ? 'border-slate-300' : 'border-slate-200 text-slate-400',
-                    isBlocked ? 'bg-rose-200 border-rose-400 hover:bg-rose-300 hover:border-rose-500' : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400',
+                    isBlocked ? 'bg-rose-200 border-rose-400 hover:bg-rose-300 hover:border-rose-500' : 
+                    hasNoAvailableSlots ? 'bg-red-100 border-red-300 hover:bg-red-200 hover:border-red-400' : 
+                    'bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400',
                     isSelected ? 'ring-2 ring-slate-900 ring-offset-1 sm:ring-offset-2 border-slate-900' : '',
                     isToday ? 'shadow-md border-slate-900/30 bg-slate-50' : '',
                   ]

@@ -23,10 +23,17 @@ export async function GET(request: Request) {
   // Automatic release is disabled - use manual release from admin dashboard instead
   // Return all slots (including booked/pending ones) so we can detect gaps in consecutive slot checking
   // Frontend will filter to show only available slots for display
-  const [slots, blockedDates] = await Promise.all([
+  // IMPORTANT: Filter out hidden slots from public booking page
+  const [allSlots, blockedDates] = await Promise.all([
     targetNailTechId ? listSlots(targetNailTechId) : listSlots(),
     listBlockedDates()
   ]);
+
+  // Calculate "today" in the same YYYY-MM-DD format used by slots
+  const today = new Date().toISOString().slice(0, 10);
+  
+  // Filter out hidden slots and past-date slots - they should not be visible to customers
+  const slots = allSlots.filter((slot) => !slot.isHidden && slot.date >= today);
   
   // Prevent caching to ensure fresh data, especially after slot updates
   return NextResponse.json({ slots, blockedDates }, {

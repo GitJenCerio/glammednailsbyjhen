@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { motion } from 'framer-motion';
 import { IoClose } from 'react-icons/io5';
 import Header from '@/components/Header';
@@ -708,6 +708,43 @@ export default function BookingPage() {
     [availableSlotsForDate, selectedService, slots, blockedDates],
   );
 
+  // Find dates with no available slots (for calendar styling)
+  const noAvailableSlotsDates = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const datesWithNoSlots: string[] = [];
+    
+    // Check all dates in the current month view
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
+    const allDatesInMonth = eachDayOfInterval({ start, end });
+    
+    allDatesInMonth.forEach((date) => {
+      const isoDate = format(date, 'yyyy-MM-dd');
+      if (isoDate < today) return; // Skip past dates
+      
+      // Check if date is blocked
+      const isBlocked = blockedDates.some(
+        (block) => isoDate >= block.startDate && isoDate <= block.endDate
+      );
+      if (isBlocked) return; // Skip blocked dates
+      
+      // Check if there are any available slots for this date
+      const hasAvailableSlots = slots.some(
+        (slot) =>
+          slot.date === isoDate &&
+          slot.date >= today &&
+          slot.status === 'available' &&
+          !slot.isHidden
+      );
+      
+      if (!hasAvailableSlots) {
+        datesWithNoSlots.push(isoDate);
+      }
+    });
+    
+    return datesWithNoSlots;
+  }, [slots, blockedDates, currentMonth]);
+
   const handleSelectSlot = useCallback((slot: Slot) => {
     if (slot.status !== 'available') return;
     setSelectedService('manicure');
@@ -907,15 +944,23 @@ export default function BookingPage() {
               <div className="max-w-4xl mx-auto px-2 sm:px-4">
                 <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.8fr,1fr]">
                   <div id="booking-calendar" className="scroll-mt-24">
-                    <CalendarGrid
-                      referenceDate={currentMonth}
-                      slots={slots.filter((slot) => slot.status === 'available')}
-                      blockedDates={blockedDates}
-                      selectedDate={selectedDate}
-                      onSelectDate={setSelectedDate}
-                      onChangeMonth={setCurrentMonth}
-                      nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
-                    />
+                    {(() => {
+                      const today = format(new Date(), 'yyyy-MM-dd');
+                      const futureSlots = slots.filter((slot) => slot.date >= today);
+                      return (
+                        <CalendarGrid
+                          referenceDate={currentMonth}
+                          slots={futureSlots.filter((slot) => slot.status === 'available')}
+                          blockedDates={blockedDates}
+                          selectedDate={selectedDate}
+                          onSelectDate={setSelectedDate}
+                          onChangeMonth={setCurrentMonth}
+                          nailTechName={selectedNailTechId ? `Ms. ${nailTechs.find(t => t.id === selectedNailTechId)?.name || ''}` : undefined}
+                          noAvailableSlotsDates={noAvailableSlotsDates}
+                          disablePastDates
+                        />
+                      );
+                    })()}
                   </div>
 
                   <section 
@@ -950,9 +995,24 @@ export default function BookingPage() {
 
                   <div className="space-y-3">
                     {availableSlotsForDate.length === 0 && (
-                      <p className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                        No available slots for this day. Choose another date on the calendar.
-                      </p>
+                      <div className="rounded-2xl border-2 border-dashed border-red-300 bg-red-50 p-4 text-sm">
+                        <p className="text-red-700 font-semibold mb-2">
+                          No available slots for this day.
+                        </p>
+                        <p className="text-red-600 mb-3">
+                          Do you want to be added to the waiting list? If a slot is canceled or new slots open for squeeze-in, we&apos;ll notify you.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // TODO: Implement waiting list functionality
+                            alert('Waiting list feature coming soon! We will notify you when slots become available.');
+                          }}
+                          className="w-full rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 font-semibold transition-colors touch-manipulation"
+                        >
+                          Join Waiting List
+                        </button>
+                      </div>
                     )}
                     {availableSlotsForDate.map((slot) => (
                       <button

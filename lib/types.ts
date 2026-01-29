@@ -45,6 +45,7 @@ export interface Slot {
   status: SlotStatus;
   slotType?: 'regular' | 'with_squeeze_fee' | null;
   notes?: string | null;
+  isHidden?: boolean; // Hidden slots are not visible to customers but exist in the system
   nailTechId: string; // Required: every slot belongs to a nail tech
   createdAt: string;
   updatedAt: string;

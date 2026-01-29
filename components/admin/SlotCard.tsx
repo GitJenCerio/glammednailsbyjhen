@@ -204,6 +204,11 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
   const showNailTechBadge = !!slotNailTech;
 
   const getStatusColor = () => {
+    // Hidden slots always get light gray styling for easy identification
+    if (slot.isHidden) {
+      return 'border-gray-300 bg-gray-50';
+    }
+    
     // Check booking status first for colored cards
     if (booking) {
       switch (booking.status) {
@@ -253,7 +258,7 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
         </div>
       )}
       <div className="flex items-center gap-2 flex-wrap">
-        <p className="text-sm sm:text-base font-bold text-slate-900">{formatTime12Hour(slot.time)}</p>
+        <p className={`text-sm sm:text-base font-bold ${slot.isHidden ? 'text-gray-500' : 'text-slate-900'}`}>{formatTime12Hour(slot.time)}</p>
         {booking?.status === 'pending_form' && (
           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-yellow-500 text-white border border-yellow-600">
             Pending Form
@@ -292,6 +297,11 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
         {serviceLocation && (
           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-blue-200 text-blue-900 border border-blue-300">
             {serviceLocation}
+          </span>
+        )}
+        {slot.isHidden && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-semibold bg-gray-200 text-gray-700 border border-gray-300" title="Hidden - not visible to customers">
+            Hidden
           </span>
         )}
         {showNailTechBadge && slotNailTech && (() => {
