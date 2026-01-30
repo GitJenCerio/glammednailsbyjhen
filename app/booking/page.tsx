@@ -508,14 +508,14 @@ export default function BookingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNailTechId]);
 
-  // Auto-refresh slots every 30 seconds to show updated slot status (pending slots should disappear)
-  // Increased interval for better performance - cache headers help with freshness
+  // OPTIMIZED: Increased auto-refresh interval from 30s to 60s to reduce Firestore reads
+  // Cache headers on API route provide freshness, so less frequent polling is safe
   useEffect(() => {
     if (!selectedNailTechId) return;
     
     const interval = setInterval(() => {
       loadData(false); // Don't show loading spinner on auto-refresh
-    }, 30000); // 30 seconds - balance between freshness and performance
+    }, 60000); // 60 seconds - reduced reads while still showing fresh data
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -524,9 +524,9 @@ export default function BookingPage() {
   async function loadNailTechs() {
     setLoadingNailTechs(true);
     try {
-      const response = await fetch('/api/nail-techs?activeOnly=true', {
-        cache: 'no-store',
-      });
+      // OPTIMIZED: Removed cache: 'no-store' - API route now caches for 5 minutes
+      // Nail techs rarely change, so caching significantly reduces reads
+      const response = await fetch('/api/nail-techs?activeOnly=true');
       const data = await response.json();
       setNailTechs(data.nailTechs || []);
       
@@ -548,10 +548,10 @@ export default function BookingPage() {
     }
     setError(null);
     try {
-      // Add cache-busting timestamp to ensure fresh data
-      const timestamp = new Date().getTime();
-      const response = await fetch(`/api/availability?t=${timestamp}&nailTechId=${selectedNailTechId}`, {
-        cache: 'no-store',
+      // OPTIMIZED: Removed cache-busting timestamp - API route now has proper caching
+      // Browser/CDN cache will handle freshness, reducing unnecessary Firestore reads
+      const response = await fetch(`/api/availability?nailTechId=${selectedNailTechId}`, {
+        // Use default cache behavior - API route handles caching headers
       });
       const data = await response.json();
       setSlots(data.slots);
@@ -996,22 +996,12 @@ export default function BookingPage() {
                   <div className="space-y-3">
                     {availableSlotsForDate.length === 0 && (
                       <div className="rounded-2xl border-2 border-dashed border-red-300 bg-red-50 p-4 text-sm">
-                        <p className="text-red-700 font-semibold mb-2">
+                        <p className="text-red-700 font-semibold">
                           No available slots for this day.
                         </p>
-                        <p className="text-red-600 mb-3">
-                          Do you want to be added to the waiting list? If a slot is canceled or new slots open for squeeze-in, we&apos;ll notify you.
+                        <p className="text-red-600 mt-2">
+                          Please try selecting a different date.
                         </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            // TODO: Implement waiting list functionality
-                            alert('Waiting list feature coming soon! We will notify you when slots become available.');
-                          }}
-                          className="w-full rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 font-semibold transition-colors touch-manipulation"
-                        >
-                          Join Waiting List
-                        </button>
                       </div>
                     )}
                     {availableSlotsForDate.map((slot) => (

@@ -66,23 +66,36 @@ export async function getNotifications(limitCount: number = 50): Promise<Notific
   } as Notification));
 }
 
-export function subscribeToNotifications(
-  callback: (notifications: Notification[]) => void,
-  limitCount: number = 50
-): () => void {
+/**
+ * OPTIMIZED: Replaced realtime listener with one-time fetch.
+ * Real-time listeners cause excessive reads on every notification change.
+ * Use pollNotifications() in the admin dashboard instead with proper visibility gating.
+ */
+export async function fetchNotifications(limitCount: number = 50): Promise<Notification[]> {
   const q = query(
     notificationsCollection,
     orderBy('createdAt', 'desc'),
     limit(limitCount)
   );
 
-  return onSnapshot(q, (snapshot) => {
-    const notifications = snapshot.docs.map((docSnap) => ({
-      id: docSnap.id,
-      ...docSnap.data(),
-    } as Notification));
-    callback(notifications);
-  });
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((docSnap) => ({
+    id: docSnap.id,
+    ...docSnap.data(),
+  } as Notification));
+}
+
+/**
+ * @deprecated Use fetchNotifications() with polling instead.
+ * Real-time listeners cause excessive Firestore reads.
+ */
+export function subscribeToNotifications(
+  callback: (notifications: Notification[]) => void,
+  limitCount: number = 50
+): () => void {
+  console.warn('subscribeToNotifications is deprecated. Use fetchNotifications() with polling instead.');
+  // Return a no-op unsubscribe function
+  return () => {};
 }
 
 // Helper functions to create specific notification types

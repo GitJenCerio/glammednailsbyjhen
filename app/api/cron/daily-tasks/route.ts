@@ -94,24 +94,25 @@ export async function GET(request: Request) {
       const tomorrow = addDays(today, 1);
       const tomorrowStr = format(tomorrow, 'yyyy-MM-dd');
 
-      // Get all confirmed bookings
-      const bookings = await listBookings();
-      const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
-
-      // Get all slots to match with bookings
-      const slots = await listSlots();
+      // OPTIMIZED: Query only slots for tomorrow instead of all slots
+      const { getSlotsByDate } = await import('@/lib/services/slotService');
+      const slots = await getSlotsByDate(tomorrowStr);
       const slotMap = new Map(slots.map(s => [s.id, s]));
 
-      // Find bookings scheduled for tomorrow
-      for (const booking of confirmedBookings) {
-        const slot = slotMap.get(booking.slotId);
-        if (!slot) continue;
+      // OPTIMIZED: Query only confirmed bookings and filter by slot IDs for tomorrow
+      // This avoids fetching all bookings
+      const { adminDb } = await import('@/lib/firebaseAdmin');
+      const bookingsSnapshot = await adminDb
+        .collection('bookings')
+        .where('status', '==', 'confirmed')
+        .get();
+      
+      const slotIds = new Set(slots.map(s => s.id));
 
-        // Check if booking is for tomorrow
-        const bookingDate = parseISO(slot.date);
-        const bookingDateStr = format(bookingDate, 'yyyy-MM-dd');
-        
-        if (bookingDateStr === tomorrowStr) {
+      // Find bookings scheduled for tomorrow (only check bookings that reference tomorrow's slots)
+      for (const doc of bookingsSnapshot.docs) {
+        const booking = doc.data();
+        if (slotIds.has(booking.slotId)) {
           results.appointmentsTomorrow.count++;
         }
       }

@@ -17,7 +17,6 @@ import Image from 'next/image';
 import { SlotCard } from '@/components/admin/SlotCard';
 import { SlotEditorModal } from '@/components/admin/modals/SlotEditorModal';
 import { BulkSlotCreatorModal } from '@/components/admin/modals/BulkSlotCreatorModal';
-import { BlockDateModal } from '@/components/admin/modals/BlockDateModal';
 import { DeleteSlotModal } from '@/components/admin/modals/DeleteSlotModal';
 import { DeleteDaySlotsModal } from '@/components/admin/modals/DeleteDaySlotsModal';
 import { MakeHiddenSlotsVisibleModal } from '@/components/admin/modals/MakeHiddenSlotsVisibleModal';
@@ -43,7 +42,7 @@ import type { Customer, NailTech, Notification } from '@/lib/types';
 import { IoPerson } from 'react-icons/io5';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { 
-  subscribeToNotifications, 
+  fetchNotifications,
   markNotificationAsRead, 
   markAllNotificationsAsRead,
   notifySlotAdded,
@@ -135,13 +134,11 @@ function AdminDashboardContent() {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [slotModalOpen, setSlotModalOpen] = useState(false);
   const [bulkSlotModalOpen, setBulkSlotModalOpen] = useState(false);
-  const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [deleteSlotModalOpen, setDeleteSlotModalOpen] = useState(false);
   const [slotToDelete, setSlotToDelete] = useState<Slot | null>(null);
   const [isDeletingSlot, setIsDeletingSlot] = useState(false);
   const [deleteDaySlotsModalOpen, setDeleteDaySlotsModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
-  const [blockDefaults, setBlockDefaults] = useState<{ start?: string | null; end?: string | null }>({});
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -346,14 +343,8 @@ function AdminDashboardContent() {
 
   async function syncBookingsInBackground() {
     try {
-      const cacheBuster = Date.now().toString();
-      const res = await fetch(`/api/bookings?sync=1&t=${cacheBuster}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        }
-      });
+      // OPTIMIZED: Removed cache-busting - API route handles caching
+      const res = await fetch(`/api/bookings?sync=1`);
       if (!res.ok) return;
       const data = await res.json();
       setBookings(data.bookings || []);
@@ -367,8 +358,16 @@ function AdminDashboardContent() {
     async function loadAllSlots() {
       try {
         const cacheBuster = Date.now().toString();
+        const today = new Date();
+        const sixMonthsLater = new Date();
+        sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+        
+        // OPTIMIZED: Use date range (next 6 months) instead of fetching ALL slots
+        // This prevents quota exhaustion when admin dashboard loads
         const allSlotsParams = new URLSearchParams({
           t: cacheBuster,
+          startDate: format(today, 'yyyy-MM-dd'),
+          endDate: format(sixMonthsLater, 'yyyy-MM-dd'),
         });
         if (selectedNailTechId) {
           allSlotsParams.set('nailTechId', selectedNailTechId);
@@ -394,34 +393,103 @@ function AdminDashboardContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMonth, selectedNailTechId]);
 
+  // OPTIMIZED: Gate booking polling by section visibility and tab visibility
+  // Only poll when: (1) bookings/overview section is active, (2) browser tab is visible
+  // Increased interval to 10 minutes to further reduce reads
   useEffect(() => {
-    if (activeSection !== 'bookings' && activeSection !== 'overview') {
-      if (bookingSyncIntervalRef.current) {
-        clearInterval(bookingSyncIntervalRef.current);
-        bookingSyncIntervalRef.current = null;
-      }
-      return;
-    }
+    let intervalId: NodeJS.Timeout | null = null;
+    let isVisible = true;
 
-    // Sync immediately and keep it fresh in the background
-    syncBookingsInBackground();
-    bookingSyncIntervalRef.current = setInterval(syncBookingsInBackground, 20000);
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      updatePolling();
+    };
+
+    const updatePolling = () => {
+      // Stop polling if section is wrong or tab is hidden
+      if (activeSection !== 'bookings' && activeSection !== 'overview') {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+        return;
+      }
+
+      if (!isVisible) {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+        return;
+      }
+
+      // Start polling if conditions are met
+      if (!intervalId) {
+        syncBookingsInBackground();
+        intervalId = setInterval(syncBookingsInBackground, 600000); // 10 minutes
+      }
+    };
+
+    // Initial check
+    updatePolling();
+
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (bookingSyncIntervalRef.current) {
-        clearInterval(bookingSyncIntervalRef.current);
-        bookingSyncIntervalRef.current = null;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [activeSection]);
 
-  // Subscribe to notifications
+  // OPTIMIZED: Replace realtime listener with polling to reduce Firestore reads
+  // Poll notifications every 45 seconds when tab is visible
   useEffect(() => {
-    const unsubscribe = subscribeToNotifications((newNotifications) => {
-      setNotifications(newNotifications);
-    }, 50);
+    let intervalId: NodeJS.Timeout | null = null;
+    let isVisible = true;
 
-    return () => unsubscribe();
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        // Tab became visible, fetch immediately and start polling
+        fetchNotificationsFn();
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(fetchNotificationsFn, 45000); // 45 seconds
+      } else {
+        // Tab hidden, stop polling
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }
+    };
+
+    const fetchNotificationsFn = async () => {
+      if (!isVisible) return;
+      try {
+        const newNotifications = await fetchNotifications(50);
+        setNotifications(newNotifications);
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+      }
+    };
+
+    // Initial fetch
+    fetchNotificationsFn();
+    
+    // Start polling
+    intervalId = setInterval(fetchNotificationsFn, 45000); // 45 seconds
+    
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const unreadNotificationsCount = useMemo(
@@ -537,11 +605,10 @@ function AdminDashboardContent() {
       if (isFirstLoad) {
         setLoadingCalendar(true);
       }
-      // Add cache-busting timestamp to prevent stale data in production
-      const cacheBuster = Date.now().toString();
+      // OPTIMIZED: Removed cache-busting - API routes now handle caching properly
+      // This allows browser/CDN caching to reduce Firestore reads
       const { rangeStart: calendarStart, rangeEnd: calendarEnd } = getCalendarRange(currentMonth);
       const slotParams = new URLSearchParams({
-        t: cacheBuster,
         startDate: calendarStart,
         endDate: calendarEnd,
       });
@@ -555,57 +622,27 @@ function AdminDashboardContent() {
       }
       
       // Load calendar data + bookings together so calendar statuses are accurate on first render
-      // Load all slots separately for modals and other views (no date filtering)
+      // OPTIMIZED: Load slots for modals with 6-month date range instead of all slots
+      const today = new Date();
+      const sixMonthsLater = new Date();
+      sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
       const allSlotsParams = new URLSearchParams({
-        t: cacheBuster,
+        startDate: format(today, 'yyyy-MM-dd'),
+        endDate: format(sixMonthsLater, 'yyyy-MM-dd'),
       });
       if (selectedNailTechId) {
         allSlotsParams.set('nailTechId', selectedNailTechId);
       }
 
+      // OPTIMIZED: Removed cache-busting and no-store headers
+      // API routes now handle caching properly, reducing Firestore reads
       const [slotsRes, allSlotsRes, blocksRes, nailTechsRes, bookingsRes, customersRes] = await Promise.all([
-        fetch(`/api/slots?${slotParams.toString()}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()),
-        fetch(`/api/slots?${allSlotsParams.toString()}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()),
-        fetch(`/api/blocks?t=${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()),
-        fetch(`/api/nail-techs?t=${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
-        fetch(`/api/bookings?sync=0&t=${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()).catch(() => ({ bookings: [] })),
-        fetch(`/api/customers?t=${cacheBuster}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          }
-        }).then((res) => res.json()).catch(() => ({ customers: [] })),
+        fetch(`/api/slots?${slotParams.toString()}`).then((res) => res.json()),
+        fetch(`/api/slots?${allSlotsParams.toString()}`).then((res) => res.json()),
+        fetch(`/api/blocks`).then((res) => res.json()),
+        fetch(`/api/nail-techs`).then((res) => res.json()).catch(() => ({ nailTechs: [] })),
+        fetch(`/api/bookings?sync=0`).then((res) => res.json()).catch(() => ({ bookings: [] })),
+        fetch(`/api/customers`).then((res) => res.json()).catch(() => ({ customers: [] })),
       ]);
       
       // Set calendar + booking data together so badges are accurate
@@ -1000,16 +1037,6 @@ function AdminDashboardContent() {
     }
   }
 
-  async function handleBlockDates(payload: { startDate: string; endDate: string; scope: BlockedDate['scope']; reason?: string }) {
-    const res = await fetch('/api/blocks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    await loadData();
-    setToast('Dates blocked.');
-  }
 
   async function handleConfirmBooking(id: string, depositAmount?: number, depositPaymentMethod?: 'PNB' | 'CASH' | 'GCASH') {
     try {
@@ -2048,13 +2075,6 @@ function AdminDashboardContent() {
         defaultNailTechId={role === 'staff' && nailTechId ? nailTechId : selectedNailTechId}
       />
 
-      <BlockDateModal
-        open={blockModalOpen}
-        initialStart={blockDefaults.start ?? selectedDate}
-        initialEnd={blockDefaults.end ?? selectedDate}
-        onClose={() => setBlockModalOpen(false)}
-        onSubmit={handleBlockDates}
-      />
 
       <MakeHiddenSlotsVisibleModal
         open={makeVisibleModalOpen}

@@ -105,3 +105,9 @@ Screenshot*.png
 .cache/
 .temp/
 .tmp/
+
+# Backups
+/backups/
+
+# Monitoring reports
+firestore-usage-report.json

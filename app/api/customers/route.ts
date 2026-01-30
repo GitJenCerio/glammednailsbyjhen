@@ -8,7 +8,13 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const customers = await listCustomers();
-    return NextResponse.json({ customers });
+    // OPTIMIZED: Customers list changes infrequently, cache for 2 minutes
+    // Reduces reads when admin dashboard loads customer list
+    return NextResponse.json({ customers }, {
+      headers: {
+        'Cache-Control': 'private, s-maxage=120, stale-while-revalidate=300',
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message ?? 'Unable to list customers.' }, { status: 500 });
   }

@@ -16,19 +16,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Both startDate and endDate are required.' }, { status: 400 });
   }
 
-  // Automatic slot release is disabled - use manual release from admin dashboard instead
-  // Don't run expired slot cleanup on every request - it's slow and not critical
-  // Run it in a background cron job or manually from admin dashboard instead
-  const slots = startDate && endDate
-    ? await listSlotsByDateRange(startDate, endDate, nailTechId)
-    : await listSlots(nailTechId);
+  // OPTIMIZED: Require date range to prevent unbounded queries
+  // This prevents accidental quota exhaustion from fetching all slots
+  if (!startDate || !endDate) {
+    return NextResponse.json(
+      { error: 'Both startDate and endDate query parameters are required.' },
+      { status: 400 }
+    );
+  }
+
+  const slots = await listSlotsByDateRange(startDate, endDate, nailTechId);
   
-  // Prevent caching to ensure fresh data, especially after deletions
+  // OPTIMIZED: Use stale-while-revalidate caching (20 seconds fresh, 40 seconds stale)
+  // Slots change moderately frequently, but short cache significantly reduces reads
   return NextResponse.json({ slots }, {
     headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
+      'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=40',
+      'CDN-Cache-Control': 'public, s-maxage=20',
     },
   });
 }

@@ -8,7 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "create-placeholders": "node scripts/create-placeholders.js",
-    "clean-database": "tsx scripts/clean-database.ts"
+    "clean-database": "tsx scripts/clean-database.ts",
+    "cleanup-old-data": "tsx scripts/cleanup-old-data.ts",
+    "check-quota": "tsx scripts/check-quota-usage.ts",
+    "aggressive-cleanup": "tsx scripts/aggressive-cleanup.ts",
+    "backup-firestore": "tsx scripts/backup-firestore.ts",
+    "monitor-firestore": "tsx scripts/monitor-firestore-usage.ts",
+    "show-collection-usage": "tsx scripts/show-collection-usage.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",

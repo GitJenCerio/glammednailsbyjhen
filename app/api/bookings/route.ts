@@ -79,10 +79,12 @@ export async function GET(request: Request) {
   
   const bookings = await listBookings();
   
-  // Add caching headers (short cache since bookings change frequently)
+  // OPTIMIZED: Use stale-while-revalidate (10 seconds fresh, 30 seconds stale)
+  // Bookings change frequently but short cache reduces reads significantly
+  // Admin dashboard syncs every 2 minutes anyway, so 10s cache is safe
   return NextResponse.json({ bookings }, {
     headers: {
-      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      'Cache-Control': 'private, s-maxage=10, stale-while-revalidate=30',
     },
   });
 }

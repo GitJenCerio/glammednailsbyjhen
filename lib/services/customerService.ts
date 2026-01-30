@@ -201,9 +201,49 @@ export function extractCustomerInfo(
   };
 }
 
+// OPTIMIZED: Customer lookup cache to reduce Firestore reads during Google Sheets sync
+// Customer lookups happen frequently during sync - caching reduces reads significantly
+interface CachedCustomer {
+  customer: Customer;
+  timestamp: number;
+}
+
+class CustomerLookupCache {
+  private cache: Map<string, CachedCustomer> = new Map();
+  private readonly TTL = 10 * 60 * 1000; // 10 minutes cache
+  private readonly MAX_SIZE = 500; // Max 500 cached customers
+
+  get(key: string): Customer | null {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+    
+    if (Date.now() - cached.timestamp > this.TTL) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.customer;
+  }
+
+  set(key: string, customer: Customer): void {
+    if (this.cache.size >= this.MAX_SIZE) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, { customer, timestamp: Date.now() });
+  }
+
+  invalidate(key: string): void {
+    this.cache.delete(key);
+  }
+}
+
+const customerLookupCache = new CustomerLookupCache();
+
 /**
  * Find or create a customer based on email or phone
  * If neither exists, creates a new customer
+ * OPTIMIZED: Added caching to reduce Firestore reads during Google Sheets sync
  */
 export async function findOrCreateCustomer(
   customerData?: Record<string, string>,
@@ -215,6 +255,22 @@ export async function findOrCreateCustomer(
   }
 
   const { name, firstName, lastName, email, phone, socialMediaName, referralSource } = extractCustomerInfo(customerData, customerDataOrder);
+
+  // OPTIMIZED: Check cache first to reduce Firestore reads
+  if (email) {
+    const cached = customerLookupCache.get(`email:${email.toLowerCase()}`);
+    if (cached) {
+      // Found in cache - return immediately (no Firestore read!)
+      return cached;
+    }
+  }
+  
+  if (phone) {
+    const cached = customerLookupCache.get(`phone:${phone}`);
+    if (cached) {
+      return cached;
+    }
+  }
 
   // Try to find existing customer by email first
   if (email) {
@@ -254,8 +310,15 @@ export async function findOrCreateCustomer(
         }
         if (Object.keys(updates).length > 1) {
           await emailSnapshot.docs[0].ref.set(updates, { merge: true });
-          return { ...existing, ...updates };
+          const updated = { ...existing, ...updates };
+          // OPTIMIZED: Cache the result
+          if (email) customerLookupCache.set(`email:${email.toLowerCase()}`, updated);
+          if (phone) customerLookupCache.set(`phone:${phone}`, updated);
+          return updated;
         }
+        // OPTIMIZED: Cache the result even if no updates
+        if (email) customerLookupCache.set(`email:${email.toLowerCase()}`, existing);
+        if (phone) customerLookupCache.set(`phone:${phone}`, existing);
         return existing;
       }
     }
@@ -295,8 +358,15 @@ export async function findOrCreateCustomer(
         }
         if (Object.keys(updates).length > 1) {
           await phoneSnapshot.docs[0].ref.set(updates, { merge: true });
-          return { ...existing, ...updates };
+          const updated = { ...existing, ...updates };
+          // OPTIMIZED: Cache the result
+          if (email) customerLookupCache.set(`email:${email.toLowerCase()}`, updated);
+          if (phone) customerLookupCache.set(`phone:${phone}`, updated);
+          return updated;
         }
+        // OPTIMIZED: Cache the result even if no updates
+        if (email) customerLookupCache.set(`email:${email.toLowerCase()}`, existing);
+        if (phone) customerLookupCache.set(`phone:${phone}`, existing);
         return existing;
       }
     }
@@ -318,7 +388,13 @@ export async function findOrCreateCustomer(
 
   const dataToSave = omitUndefined(newCustomer);
   const docRef = await getCustomersCollection().add(dataToSave);
-  return docToCustomer(docRef.id, dataToSave);
+  const created = docToCustomer(docRef.id, dataToSave);
+  
+  // OPTIMIZED: Cache the newly created customer
+  if (email) customerLookupCache.set(`email:${email.toLowerCase()}`, created);
+  if (phone) customerLookupCache.set(`phone:${phone}`, created);
+  
+  return created;
 }
 
 /**
@@ -382,9 +458,15 @@ function normalizeEmail(email?: string): string | null {
 
 /**
  * List all customers
+ * OPTIMIZED: Added default limit of 500 to prevent fetching all customers
+ * This reduces reads significantly (was fetching 338+ customers every time)
  */
-export async function listCustomers(): Promise<Customer[]> {
-  const snapshot = await getCustomersCollection().orderBy('name').get();
+export async function listCustomers(limitCount?: number): Promise<Customer[]> {
+  const limit = limitCount ?? 500; // Default limit - enough for admin dashboard
+  const snapshot = await getCustomersCollection()
+    .orderBy('name')
+    .limit(limit)
+    .get();
   return snapshot.docs.map((doc) => docToCustomer(doc.id, doc.data()));
 }
 

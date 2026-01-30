@@ -11,9 +11,12 @@ export async function GET(request: Request) {
     
     const nailTechs = activeOnly ? await listActiveNailTechs() : await listNailTechs();
     
+    // OPTIMIZED: Nail techs change very infrequently, cache for 5 minutes
+    // This significantly reduces Firestore reads since nail techs are loaded on every page
     return NextResponse.json({ nailTechs }, {
       headers: {
-        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        'CDN-Cache-Control': 'public, s-maxage=300',
       },
     });
   } catch (error: any) {

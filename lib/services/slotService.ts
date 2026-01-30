@@ -72,23 +72,18 @@ async function normalizeSlotsFromSnapshot(snapshot: FirebaseFirestore.QuerySnaps
   return slots;
 }
 
+/**
+ * @deprecated This function fetches ALL slots and can cause quota exhaustion.
+ * Use listSlotsByDateRange() instead with explicit startDate and endDate.
+ * 
+ * This function is kept for backward compatibility but will throw an error
+ * to prevent accidental unbounded queries.
+ */
 export async function listSlots(nailTechId?: string): Promise<Slot[]> {
-  // Fetch all slots and filter/sort in memory to avoid requiring composite index
-  const snapshot = await getSlotCollection().get();
-  const slots = await normalizeSlotsFromSnapshot(snapshot);
-
-  // Filter by nailTechId if provided
-  let filteredSlots = slots;
-  if (nailTechId) {
-    filteredSlots = slots.filter((slot) => slot.nailTechId === nailTechId);
-  }
-
-  // Sort by date and time
-  return filteredSlots.sort((a, b) => {
-    const dateCompare = a.date.localeCompare(b.date);
-    if (dateCompare !== 0) return dateCompare;
-    return a.time.localeCompare(b.time);
-  });
+  throw new Error(
+    'listSlots() is deprecated and disabled to prevent quota exhaustion. ' +
+    'Use listSlotsByDateRange(startDate, endDate, nailTechId) instead with explicit date ranges.'
+  );
 }
 
 export async function listSlotsByDateRange(startDate: string, endDate: string, nailTechId?: string): Promise<Slot[]> {
@@ -111,9 +106,15 @@ export async function listSlotsByDateRange(startDate: string, endDate: string, n
   });
 }
 
+/**
+ * @deprecated This function is disabled to prevent unbounded queries.
+ * Use listSlotsByDateRange() with explicit date ranges instead.
+ */
 export async function listSlotsByNailTech(nailTechId: string): Promise<Slot[]> {
-  // Use listSlots which handles filtering and sorting in memory
-  return listSlots(nailTechId);
+  throw new Error(
+    'listSlotsByNailTech() is deprecated and disabled to prevent quota exhaustion. ' +
+    'Use listSlotsByDateRange(startDate, endDate, nailTechId) instead with explicit date ranges.'
+  );
 }
 
 export async function listSlotsByStatus(status: Slot['status'], nailTechId?: string): Promise<Slot[]> {
