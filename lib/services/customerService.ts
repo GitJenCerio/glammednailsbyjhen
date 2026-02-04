@@ -60,28 +60,237 @@ export function extractCustomerInfo(
     return undefined;
   };
 
-  // Try various field name variations for first name
-  const firstName = 
-    customerData['Name'] || 
-    customerData['name'] || 
-    customerData['First Name'] ||
-    customerData['firstName'] ||
-    customerData['Customer Name'] ||
-    customerData['customerName'] ||
-    '';
+  // Helper function to find field by fuzzy matching (case-insensitive, partial match)
+  const findFieldByKeywords = (keywords: string[], excludeKeywords: string[] = []): string | undefined => {
+    const lowerKeywords = keywords.map(k => k.toLowerCase());
+    const lowerExclude = excludeKeywords.map(k => k.toLowerCase());
+    
+    for (const [key, value] of Object.entries(customerData)) {
+      if (!value || !String(value).trim()) continue;
+      
+      const lowerKey = key.toLowerCase();
+      
+      // Skip if key contains any exclude keywords
+      if (lowerExclude.some(exclude => lowerKey.includes(exclude))) {
+        continue;
+      }
+      
+      // Check if key matches any keyword
+      if (lowerKeywords.some(kw => lowerKey.includes(kw) || lowerKey === kw)) {
+        const trimmed = String(value).trim();
+        if (trimmed && trimmed.length > 0 && trimmed.length < 100) {
+          return trimmed;
+        }
+      }
+    }
+    return undefined;
+  };
 
-  // Try various field name variations for last name
-  const lastName = 
-    customerData['Surname'] || 
-    customerData['surname'] || 
-    customerData['Last Name'] || 
-    customerData['lastName'] ||
-    customerData['Customer Surname'] ||
-    customerData['customerSurname'] ||
-    '';
+  // Try to find first name - check common field name variations
+  // Priority: exact matches first, then fuzzy matching
+  let firstName = '';
+  
+  // Try exact matches first (including full Google Sheets field names)
+  // Check for exact field names from Google Sheets first
+  const nameFieldVariations = [
+    'Name ( Autofill if repeat clients)',
+    'Name (Autofill if repeat clients)',
+    'Name',
+    'name',
+  ];
+  
+  for (const fieldName of nameFieldVariations) {
+    if (customerData[fieldName] && String(customerData[fieldName]).trim()) {
+      firstName = String(customerData[fieldName]).trim();
+      break;
+    }
+  }
+  
+  // If not found, try case-insensitive matching with loop
+  if (!firstName) {
+    for (const [key, value] of Object.entries(customerData)) {
+      const lowerKey = key.toLowerCase().trim();
+      // Match "Name" field (but not Surname, Last Name, etc.)
+      if ((lowerKey === 'name' || lowerKey.startsWith('name (')) && 
+          !lowerKey.includes('surname') && 
+          !lowerKey.includes('last name') && 
+          !lowerKey.includes('lastname') &&
+          !lowerKey.includes('facebook') &&
+          !lowerKey.includes('instagram') &&
+          !lowerKey.includes('social') &&
+          !lowerKey.includes('inquire') &&
+          value && String(value).trim()) {
+        firstName = String(value).trim();
+        break;
+      }
+    }
+  }
+  
+  // Fallback to common variations
+  if (!firstName) {
+    firstName = 
+      customerData['Name'] || 
+      customerData['name'] || 
+      customerData['First Name'] ||
+      customerData['firstName'] ||
+      customerData['Customer Name'] ||
+      customerData['customerName'] ||
+      '';
+  }
 
-  // Build full name
-  const fullName = `${firstName}${firstName && lastName ? ' ' : ''}${lastName}`.trim() || 'Unknown Customer';
+  // Try to find last name/surname - exact matches first
+  let lastName = '';
+  
+  // Try exact matches first (including full Google Sheets field names)
+  // Check for exact field names from Google Sheets first
+  const surnameFieldVariations = [
+    'Surname ( Autofill if repeat clients)',
+    'Surname (Autofill if repeat clients)',
+    'Surname',
+    'surname',
+  ];
+  
+  for (const fieldName of surnameFieldVariations) {
+    if (customerData[fieldName] && String(customerData[fieldName]).trim()) {
+      lastName = String(customerData[fieldName]).trim();
+      break;
+    }
+  }
+  
+  // If not found, try case-insensitive matching with loop
+  if (!lastName) {
+    for (const [key, value] of Object.entries(customerData)) {
+      const lowerKey = key.toLowerCase().trim();
+      // Match "Surname" field (exact or with parentheses)
+      if ((lowerKey === 'surname' || lowerKey.startsWith('surname (')) && 
+          value && String(value).trim()) {
+        lastName = String(value).trim();
+        break;
+      }
+    }
+  }
+  
+  // Fallback to common variations
+  if (!lastName) {
+    lastName = 
+      customerData['Surname'] || 
+      customerData['surname'] || 
+      customerData['Last Name'] || 
+      customerData['lastName'] ||
+      customerData['Customer Surname'] ||
+      customerData['customerSurname'] ||
+      customerData['Family Name'] ||
+      customerData['familyName'] ||
+      '';
+  }
+
+  // If we didn't find first name, try fuzzy search (excluding social media, email, phone, etc.)
+  if (!firstName || firstName.trim() === '') {
+    firstName = findFieldByKeywords(
+      ['first name', 'firstname', 'fname', 'given name', 'name'],
+      ['surname', 'last name', 'lastname', 'email', 'phone', 'contact', 'facebook', 'instagram', 'social', 'fb', 'ig', 'booking', 'date', 'time', 'service', 'location', 'referral', 'source', 'inquire']
+    ) || '';
+  }
+
+  // If we didn't find last name, try fuzzy search
+  if (!lastName || lastName.trim() === '') {
+    lastName = findFieldByKeywords(
+      ['surname', 'last name', 'lastname', 'lname', 'family name'],
+      ['first name', 'firstname', 'email', 'phone', 'contact', 'facebook', 'instagram', 'social', 'fb', 'ig', 'booking', 'date', 'time', 'service', 'location', 'referral', 'source', 'inquire']
+    ) || '';
+  }
+
+  // If we have a "Full Name" field, try to split it
+  const fullNameField = customerData['Full Name'] || customerData['fullName'] || customerData['Full name'] || '';
+  if (fullNameField && (!firstName || !lastName)) {
+    const parts = fullNameField.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      // Assume first part is first name, rest is last name
+      if (!firstName) firstName = parts[0];
+      if (!lastName) lastName = parts.slice(1).join(' ');
+    } else if (parts.length === 1 && !firstName) {
+      // Single name - use as first name
+      firstName = parts[0];
+    }
+  }
+
+  // Build full name - avoid duplicating last name
+  // If firstName already contains lastName, don't add it again
+  let fullName = '';
+  if (firstName && lastName) {
+    // Check if firstName already ends with lastName (to avoid duplication)
+    const firstNameLower = firstName.toLowerCase().trim();
+    const lastNameLower = lastName.toLowerCase().trim();
+    if (firstNameLower.endsWith(lastNameLower)) {
+      // Last name is already in first name, don't duplicate
+      fullName = firstName.trim();
+    } else {
+      fullName = `${firstName} ${lastName}`.trim();
+    }
+  } else if (firstName) {
+    fullName = firstName.trim();
+  } else if (lastName) {
+    fullName = lastName.trim();
+  }
+  
+  // If we still don't have a name, try to find ANY field that looks like a name
+  if (!fullName || fullName === '') {
+    // Search through all fields for something that looks like a name
+    for (const [key, value] of Object.entries(customerData)) {
+      if (!value || !String(value).trim()) continue;
+      
+      const lowerKey = key.toLowerCase();
+      const strValue = String(value).trim();
+      
+      // Skip non-name fields
+      if (lowerKey.includes('email') || 
+          lowerKey.includes('phone') || 
+          lowerKey.includes('contact') || 
+          lowerKey.includes('booking') || 
+          lowerKey.includes('date') || 
+          lowerKey.includes('time') ||
+          lowerKey.includes('service') || 
+          lowerKey.includes('location') || 
+          lowerKey.includes('referral') || 
+          lowerKey.includes('source') ||
+          lowerKey.includes('instagram') || 
+          lowerKey.includes('facebook') || 
+          lowerKey.includes('social') || 
+          lowerKey.includes('fb') ||
+          lowerKey.includes('ig') ||
+          lowerKey.includes('inquire')) {
+        continue;
+      }
+      
+      // If the key contains "name" or the value looks like a name (reasonable length, no @, no numbers)
+      if ((lowerKey.includes('name') || strValue.length > 2 && strValue.length < 50 && !strValue.includes('@') && !/^\d+$/.test(strValue))) {
+        // Use this as the name
+        fullName = strValue;
+        if (!firstName) firstName = strValue.split(/\s+/)[0];
+        break;
+      }
+    }
+  }
+
+  // Final fallback: use social media name if no other name found
+  if (!fullName || fullName.trim() === '') {
+    // Try to get social media name as last resort
+    const socialMediaName = 
+      customerData['Facebook or Instagram Name'] ||
+      customerData['FB Name'] ||
+      customerData['Social Media Name'] ||
+      customerData['Facebook or Instagram Name. (The one you used to inquire with me.)'] ||
+      customerData['Facebook or Instagram Name. (The one you used to inquire with me)'] ||
+      findFieldByKeywords(['facebook', 'instagram', 'fb name', 'ig name', 'social media name'], []) ||
+      undefined;
+    
+    if (socialMediaName && socialMediaName.trim()) {
+      fullName = socialMediaName.trim();
+      firstName = fullName.split(/\s+/)[0];
+    } else {
+      fullName = 'Unknown Customer';
+    }
+  }
 
   // Extract email
   const email = 
@@ -93,75 +302,199 @@ export function extractCustomerInfo(
     undefined;
 
   // Extract phone - try multiple variations including "Contact Number"
-  const phone = 
-    customerData['Phone'] || 
-    customerData['phone'] || 
-    customerData['Phone Number'] ||
-    customerData['phoneNumber'] ||
-    customerData['Contact'] ||
-    customerData['contact'] ||
-    customerData['Contact Number'] ||
-    customerData['contactNumber'] ||
-    customerData['Mobile'] ||
-    customerData['mobile'] ||
-    undefined;
+  // Priority: exact matches with full Google Sheets field names first
+  let phone: string | undefined = undefined;
+  
+  // Try exact matches first (including full Google Sheets field names with parentheses)
+  // Check for exact field names from Google Sheets first
+  const phoneFieldVariations = [
+    'Contact Number ( Autofill if repeat clients)',
+    'Contact Number (Autofill if repeat clients)',
+    'Contact Number',
+    'contact number',
+  ];
+  
+  for (const fieldName of phoneFieldVariations) {
+    if (customerData[fieldName] && String(customerData[fieldName]).trim()) {
+      phone = String(customerData[fieldName]).trim();
+      break;
+    }
+  }
+  
+  // If not found, try case-insensitive matching with loop
+  if (!phone) {
+    for (const [key, value] of Object.entries(customerData)) {
+      const lowerKey = key.toLowerCase().trim();
+      // Match "Contact Number" field (exact or with parentheses/autofill text)
+      if ((lowerKey === 'contact number' || 
+           lowerKey.startsWith('contact number (')) && 
+          value && String(value).trim()) {
+        phone = String(value).trim();
+        break;
+      }
+    }
+  }
+  
+  // Fallback to common variations
+  if (!phone) {
+    phone = 
+      customerData['Phone'] || 
+      customerData['phone'] || 
+      customerData['Phone Number'] ||
+      customerData['phoneNumber'] ||
+      customerData['Contact'] ||
+      customerData['contact'] ||
+      customerData['Contact Number'] ||
+      customerData['contactNumber'] ||
+      customerData['Mobile'] ||
+      customerData['mobile'] ||
+      undefined;
+  }
 
   // Extract social media name (FB/Instagram)
-  // Index 02 in customerDataOrder, or check by field name
-  const socialMediaName = 
-    getValue('Facebook or Instagram Name. (The one you used to inquire with me.)', 2) ||
-    getValue('Facebook or Instagram Name. (The one you used to inquire with me)', 2) ||
-    getValue('Facebook or Instagram Name', 2) ||
-    customerData['FB Name'] ||
-    customerData['fb name'] ||
-    customerData['Facebook Name'] ||
-    customerData['facebookName'] ||
-    customerData['Instagram Name'] ||
-    customerData['instagramName'] ||
-    customerData['Social Media Name'] ||
-    customerData['socialMediaName'] ||
-    customerData['FB name/Instagram name'] ||
-    customerData['FB/Instagram'] ||
-    undefined;
+  // Priority: exact matches with full Google Sheets field names first
+  let socialMediaName: string | undefined = undefined;
+  
+  // Try exact matches first (including full Google Sheets field names with all variations)
+  // Check for exact field names from Google Sheets first
+  const socialMediaFieldVariations = [
+    'Facebook or Instagram Name. (The one you used to inquire with me.) Autofill if repeat clients',
+    'Facebook or Instagram Name. (The one you used to inquire with me.)',
+    'Facebook or Instagram Name. (The one you used to inquire with me)',
+    'Facebook or Instagram Name',
+    'FB Name',
+    'fb name',
+  ];
+  
+  for (const fieldName of socialMediaFieldVariations) {
+    if (customerData[fieldName] && String(customerData[fieldName]).trim()) {
+      const trimmed = String(customerData[fieldName]).trim();
+      // Skip if it looks like a booking ID
+      if (!/^GN-\d+$/i.test(trimmed)) {
+        socialMediaName = trimmed;
+        break;
+      }
+    }
+  }
+  
+  // If not found, try case-insensitive matching with loop
+  if (!socialMediaName) {
+    for (const [key, value] of Object.entries(customerData)) {
+      const lowerKey = key.toLowerCase().trim();
+      // Match Facebook/Instagram name field - must contain "facebook" or "instagram" and "name"
+      // But exclude booking ID fields and other non-social-media fields
+      if ((lowerKey.includes('facebook') || lowerKey.includes('instagram') || lowerKey.includes('fb') || lowerKey.includes('ig')) &&
+          lowerKey.includes('name') &&
+          !lowerKey.includes('booking') &&
+          !lowerKey.startsWith('gn-') &&
+          value && String(value).trim()) {
+        const trimmedValue = String(value).trim();
+        // Double-check it's not a booking ID
+        if (!/^GN-\d+$/i.test(trimmedValue)) {
+          socialMediaName = trimmedValue;
+          break;
+        }
+      }
+    }
+  }
+  
+  // Fallback to common variations (but skip if it looks like a booking ID)
+  if (!socialMediaName) {
+    const candidates = [
+      customerData['Facebook or Instagram Name. (The one you used to inquire with me.)'],
+      customerData['Facebook or Instagram Name. (The one you used to inquire with me)'],
+      customerData['Facebook or Instagram Name'],
+      customerData['FB Name'],
+      customerData['fb name'],
+      customerData['Facebook Name'],
+      customerData['facebookName'],
+      customerData['Instagram Name'],
+      customerData['instagramName'],
+      customerData['Social Media Name'],
+      customerData['socialMediaName'],
+      customerData['FB name/Instagram name'],
+      customerData['FB/Instagram'],
+    ];
+    
+    for (const candidate of candidates) {
+      if (candidate && String(candidate).trim()) {
+        const trimmed = String(candidate).trim();
+        // Skip if it looks like a booking ID
+        if (!/^GN-\d+$/i.test(trimmed)) {
+          socialMediaName = trimmed;
+          break;
+        }
+      }
+    }
+  }
 
   // Extract referral source (how did you find out about glammednails)
-  // Index 09 in customerDataOrder - try both index 9 and 8 (in case of off-by-one)
-  // First, directly check index 9 in customerDataOrder if it exists
+  // Priority: exact matches with full Google Sheets field names first
   let referralSource: string | undefined = undefined;
   
-  if (customerDataOrder && customerDataOrder.length > 9) {
-    const fieldNameAtIndex9 = customerDataOrder[9];
-    if (fieldNameAtIndex9 && customerData[fieldNameAtIndex9]) {
-      referralSource = customerData[fieldNameAtIndex9].trim();
+  // Try exact matches first (including full Google Sheets field names with parentheses)
+  // Check for exact field names from Google Sheets first
+  const referralFieldVariations = [
+    'How did you find out about glammednailsbyjhen?  ( Autofill if repeat clients)',
+    'How did you find out about glammednailsbyjhen? ( Autofill if repeat clients)',
+    'How did you find out about glammednailsbyjhen? (Autofill if repeat clients)',
+    'How did you find out about glammednailsbyjhen?',
+    'How did you find out about glammednailsbyjhen',
+  ];
+  
+  for (const fieldName of referralFieldVariations) {
+    if (customerData[fieldName] && String(customerData[fieldName]).trim()) {
+      const trimmedValue = String(customerData[fieldName]).trim();
+      // Skip if it looks like a single name word (common last names that might be misidentified)
+      // Also skip if it's too short or looks like a name pattern
+      const isSingleNameWord = /^[A-Z][a-z]+$/.test(trimmedValue);
+      const isLikelyName = trimmedValue.length < 15 && /^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/.test(trimmedValue) && !trimmedValue.includes('?') && !trimmedValue.includes('!');
+      if (trimmedValue.length > 2 && !isSingleNameWord && !isLikelyName) {
+        referralSource = trimmedValue;
+        break;
+      }
     }
   }
   
-  // If not found, try index 8
-  if (!referralSource && customerDataOrder && customerDataOrder.length > 8) {
-    const fieldNameAtIndex8 = customerDataOrder[8];
-    if (fieldNameAtIndex8 && customerData[fieldNameAtIndex8]) {
-      referralSource = customerData[fieldNameAtIndex8].trim();
+  // If not found, try case-insensitive matching with loop
+  if (!referralSource) {
+    for (const [key, value] of Object.entries(customerData)) {
+      const lowerKey = key.toLowerCase().trim();
+      // Match referral source field - must contain "find out" or "glammednails" or "referral"
+      // But exclude name fields and other non-referral fields
+      if ((lowerKey.includes('find out') || 
+           lowerKey.includes('glammednails') || 
+           (lowerKey.includes('referral') && lowerKey.includes('source')) || 
+           (lowerKey.includes('source') && (lowerKey.includes('referral') || lowerKey.includes('find')))) &&
+          !lowerKey.includes('name') &&
+          !lowerKey.includes('surname') &&
+          !lowerKey.includes('email') &&
+          !lowerKey.includes('phone') &&
+          !lowerKey.includes('contact') &&
+          !lowerKey.includes('booking') &&
+          !lowerKey.includes('first') &&
+          !lowerKey.includes('last') &&
+          value && String(value).trim()) {
+        const trimmedValue = String(value).trim();
+        // Skip if it looks like a single name word (common last names that might be misidentified)
+        // Also skip if it's too short or looks like a name pattern
+        const isSingleNameWord = /^[A-Z][a-z]+$/.test(trimmedValue);
+        const isLikelyName = trimmedValue.length < 15 && /^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/.test(trimmedValue) && !trimmedValue.includes('?') && !trimmedValue.includes('!');
+        if (trimmedValue.length > 2 && !isSingleNameWord && !isLikelyName) {
+          referralSource = trimmedValue;
+          break;
+        }
+      }
     }
   }
   
-  // Then try by field name variations
+  // Fallback: try by field name variations
   if (!referralSource) {
     referralSource = 
-      getValue('How did you find out about glammednailsbyjhen?', 9) ||
-      getValue('How did you find out about glammednailsbyjhen?', 8);
-  }
-  
-  if (!referralSource) {
-    // Try other field name variations with both indices
-    referralSource = 
-      getValue('How did you find out about glammednailsbyjhen', 9) ||
-      getValue('How did you find out about glammednailsbyjhen', 8) ||
-      getValue('How did you find out about glammednails', 9) ||
-      getValue('How did you find out about glammednails', 8) ||
-      getValue('How did you find out about glammednailsbyjhen', 9) ||
-      getValue('How did you find out about glammednailsbyjhen', 9) ||
       customerData['How did you find out about glammednailsbyjhen?']?.trim() ||
       customerData['How did you find out about glammednailsbyjhen']?.trim() ||
+      customerData['How did you find out about glammednails?']?.trim() ||
+      customerData['How did you find out about glammednails']?.trim() ||
       customerData['Referral Source']?.trim() ||
       customerData['referralSource']?.trim() ||
       customerData['How did you hear about us']?.trim() ||
@@ -171,15 +504,21 @@ export function extractCustomerInfo(
       undefined;
   }
   
-  // Fallback: search all keys for variations containing "find out" or "glammednails"
+  // Final fallback: search all keys for variations containing "find out" or "glammednails"
   if (!referralSource) {
     const keys = Object.keys(customerData);
     for (const key of keys) {
       const lowerKey = key.toLowerCase();
       if ((lowerKey.includes('find out') || lowerKey.includes('glammednails') || lowerKey.includes('referral') || lowerKey.includes('source')) && 
+          !lowerKey.includes('name') &&
+          !lowerKey.includes('surname') &&
           customerData[key] && customerData[key].trim()) {
-        referralSource = customerData[key].trim();
-        break;
+        const trimmed = customerData[key].trim();
+        // Skip if it looks like a name (single capitalized word)
+        if (trimmed.length > 2 && !/^[A-Z][a-z]+$/.test(trimmed)) {
+          referralSource = trimmed;
+          break;
+        }
       }
     }
   }
@@ -308,6 +647,18 @@ export async function findOrCreateCustomer(
         if (email && !existing.email) {
           updates.email = email;
         }
+        // Update name if existing name is "Unknown Customer" or if we have a better name
+        if (name && name !== 'Unknown Customer' && 
+            (existing.name === 'Unknown Customer' || !existing.name || existing.name.trim() === '')) {
+          updates.name = name;
+        } else if (firstName || lastName) {
+          // Rebuild name from firstName and lastName if we have them
+          const rebuiltName = `${firstName || existing.firstName || ''}${(firstName || existing.firstName) && (lastName || existing.lastName) ? ' ' : ''}${lastName || existing.lastName || ''}`.trim();
+          if (rebuiltName && rebuiltName !== 'Unknown Customer' && 
+              (existing.name === 'Unknown Customer' || !existing.name || existing.name.trim() === '')) {
+            updates.name = rebuiltName;
+          }
+        }
         if (Object.keys(updates).length > 1) {
           await emailSnapshot.docs[0].ref.set(updates, { merge: true });
           const updated = { ...existing, ...updates };
@@ -355,6 +706,18 @@ export async function findOrCreateCustomer(
         // If isRepeatClient is provided and different from existing, update it
         if (isRepeatClient !== undefined && existing.isRepeatClient !== isRepeatClient) {
           updates.isRepeatClient = isRepeatClient;
+        }
+        // Update name if existing name is "Unknown Customer" or if we have a better name
+        if (name && name !== 'Unknown Customer' && 
+            (existing.name === 'Unknown Customer' || !existing.name || existing.name.trim() === '')) {
+          updates.name = name;
+        } else if (firstName || lastName) {
+          // Rebuild name from firstName and lastName if we have them
+          const rebuiltName = `${firstName || existing.firstName || ''}${(firstName || existing.firstName) && (lastName || existing.lastName) ? ' ' : ''}${lastName || existing.lastName || ''}`.trim();
+          if (rebuiltName && rebuiltName !== 'Unknown Customer' && 
+              (existing.name === 'Unknown Customer' || !existing.name || existing.name.trim() === '')) {
+            updates.name = rebuiltName;
+          }
         }
         if (Object.keys(updates).length > 1) {
           await phoneSnapshot.docs[0].ref.set(updates, { merge: true });

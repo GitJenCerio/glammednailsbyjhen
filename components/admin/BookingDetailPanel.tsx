@@ -103,16 +103,9 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTe
       return;
     }
     
-    if (booking.status === 'pending_payment') {
+    // For both pending_payment and pending_form, show deposit input
+    if (booking.status === 'pending_payment' || booking.status === 'pending_form') {
       setShowDepositInput(true);
-    } else if (booking.status === 'pending_form') {
-      // For pending_form bookings, confirm without deposit
-      setIsConfirming(true);
-      try {
-        await onConfirm(booking.id, undefined, undefined);
-      } finally {
-        setIsConfirming(false);
-      }
     }
   };
 
@@ -140,7 +133,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTe
     } catch (error) {
       console.error('Failed to confirm booking:', error);
       // Reopen deposit input on error so user can retry
-      if (booking.status === 'pending_payment') {
+      if (booking.status === 'pending_payment' || booking.status === 'pending_form') {
         setShowDepositInput(true);
         setDepositAmount(amount?.toString() || '');
       }
@@ -482,7 +475,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTe
       </div>
 
       <div className="mt-3 sm:mt-4 space-y-1.5 sm:space-y-2">
-        {booking.status === 'pending_payment' && !showDepositInput && !isConfirming && (
+        {(booking.status === 'pending_payment' || booking.status === 'pending_form') && !showDepositInput && !isConfirming && (
           <button
             type="button"
             onClick={handleConfirmClick}
@@ -492,17 +485,7 @@ export function BookingDetailPanel({ booking, slotLabel, pairedSlotLabel, nailTe
             {isConfirming ? 'Confirming...' : 'Confirm booking'}
           </button>
         )}
-        {booking.status === 'pending_form' && !isConfirming && (
-          <button
-            type="button"
-            onClick={handleConfirmClick}
-            disabled={isConfirming}
-            className="w-full rounded-full bg-emerald-600 px-3 py-2 text-[10px] sm:text-xs font-semibold text-white touch-manipulation active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isConfirming ? 'Confirming...' : 'Confirm booking'}
-          </button>
-        )}
-        {booking.status === 'pending_payment' && showDepositInput && (
+        {(booking.status === 'pending_payment' || booking.status === 'pending_form') && showDepositInput && (
           <div className="rounded-lg sm:rounded-xl border-2 border-emerald-200 bg-emerald-50 p-2 sm:p-3 space-y-2">
             <div>
               <label className="block text-[10px] sm:text-xs font-semibold text-emerald-900 mb-1">

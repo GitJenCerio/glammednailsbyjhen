@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl, splitRescheduleBooking, updateServiceType } from '@/lib/services/bookingService';
+import { confirmBooking, getBookingById, updateBookingStatus, saveInvoice, updatePaymentStatus, updateDepositAmount, rescheduleBooking, getBookingFormUrl, splitRescheduleBooking, updateServiceType, linkBookingToCustomer } from '@/lib/services/bookingService';
 import type { Invoice, PaymentStatus, ServiceType } from '@/lib/types';
 
 // Mark this route as dynamic to prevent static analysis during build
@@ -103,6 +103,20 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     } catch (error: any) {
       console.error('Error updating service type:', error);
       return NextResponse.json({ error: error.message ?? 'Failed to update service type' }, { status: 500 });
+    }
+  }
+
+  if (body?.action === 'link_customer') {
+    const customerId = body.customerId;
+    if (!customerId) {
+      return NextResponse.json({ error: 'Customer ID is required.' }, { status: 400 });
+    }
+    try {
+      await linkBookingToCustomer(params.id, customerId);
+      return NextResponse.json({ success: true });
+    } catch (error: any) {
+      console.error('Error linking booking to customer:', error);
+      return NextResponse.json({ error: error.message ?? 'Failed to link booking to customer' }, { status: 500 });
     }
   }
 

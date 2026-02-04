@@ -328,7 +328,17 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
 
   // Helper functions for search (defined early so they can be used in matchesSearch)
   const getCustomerName = useCallback((booking: BookingWithSlot): string => {
-    // Priority 1: Get customer name from form data (for bookings with submitted forms)
+    // Priority 1: Try to get name from customer record if customerId exists (source of truth after editing)
+    // This ensures that when a customer is updated, the new name is shown in bookings
+    if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+      const customer = customers.find(c => c.id === booking.customerId);
+      if (customer?.name && customer.name !== 'Unknown Customer') {
+        return customer.name;
+      }
+    }
+    
+    // Priority 2: Get customer name from form data (for bookings with submitted forms)
+    // This is historical data from when the form was submitted
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
       // Helper function to find field by fuzzy matching key names
       const findField = (keywords: string[]): string | null => {
@@ -410,14 +420,6 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
       }
     }
     
-    // Priority 2: Try to get name from customer record if customerId exists
-    if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
-      const customer = customers.find(c => c.id === booking.customerId);
-      if (customer?.name) {
-        return customer.name;
-      }
-    }
-    
     // Priority 3: For pending_form bookings, check clientType
     if (booking.status === 'pending_form') {
       // If it's a repeat client and we have customerId, try to show name
@@ -425,7 +427,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
         if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
           // Try to find customer name from customers list
           const customer = customers.find(c => c.id === booking.customerId);
-          if (customer?.name) {
+          if (customer?.name && customer.name !== 'Unknown Customer') {
             return customer.name;
           }
         }
@@ -436,7 +438,7 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
         // clientType not set - check if customerId exists to determine
         if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
           const customer = customers.find(c => c.id === booking.customerId);
-          if (customer?.name) {
+          if (customer?.name && customer.name !== 'Unknown Customer') {
             return customer.name;
           }
           return 'Repeat Client'; // Has customerId but no clientType set
@@ -1199,9 +1201,10 @@ export function BookingsView({ bookings, slots, selectedDate, customers = [], na
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          e.preventDefault();
                         }}
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                        }}
                       >
                         <div className="py-1">
                           {booking.customerData && Object.keys(booking.customerData).length > 0 && (

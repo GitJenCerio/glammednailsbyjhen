@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCustomerById, updateCustomer, getBookingsByCustomer, calculateCustomerLifetimeValue } from '@/lib/services/customerService';
+import { getCustomerById, updateCustomer, deleteCustomer, getBookingsByCustomer, calculateCustomerLifetimeValue } from '@/lib/services/customerService';
 import type { CustomerInput } from '@/lib/types';
 
 // Mark this route as dynamic to prevent static analysis during build
@@ -46,6 +46,43 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json({ customer });
   } catch (error: any) {
     return NextResponse.json({ error: error.message ?? 'Unable to update customer.' }, { status: 400 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const customer = await getCustomerById(params.id);
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found.' }, { status: 404 });
+    }
+
+    // Check if customer has any bookings
+    const bookings = await getBookingsByCustomer(params.id);
+    
+    // Get query parameter to allow force delete
+    const { searchParams } = new URL(request.url);
+    const forceDelete = searchParams.get('force') === 'true';
+    
+    if (bookings.length > 0 && !forceDelete) {
+      return NextResponse.json(
+        { 
+          error: `Cannot delete customer. This customer has ${bookings.length} booking(s). Please cancel or delete the bookings first, or use force delete.`,
+          hasBookings: true,
+          bookingCount: bookings.length,
+        },
+        { status: 400 }
+      );
+    }
+
+    // If force delete, we still delete the customer (bookings will remain but won't have a customer link)
+    await deleteCustomer(params.id);
+    return NextResponse.json({ 
+      message: bookings.length > 0 
+        ? `Customer deleted successfully. Note: ${bookings.length} booking(s) remain in the system but are no longer linked to a customer.`
+        : 'Customer deleted successfully.'
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message ?? 'Unable to delete customer.' }, { status: 500 });
   }
 }
 

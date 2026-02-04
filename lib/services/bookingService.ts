@@ -219,6 +219,43 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
 
   let slotNailTechId: string | null = null;
 
+  // For new clients, create a customer record immediately if we have social media name
+  // This ensures customers are saved even if they don't complete the form
+  const clientType = options?.clientType;
+  let newCustomerId: string | null = null;
+  if (clientType === 'new' && !foundCustomerId && options?.socialMediaName && options.socialMediaName.trim()) {
+    // Create customer record with available data (will be updated when form is submitted)
+    // Use social media name as the customer name since that's all we have
+    const socialMediaName = options.socialMediaName.trim();
+    const customerData = {
+      'Facebook or Instagram Name': socialMediaName,
+      'FB Name': socialMediaName,
+      'Social Media Name': socialMediaName,
+      'Name': socialMediaName, // Also add as Name so extraction uses it
+    };
+    const customerDataOrder = ['Facebook or Instagram Name'];
+    
+    try {
+      const customer = await findOrCreateCustomer(customerData, customerDataOrder, false);
+      newCustomerId = customer.id;
+      
+      // If customer name is still "Unknown Customer", update it to use social media name
+      if (customer.name === 'Unknown Customer') {
+        await getCustomersCollection().doc(customer.id).set({
+          name: socialMediaName,
+          socialMediaName: socialMediaName,
+          updatedAt: Timestamp.now().toDate().toISOString(),
+        }, { merge: true });
+        console.log(`Updated customer ${customer.id} name to "${socialMediaName}"`);
+      }
+      
+      console.log(`Created customer for new client: ${customer.id} (${socialMediaName})`);
+    } catch (error) {
+      console.error('Error creating customer for new client:', error);
+      // Continue with booking creation even if customer creation fails
+    }
+  }
+
   await adminDb.runTransaction(async (transaction) => {
     const slotRef = getSlotsCollection().doc(slotId);
     const slotSnap = await transaction.get(slotRef);
@@ -347,14 +384,13 @@ export async function createBooking(slotId: string, options?: CreateBookingOptio
     });
 
     const bookingRef = bookingsCollection.doc();
-    const clientType = options?.clientType;
     
     // For repeat clients, if we found the customer by email, use their customerId
-    // Otherwise, use placeholder that will be updated when form is submitted
+    // For new clients, use the newly created customerId or placeholder
     const bookingData: any = {
       slotId,
       bookingId,
-      customerId: foundCustomerId || 'PENDING_FORM_SUBMISSION', // Use found customerId if available, otherwise placeholder
+      customerId: foundCustomerId || newCustomerId || 'PENDING_FORM_SUBMISSION', // Use found/new customerId if available, otherwise placeholder
       nailTechId: slotNailTechId || '', // Required: get from slot
       serviceType,
       status: 'pending_form' as BookingStatus,
@@ -999,11 +1035,11 @@ export async function syncBookingWithForm(
     customer = await getCustomerById(booking.customerId);
     if (!customer) {
       // Customer not found, fall back to findOrCreateCustomer
-      customer = await findOrCreateCustomer(formData);
+      customer = await findOrCreateCustomer(formData, fieldOrder);
     }
   } else {
     // No existing customer link, find or create customer from form data
-    customer = await findOrCreateCustomer(formData);
+    customer = await findOrCreateCustomer(formData, fieldOrder);
   }
   
   // If customer already has an email saved in the system, replace the form email with the saved email
@@ -1203,6 +1239,102 @@ export async function confirmBooking(bookingId: string, depositAmount?: number, 
     });
   });
 
+  // After confirming booking, ensure customer exists and is properly saved
+  // This handles cases where bookings are confirmed without form submission
+  // For new clients without form data, we only use Social Media Name to create customer
+  if (booking && customerId) {
+    try {
+      // TypeScript type guard: ensure booking is not null
+      const bookingData: Booking = booking;
+      
+      // Check if customer exists
+      let customer = null;
+      if (customerId !== 'PENDING_FORM_SUBMISSION') {
+        customer = await getCustomerById(customerId);
+      }
+
+      // Extract social media name from booking data (for bookings confirmed without form)
+      const customerData = bookingData.customerData || {};
+      
+      // Find social media name from customerData
+      const socialMediaName = 
+        customerData['Facebook or Instagram Name'] ||
+        customerData['FB Name'] ||
+        customerData['Social Media Name'] ||
+        customerData['Facebook or Instagram Name. (The one you used to inquire with me.)'] ||
+        customerData['Facebook or Instagram Name. (The one you used to inquire with me)'] ||
+        Object.entries(customerData).find(([k]) => {
+          const lower = k.toLowerCase();
+          return (lower.includes('facebook') || lower.includes('instagram') || 
+                  lower.includes('fb') || lower.includes('social media')) &&
+                 lower.includes('name');
+        })?.[1];
+
+      // If customer doesn't exist or has "Unknown Customer", create/update it
+      // For new clients without form: only use Social Media Name if available
+      if (!customer || (customer.name === 'Unknown Customer')) {
+        // Only proceed if we have social media name (for bookings confirmed without form)
+        // OR if we have full customerData (for bookings with form data)
+        if (socialMediaName && String(socialMediaName).trim()) {
+          // For bookings confirmed without form: create customer with only Social Media Name
+          const customerDataForCreation = {
+            'Facebook or Instagram Name': String(socialMediaName).trim(),
+            'FB Name': String(socialMediaName).trim(),
+            'Social Media Name': String(socialMediaName).trim(),
+            'Name': String(socialMediaName).trim(), // Use social media name as name
+          };
+          const customerDataOrder = ['Facebook or Instagram Name'];
+          
+          const { findOrCreateCustomer } = await import('./customerService');
+          const updatedCustomer = await findOrCreateCustomer(customerDataForCreation, customerDataOrder, false);
+          
+          // If customer name is still "Unknown Customer", explicitly update it to use social media name
+          if (updatedCustomer.name === 'Unknown Customer') {
+            await getCustomersCollection().doc(updatedCustomer.id).set({
+              name: String(socialMediaName).trim(),
+              socialMediaName: String(socialMediaName).trim(),
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            }, { merge: true });
+            console.log(`Updated customer ${updatedCustomer.id} name to "${socialMediaName}" during confirmation`);
+          }
+          
+          // If customer was created (new customer), link the booking to it
+          if (updatedCustomer.id !== customerId && customerId === 'PENDING_FORM_SUBMISSION') {
+            await getBookingsCollection().doc(bookingId).set({
+              customerId: updatedCustomer.id,
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            }, { merge: true });
+            console.log(`Linked booking ${bookingId} to customer ${updatedCustomer.id} during confirmation`);
+          } else if (customer && customer.name === 'Unknown Customer' && updatedCustomer.name !== 'Unknown Customer') {
+            // Customer was updated with a proper name
+            console.log(`Updated customer ${updatedCustomer.id} name from "Unknown Customer" to "${updatedCustomer.name}" during confirmation`);
+          }
+        } else if (Object.keys(customerData).length > 0) {
+          // Fallback: if we have customerData but no social media name, use full customerData
+          // This handles cases where form was submitted but social media name field is missing
+          const customerDataOrder = bookingData.customerDataOrder || [];
+          const { findOrCreateCustomer } = await import('./customerService');
+          const updatedCustomer = await findOrCreateCustomer(customerData, customerDataOrder, false);
+          
+          // If customer was created (new customer), link the booking to it
+          if (updatedCustomer.id !== customerId && customerId === 'PENDING_FORM_SUBMISSION') {
+            await getBookingsCollection().doc(bookingId).set({
+              customerId: updatedCustomer.id,
+              updatedAt: Timestamp.now().toDate().toISOString(),
+            }, { merge: true });
+            console.log(`Linked booking ${bookingId} to customer ${updatedCustomer.id} during confirmation`);
+          } else if (customer && customer.name === 'Unknown Customer' && updatedCustomer.name !== 'Unknown Customer') {
+            // Customer was updated with a proper name
+            console.log(`Updated customer ${updatedCustomer.id} name from "Unknown Customer" to "${updatedCustomer.name}" during confirmation`);
+          }
+        }
+      }
+    } catch (error) {
+      // Don't fail the confirmation if customer creation/update fails
+      console.error('Error ensuring customer exists during booking confirmation:', error);
+    }
+  }
+
   // Email functionality disabled
 }
 
@@ -1290,6 +1422,33 @@ export async function updateBookingStatus(bookingId: string, status: BookingStat
   await getBookingsCollection().doc(bookingId).set(updateData, { merge: true });
 
   // Email functionality disabled
+}
+
+export async function linkBookingToCustomer(bookingId: string, customerId: string): Promise<void> {
+  const bookingRef = getBookingsCollection().doc(bookingId);
+  const bookingSnap = await bookingRef.get();
+  
+  if (!bookingSnap.exists) {
+    throw new Error('Booking not found.');
+  }
+  
+  // Verify customer exists
+  const customerRef = getCustomersCollection().doc(customerId);
+  const customerSnap = await customerRef.get();
+  
+  if (!customerSnap.exists) {
+    throw new Error('Customer not found.');
+  }
+  
+  // Update booking with customerId
+  await bookingRef.set({
+    customerId,
+    updatedAt: Timestamp.now().toDate().toISOString(),
+  }, { merge: true });
+  
+  // Invalidate booking cache
+  const { bookingCache } = await import('./bookingCache');
+  bookingCache.invalidate(bookingId);
 }
 
 export async function updateServiceType(bookingId: string, newServiceType: ServiceType): Promise<void> {

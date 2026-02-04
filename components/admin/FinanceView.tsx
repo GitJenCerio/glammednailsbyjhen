@@ -48,6 +48,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<Record<string, 'up' | 'down'>>({});
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const dropdownMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [dropdownCoords, setDropdownCoords] = useState<{ top: number; right: number } | null>(null);
   const [localSelectedNailTechId, setLocalSelectedNailTechId] = useState<string | null>(selectedNailTechId || null);
   const [activeFilterField, setActiveFilterField] = useState<'nailTech' | 'status' | 'date'>('status');
@@ -139,7 +140,14 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
   };
 
   const getCustomerName = useCallback((booking: Booking) => {
-    // 1) Always prefer the name the client typed in the form (per booking)
+    // 1) First, try to get name from customer record (source of truth after editing)
+    // This ensures that when a customer is updated, the new name is shown in bookings
+    if (booking.customerId && booking.customerId !== 'PENDING_FORM_SUBMISSION' && customers.length > 0) {
+      const customer = customers.find((c) => c.id === booking.customerId);
+      if (customer?.name && customer.name !== 'Unknown Customer') return customer.name;
+    }
+
+    // 2) Fall back to the name the client typed in the form (per booking) - historical data
     if (booking.customerData && Object.keys(booking.customerData).length > 0) {
       // Helper function to find field by fuzzy matching key names
       const findField = (keywords: string[]): string | null => {
@@ -322,8 +330,8 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       const effectivePaymentStatus = getEffectivePaymentStatus(booking);
       
       if (filterStatus !== 'all' && effectivePaymentStatus !== filterStatus) return false;
-      // Include bookings with invoices OR bookings with deposits/paid amounts (partial payments) OR confirmed bookings (even with 0 payment)
-      if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed') return false;
+      // Include bookings with invoices OR bookings with deposits/paid amounts (partial payments) OR confirmed bookings (even with 0 payment) OR pending_payment bookings (to allow creating quotes for past bookings)
+      if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed' && booking.status !== 'pending_payment') return false;
       
       
       return true;
@@ -512,13 +520,33 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
     if (!openDropdownId) return;
 
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // Check if click is inside the dropdown menu itself (using ref for the open dropdown)
+      const openMenuRef = dropdownMenuRefs.current[openDropdownId];
+      if (openMenuRef && openMenuRef.contains(target)) {
+        return; // Don't close if clicking inside dropdown
+      }
+      
+      // Check if click is inside the dropdown menu by class (fallback)
+      const isDropdownMenu = target.closest('.dropdown-menu');
+      if (isDropdownMenu) {
+        return; // Don't close if clicking inside dropdown
+      }
+      
+      // Check if click is on a button inside the dropdown (buttons might be direct children or nested)
+      const buttonInDropdown = target.closest('.dropdown-menu button');
+      if (buttonInDropdown) {
+        return; // Don't close if clicking a button inside dropdown
+      }
+      
+      // Check if click is on the dropdown button itself
       const allRefs = Object.values(dropdownRefs.current);
       const clickedInside = allRefs.some(
-        (ref) => ref && ref.contains(event.target as Node)
+        (ref) => ref && ref.contains(target)
       );
-      const target = event.target as HTMLElement;
-      const isDropdownMenu = target.closest('.dropdown-menu');
-      if (!clickedInside && !isDropdownMenu) {
+      
+      if (!clickedInside) {
         setOpenDropdownId(null);
         setDropdownCoords(null);
       }
@@ -540,8 +568,16 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    // Use click event and add a small delay to allow button clicks to fire first
+    // This ensures that button onClick handlers execute before the outside click handler
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 50); // Delay to ensure button clicks are processed first
+    
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('click', handleClickOutside);
+    };
   }, [openDropdownId]);
 
   // Calculate today's bookings
@@ -555,7 +591,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
         .filter((booking) => {
           const effectivePaymentStatus = getEffectivePaymentStatus(booking);
           if (filterStatus !== 'all' && effectivePaymentStatus !== filterStatus) return false;
-        if (!booking.invoice && !booking.depositAmount && booking.status !== 'confirmed') return false;
+        if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed' && booking.status !== 'pending_payment') return false;
         const appointmentDate = parseISO(booking.slot.date);
         return appointmentDate >= today && appointmentDate < tomorrow;
       })
@@ -589,7 +625,7 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
       .filter((booking) => {
         const effectivePaymentStatus = getEffectivePaymentStatus(booking);
         if (filterStatus !== 'all' && effectivePaymentStatus !== filterStatus) return false;
-        if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed') return false;
+        if (!booking.invoice && !booking.depositAmount && !booking.paidAmount && booking.status !== 'confirmed' && booking.status !== 'pending_payment') return false;
         const appointmentDate = parseISO(booking.slot.date);
         // Exclude today's bookings (they're shown in the Today section)
         if (appointmentDate >= today && appointmentDate < tomorrow) return false;
@@ -906,6 +942,20 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                                 View Invoice
                               </button>
                             )}
+                            {booking.invoice && onMakeQuotation && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMakeQuotation(booking.id);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoCreateOutline className="w-4 h-4 text-blue-600" />
+                                Edit Invoice
+                              </button>
+                            )}
                             {onMakeQuotation && !booking.invoice && (
                               <button
                                 onClick={(e) => {
@@ -1197,6 +1247,20 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                                 View Invoice
                               </button>
                             )}
+                            {booking.invoice && onMakeQuotation && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMakeQuotation(booking.id);
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                              >
+                                <IoCreateOutline className="w-4 h-4 text-blue-600" />
+                                Edit Invoice
+                              </button>
+                            )}
                             {onMakeQuotation && !booking.invoice && (
                               <button
                                 onClick={(e) => {
@@ -1404,9 +1468,25 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
       {/* All Other Bookings - Mobile Card View */}
       <div className="lg:hidden space-y-3">
+        {filterPeriod !== 'all' && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs text-amber-800">
+              <strong>Note:</strong> To view invoices and create quotations for past bookings, set the Period filter to &quot;All time&quot;.
+            </p>
+          </div>
+        )}
         {filteredBookings.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-xs sm:text-sm text-slate-500">
-            No invoices found.
+            {filterPeriod !== 'all' ? (
+              <div>
+                <p>No bookings found for the selected period.</p>
+                <p className="mt-2 text-xs text-slate-400">
+                  Try setting the Period filter to &quot;All time&quot; to see past bookings.
+                </p>
+              </div>
+            ) : (
+              'No invoices found.'
+            )}
           </div>
         ) : (
           filteredBookings.map((booking) => (
@@ -1483,6 +1563,20 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                             >
                               <IoEyeOutline className="w-4 h-4" />
                               View Invoice
+                            </button>
+                          )}
+                          {booking.invoice && onMakeQuotation && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMakeQuotation(booking.id);
+                                setOpenDropdownId(null);
+                                setDropdownCoords(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 touch-manipulation"
+                            >
+                              <IoCreateOutline className="w-4 h-4 text-blue-600" />
+                              Edit Invoice
                             </button>
                           )}
                           {onMakeQuotation && !booking.invoice && (
@@ -1611,6 +1705,13 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
 
       {/* Desktop Table View */}
       <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {filterPeriod !== 'all' && (
+          <div className="px-4 xl:px-6 py-3 bg-amber-50 border-b border-amber-200">
+            <p className="text-xs text-amber-800">
+              <strong>Note:</strong> To view invoices and create quotations for past bookings, set the Period filter to &quot;All time&quot;.
+            </p>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px]">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -1648,7 +1749,16 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-6 py-12 text-center text-sm text-slate-500">
-                    No invoices found.
+                    {filterPeriod !== 'all' ? (
+                      <div>
+                        <p>No bookings found for the selected period.</p>
+                        <p className="mt-2 text-xs text-slate-400">
+                          Try setting the Period filter to &quot;All time&quot; to see past bookings.
+                        </p>
+                      </div>
+                    ) : (
+                      'No invoices found.'
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -1764,64 +1874,148 @@ export function FinanceView({ bookings, slots, customers = [], nailTechs = [], s
                     <td className="px-4 xl:px-6 py-3">
                       <div className="relative inline-block" ref={(el) => { dropdownRefs.current[booking.id] = el; }}>
                         <button
-                          onClick={() => {
-                            setOpenDropdownId(openDropdownId === booking.id ? null : booking.id);
-                            setDropdownCoords(null);
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const button = e.currentTarget;
+                            const rect = button.getBoundingClientRect();
+                            if (openDropdownId === booking.id) {
+                              setOpenDropdownId(null);
+                              setDropdownCoords(null);
+                            } else {
+                              setOpenDropdownId(booking.id);
+                              setDropdownCoords({
+                                top: rect.bottom + 4,
+                                right: window.innerWidth - rect.right,
+                              });
+                            }
                           }}
                           className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                           aria-label="Actions"
                         >
                           <IoEllipsisVertical className="w-5 h-5 text-slate-600" />
                         </button>
-                        {openDropdownId === booking.id && (
+                        {openDropdownId === booking.id && dropdownCoords && typeof window !== 'undefined' && createPortal(
                           <div 
-                            className="fixed w-48 rounded-xl border border-slate-200 bg-white shadow-lg z-[100] overflow-hidden"
+                            ref={(el) => { dropdownMenuRefs.current[booking.id] = el; }}
+                            className="dropdown-menu fixed w-48 rounded-xl border border-slate-200 bg-white shadow-lg z-[9999] overflow-hidden"
                             style={{
-                              right: typeof window !== 'undefined' ? `${Math.max(20, window.innerWidth - (dropdownRefs.current[booking.id]?.getBoundingClientRect().right || 0) + 20)}px` : '20px',
-                              top: dropdownPosition[booking.id] === 'up' 
-                                ? `${Math.max(20, (dropdownRefs.current[booking.id]?.getBoundingClientRect().top || 0) - 100)}px`
-                                : `${Math.min((typeof window !== 'undefined' ? window.innerHeight : 1000) - 120, (dropdownRefs.current[booking.id]?.getBoundingClientRect().bottom || 0) + 4)}px`,
+                              top: `${Math.min(window.innerHeight - 150, dropdownCoords.top)}px`,
+                              right: `${Math.max(20, dropdownCoords.right)}px`,
+                              pointerEvents: 'auto',
                             }}
                           >
-                          {/* View Invoice Action */}
-                          {booking.invoice && onViewInvoice && (
-                            <button
-                              onClick={() => {
-                                onViewInvoice(booking.id);
-                                setOpenDropdownId(null);
-                              }}
-                              className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors border-b border-slate-100"
-                            >
-                              View Invoice
-                            </button>
-                          )}
-
-                          {/* Quote Action */}
-                          {onMakeQuotation && !booking.invoice && (
+                            {/* View Invoice Action */}
+                            {booking.invoice && onViewInvoice && (
                               <button
-                                onClick={() => {
-                                  onMakeQuotation(booking.id);
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  // Close dropdown immediately
                                   setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                  // Call the handler
+                                  onViewInvoice(booking.id);
+                                }}
+                                className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors border-b border-slate-100"
+                              >
+                                View Invoice
+                              </button>
+                            )}
+
+                            {/* Edit Invoice Action */}
+                            {booking.invoice && onMakeQuotation && (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  // Close dropdown immediately
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                  // Call the handler
+                                  onMakeQuotation(booking.id);
                                 }}
                                 className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors border-b border-slate-100"
                               >
-                              Quote
+                                Edit Invoice
+                              </button>
+                            )}
+
+                            {/* Quote Action */}
+                            {onMakeQuotation && !booking.invoice && (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  // Close dropdown immediately
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                  // Call the handler
+                                  onMakeQuotation(booking.id);
+                                }}
+                                className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors border-b border-slate-100"
+                              >
+                                Quote
+                              </button>
+                            )}
+
+                            {/* Update Payment Action */}
+                            {booking.invoice && booking.paymentStatus !== 'paid' && (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  // Close dropdown immediately
+                                  setOpenDropdownId(null);
+                                  setDropdownCoords(null);
+                                  // Open payment modal
+                                  setSelectedBookingForPayment(booking);
+                                  setPaymentModalOpen(true);
+                                }}
+                                className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors border-b border-slate-100"
+                              >
+                                Update Payment
                               </button>
                             )}
                             
                             {/* Refund Action */}
                             {booking.invoice && booking.paymentStatus === 'paid' && (
                               <button
-                                onClick={() => {
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
                                   handleUpdatePayment(booking.id, 'refunded');
                                   setOpenDropdownId(null);
+                                  setDropdownCoords(null);
                                 }}
                                 className="w-full px-4 py-2.5 text-left text-xs sm:text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
                               >
                                 Refund
                               </button>
                             )}
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </td>

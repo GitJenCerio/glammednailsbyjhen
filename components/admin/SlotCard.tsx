@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import type { Slot, Booking, ServiceType, NailTech } from '@/lib/types';
+import type { Slot, Booking, ServiceType, NailTech, Customer } from '@/lib/types';
 import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
-import { IoCreateOutline, IoTrashOutline, IoEyeOutline, IoDocumentTextOutline, IoEllipsisVertical } from 'react-icons/io5';
+import { IoCreateOutline, IoTrashOutline, IoEyeOutline, IoDocumentTextOutline, IoEllipsisVertical, IoLinkOutline } from 'react-icons/io5';
 
 const serviceLabels: Record<ServiceType, string> = {
   manicure: 'Manicure',
@@ -20,12 +20,14 @@ type SlotCardProps = {
   onView?: (booking: Booking) => void;
   onMakeQuotation?: (bookingId: string) => void;
   onSlotClick?: (slot: Slot) => void;
+  onLinkCustomer?: (booking: Booking) => void;
   nailTechs?: NailTech[];
   selectedNailTechId?: string | null;
   allNailTechIds?: string[]; // Sorted list of all nail tech IDs for consistent color assignment
+  customers?: Customer[]; // List of customers for linking
 };
 
-export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, onMakeQuotation, onSlotClick, nailTechs = [], selectedNailTechId, allNailTechIds }: SlotCardProps) {
+export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, onMakeQuotation, onSlotClick, onLinkCustomer, nailTechs = [], selectedNailTechId, allNailTechIds, customers = [] }: SlotCardProps) {
   const isConfirmed = slot.status === 'confirmed';
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -152,32 +154,76 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
       return null;
     };
 
-    // Try to find Facebook name first
+    // Try exact matches first (these are the keys used when creating bookings)
+    if (data['Facebook or Instagram Name'] && String(data['Facebook or Instagram Name']).trim()) {
+      return String(data['Facebook or Instagram Name']).trim();
+    }
+    if (data['FB Name'] && String(data['FB Name']).trim()) {
+      return String(data['FB Name']).trim();
+    }
+    if (data['Social Media Name'] && String(data['Social Media Name']).trim()) {
+      return String(data['Social Media Name']).trim();
+    }
+
+    // Then try fuzzy matching for variations
     const facebookName = findField(['facebook', 'fb name', 'fb']);
     if (facebookName) return facebookName;
 
-    // Then try Instagram name
     const instagramName = findField(['instagram', 'ig name', 'ig', 'insta']);
     if (instagramName) return instagramName;
 
-    // Try generic social media name
     const socialName = findField(['social media', 'social', 'social media name']);
     if (socialName) return socialName;
 
     return null;
   };
 
-  // Prioritize customerData over customer object name
-  // This is because customerData has the most up-to-date info from the form
-  // Only use customer.name if it's not "Unknown Customer" and we don't have customerData
-  const nameFromData = getCustomerNameFromData(booking?.customerData);
+  // Prioritize customer object name (source of truth after editing) over customerData
+  // This ensures that when a customer is updated, the new name is shown in bookings
+  // Only fall back to customerData if customer record doesn't have a valid name
   const customerNameFromObject = customer?.name && customer.name !== 'Unknown Customer' && customer.name.trim() !== '' 
     ? customer.name 
     : null;
-  const customerName = nameFromData || customerNameFromObject || null;
+  const nameFromData = getCustomerNameFromData(booking?.customerData);
+  const customerName = customerNameFromObject || nameFromData || null;
   
-  // Get social media name from customerData
-  const socialMediaName = getSocialMediaName(booking?.customerData);
+  // Get social media name from customerData first, then fall back to customer object
+  const socialMediaNameFromData = getSocialMediaName(booking?.customerData);
+  const socialMediaNameFromCustomer = (customer as any)?.socialMediaName && String((customer as any).socialMediaName).trim()
+    ? String((customer as any).socialMediaName).trim()
+    : null;
+  const socialMediaName = socialMediaNameFromData || socialMediaNameFromCustomer;
+
+  // Debug logging for pending bookings without form (only in development)
+  if (process.env.NODE_ENV === 'development' && booking && booking.status === 'pending_form' && !socialMediaName && !customerName) {
+    console.log('SlotCard: Pending booking without name or social media name', {
+      bookingId: booking.bookingId,
+      hasCustomerData: !!booking.customerData,
+      customerDataKeys: booking.customerData ? Object.keys(booking.customerData) : [],
+      customerData: booking.customerData,
+      customerName: customer?.name,
+      customerSocialMediaName: (customer as any)?.socialMediaName,
+    });
+  }
+
+  // Display logic:
+  // - If we have a real customer name, show it and (optionally) show socialMediaName as secondary.
+  // - If we don't have a real name yet (common for first-time clients), show socialMediaName as the primary label.
+  // - If neither exists, fall back to bookingId.
+  const primaryDisplayName =
+    customerName ||
+    socialMediaName ||
+    (booking?.bookingId ? booking.bookingId : null);
+  const secondaryDisplayName =
+    customerName &&
+    socialMediaName &&
+    customerName.trim().toLowerCase() !== socialMediaName.trim().toLowerCase()
+      ? socialMediaName
+      : null;
+  const primaryDisplayClassName =
+    !customerName && !socialMediaName
+      ? 'font-semibold text-slate-600 italic'
+      : 'font-semibold text-slate-900';
   
   // Debug: Log if we have booking but no name found (only in development)
   if (process.env.NODE_ENV === 'development' && booking && !customerName && slot.status === 'confirmed') {
@@ -372,15 +418,13 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
             <div className="flex items-center gap-2 flex-wrap">
-              {customerName ? (
-                <p className="font-semibold text-slate-900">
-                  {customerName}
-                  {socialMediaName && (
-                    <span className="text-slate-600 font-normal"> ({socialMediaName})</span>
+              {primaryDisplayName ? (
+                <p className={primaryDisplayClassName}>
+                  {primaryDisplayName}
+                  {secondaryDisplayName && (
+                    <span className="text-slate-600 font-normal"> ({secondaryDisplayName})</span>
                   )}
                 </p>
-              ) : booking?.bookingId ? (
-                <p className="font-semibold text-slate-600 italic">{booking.bookingId}</p>
               ) : null}
             </div>
             {/* Options dropdown - aligned with details on the right */}
@@ -427,7 +471,7 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
                       </button>
                     </>
                   )}
-                  {booking && slot.status === 'confirmed' && (
+                  {booking && (
                     <>
                       {onView && booking.customerData && Object.keys(booking.customerData).length > 0 && (
                         <button
@@ -441,6 +485,20 @@ export function SlotCard({ slot, booking, customer, onEdit, onDelete, onView, on
                         >
                           <IoEyeOutline className="w-4 h-4" />
                           <span>View Form</span>
+                        </button>
+                      )}
+                      {onLinkCustomer && customers.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDropdownOpen(false);
+                            onLinkCustomer(booking);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-indigo-700 hover:bg-indigo-50 transition-colors"
+                        >
+                          <IoLinkOutline className="w-4 h-4" />
+                          <span>Link to Customer</span>
                         </button>
                       )}
                       {onMakeQuotation && !booking.invoice && (

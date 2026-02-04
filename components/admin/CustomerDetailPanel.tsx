@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react';
 import type { Customer, Booking } from '@/lib/types';
 import { formatTime12Hour } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
+import { IoCalendarOutline, IoTrashOutline } from 'react-icons/io5';
 
 type CustomerDetailPanelProps = {
   customer: Customer | null;
   bookings: Booking[];
   lifetimeValue: number;
   onUpdate?: (customerId: string, updates: Partial<Customer>) => Promise<void>;
+  onBookSlot?: (customer: Customer) => void;
+  onDelete?: (customerId: string, hasBookings?: boolean) => Promise<void>;
 };
 
 const statusLabels: Record<string, string> = {
@@ -26,7 +29,7 @@ const serviceLabels: Record<string, string> = {
   home_service_3slots: 'Home Service (3 slots)',
 };
 
-export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdate }: CustomerDetailPanelProps) {
+export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdate, onBookSlot, onDelete }: CustomerDetailPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editFirstName, setEditFirstName] = useState('');
@@ -84,13 +87,49 @@ export function CustomerDetailPanel({ customer, bookings, lifetimeValue, onUpdat
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-lg sm:text-xl md:text-2xl font-semibold break-words">{customer.name}</h2>
           {!isEditing && (
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:border-slate-900 touch-manipulation"
-            >
-              Edit
-            </button>
+            <div className="flex gap-2">
+              {onBookSlot && (
+                <button
+                  type="button"
+                  onClick={() => onBookSlot(customer)}
+                  className="rounded-full bg-indigo-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-indigo-700 touch-manipulation flex items-center gap-1.5"
+                >
+                  <IoCalendarOutline className="w-4 h-4" />
+                  Book Slot
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:border-slate-900 touch-manipulation"
+              >
+                Edit
+              </button>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    let confirmMessage = `Are you sure you want to delete ${customer.name}? This action cannot be undone.`;
+                    
+                    if (bookings.length > 0) {
+                      confirmMessage = `WARNING: This customer has ${bookings.length} booking(s). Deleting will remove the customer record, but the bookings will remain in the system (they will show as having no customer).\n\nAre you sure you want to delete ${customer.name} anyway?`;
+                    }
+                    
+                    if (confirm(confirmMessage)) {
+                      try {
+                        await onDelete(customer.id, bookings.length > 0);
+                      } catch (error: any) {
+                        alert(error.message || 'Failed to delete customer.');
+                      }
+                    }
+                  }}
+                  className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 hover:border-red-400 touch-manipulation flex items-center gap-1.5"
+                >
+                  <IoTrashOutline className="w-4 h-4" />
+                  Delete
+                </button>
+              )}
+            </div>
           )}
         </div>
       </header>

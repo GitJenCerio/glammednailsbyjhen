@@ -8,7 +8,7 @@ import { auth } from '@/lib/firebase';
 
 // Prevent static generation - this page requires Firebase client SDK
 export const dynamic = 'force-dynamic';
-import type { BlockedDate, Booking, BookingWithSlot, Invoice, Slot } from '@/lib/types';
+import type { BlockedDate, Booking, BookingWithSlot, Invoice, Slot, ServiceType } from '@/lib/types';
 import { formatTime12Hour, getNailTechColorClasses } from '@/lib/utils';
 import { CustomSelect } from '@/components/admin/CustomSelect';
 import { CalendarGrid } from '@/components/admin/calendar/CalendarGrid';
@@ -31,6 +31,8 @@ import { ReleaseSlotsModal } from '@/components/admin/modals/ReleaseSlotsModal';
 import { RecoverBookingModal } from '@/components/admin/modals/RecoverBookingModal';
 import { FormResponseModal } from '@/components/admin/modals/FormResponseModal';
 import { CancelBookingModal } from '@/components/admin/modals/CancelBookingModal';
+import { LinkCustomerModal } from '@/components/admin/modals/LinkCustomerModal';
+import { BookSlotForCustomerModal } from '@/components/admin/modals/BookSlotForCustomerModal';
 import { FinanceView } from '@/components/admin/FinanceView';
 import { CustomerList } from '@/components/admin/CustomerList';
 import { CustomerDetailPanel } from '@/components/admin/CustomerDetailPanel';
@@ -167,6 +169,10 @@ function AdminDashboardContent() {
   const [releaseSlotsModalOpen, setReleaseSlotsModalOpen] = useState(false);
   const [recoverBookingModalOpen, setRecoverBookingModalOpen] = useState(false);
   const [cancelBookingModalOpen, setCancelBookingModalOpen] = useState(false);
+  const [linkCustomerModalOpen, setLinkCustomerModalOpen] = useState(false);
+  const [bookingToLink, setBookingToLink] = useState<Booking | null>(null);
+  const [bookSlotModalOpen, setBookSlotModalOpen] = useState(false);
+  const [customerToBook, setCustomerToBook] = useState<Customer | null>(null);
   const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(null);
   const [isCancellingBooking, setIsCancellingBooking] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -362,11 +368,14 @@ function AdminDashboardContent() {
         const sixMonthsLater = new Date();
         sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
         
-        // OPTIMIZED: Use date range (next 6 months) instead of fetching ALL slots
+        // OPTIMIZED: Use date range (past 6 months to future 6 months) instead of fetching ALL slots
         // This prevents quota exhaustion when admin dashboard loads
+        // Include past months so past bookings are visible when navigating to past months
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const allSlotsParams = new URLSearchParams({
           t: cacheBuster,
-          startDate: format(today, 'yyyy-MM-dd'),
+          startDate: format(sixMonthsAgo, 'yyyy-MM-dd'),
           endDate: format(sixMonthsLater, 'yyyy-MM-dd'),
         });
         if (selectedNailTechId) {
@@ -622,12 +631,15 @@ function AdminDashboardContent() {
       }
       
       // Load calendar data + bookings together so calendar statuses are accurate on first render
-      // OPTIMIZED: Load slots for modals with 6-month date range instead of all slots
+      // OPTIMIZED: Load slots for modals with date range (past 6 months to future 6 months) instead of all slots
+      // Include past months so past bookings are visible when navigating to past months
       const today = new Date();
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       const sixMonthsLater = new Date();
       sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
       const allSlotsParams = new URLSearchParams({
-        startDate: format(today, 'yyyy-MM-dd'),
+        startDate: format(sixMonthsAgo, 'yyyy-MM-dd'),
         endDate: format(sixMonthsLater, 'yyyy-MM-dd'),
       });
       if (selectedNailTechId) {
@@ -849,7 +861,27 @@ function AdminDashboardContent() {
   }, [bookingsWithSlots, bookingFilterPeriod]);
 
   const selectedBooking = selectedBookingId
-    ? bookingsWithSlots.find((booking) => booking.id === selectedBookingId) ?? null
+    ? (() => {
+        // First try to find in bookingsWithSlots (for calendar view bookings)
+        const found = bookingsWithSlots.find((booking) => booking.id === selectedBookingId);
+        if (found) return found;
+        
+        // If not found, try to find in raw bookings and construct BookingWithSlot
+        // This is needed for Finance view bookings that might not be in the current calendar range
+        const booking = bookings.find((b) => b.id === selectedBookingId);
+        if (!booking) return null;
+        
+        // Find the slot from allSlots (not just date-filtered slots)
+        const slot = filteredAllSlots.find((s) => s.id === booking.slotId);
+        if (!slot) return null;
+        
+        const linkedSlots = (booking.linkedSlotIds ?? [])
+          .map((linkedId) => filteredAllSlots.find((s) => s.id === linkedId))
+          .filter((value): value is Slot => Boolean(value));
+        const pairedSlot = linkedSlots[0];
+        
+        return { ...booking, slot, pairedSlot, linkedSlots };
+      })()
     : null;
 
   async function handleSaveSlot(payload: { date: string; time: string; status: Slot['status']; slotType?: 'regular' | 'with_squeeze_fee' | null; notes?: string; isHidden?: boolean }) {
@@ -967,6 +999,71 @@ function AdminDashboardContent() {
   function handleDeleteSlot(slot: Slot) {
     setSlotToDelete(slot);
     setDeleteSlotModalOpen(true);
+  }
+
+  function handleLinkCustomer(booking: Booking) {
+    setBookingToLink(booking);
+    setLinkCustomerModalOpen(true);
+  }
+
+  async function handleConfirmLinkCustomer(bookingId: string, customerId: string) {
+    const response = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'link_customer',
+        customerId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to link booking to customer');
+    }
+
+    // Refresh bookings and customers
+    await loadData();
+  }
+
+  function handleBookSlotForCustomer(customer: Customer) {
+    setCustomerToBook(customer);
+    setBookSlotModalOpen(true);
+  }
+
+  async function handleConfirmBookSlotForCustomer(
+    slotId: string,
+    serviceType: ServiceType,
+    linkedSlotIds: string[],
+    serviceLocation: 'homebased_studio' | 'home_service'
+  ) {
+    if (!customerToBook) return;
+
+    // Create booking with customer already linked
+    const response = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slotId,
+        serviceType,
+        linkedSlotIds,
+        serviceLocation,
+        clientType: 'repeat',
+        repeatClientEmail: customerToBook.email || customerToBook.phone || '',
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create booking');
+    }
+
+    // Refresh data
+    await loadData();
+    if (selectedCustomerId === customerToBook.id) {
+      await loadCustomerDetails(customerToBook.id);
+    }
+
+    setToast(`Booking created for ${customerToBook.name}`);
   }
 
   async function confirmDeleteSlot() {
@@ -1631,6 +1728,7 @@ function AdminDashboardContent() {
                           onDelete={handleDeleteSlot}
                           onView={(booking) => setResponseModalBooking(booking)}
                           onMakeQuotation={handleMakeQuotation}
+                          onLinkCustomer={handleLinkCustomer}
                           onSlotClick={(clickedSlot) => {
                             // When available slot is clicked, show available slot info
                             setSelectedBookingId(null);
@@ -1639,6 +1737,7 @@ function AdminDashboardContent() {
                           nailTechs={nailTechs}
                           selectedNailTechId={selectedNailTechId}
                           allNailTechIds={sortedTechIds}
+                          customers={customers}
                         />
                       </div>
                     );
@@ -1985,6 +2084,7 @@ function AdminDashboardContent() {
                 <div className="space-y-4 sm:space-y-6">
                   <CustomerList
                     customers={customers}
+                    bookings={bookings}
                     onSelect={(customer) => setSelectedCustomerId(customer.id)}
                     selectedId={selectedCustomerId}
                   />
@@ -2006,6 +2106,23 @@ function AdminDashboardContent() {
                           await loadCustomerDetails(customerId);
                         }
                         setToast('Customer updated.');
+                      }
+                    }}
+                    onBookSlot={handleBookSlotForCustomer}
+                    onDelete={async (customerId, hasBookings) => {
+                      const url = `/api/customers/${customerId}${hasBookings ? '?force=true' : ''}`;
+                      const res = await fetch(url, {
+                        method: 'DELETE',
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setToast(data.message || 'Customer deleted.');
+                        setSelectedCustomerId(null);
+                        setSelectedCustomer(null);
+                        await loadData();
+                      } else {
+                        const error = await res.json();
+                        throw new Error(error.error || 'Failed to delete customer.');
                       }
                     }}
                   />
@@ -2167,6 +2284,31 @@ function AdminDashboardContent() {
         open={!!responseModalBooking}
         booking={responseModalBooking}
         onClose={() => setResponseModalBooking(null)}
+      />
+
+      <LinkCustomerModal
+        open={linkCustomerModalOpen}
+        booking={bookingToLink}
+        customers={customers}
+        onClose={() => {
+          setLinkCustomerModalOpen(false);
+          setBookingToLink(null);
+        }}
+        onConfirm={handleConfirmLinkCustomer}
+      />
+
+      <BookSlotForCustomerModal
+        open={bookSlotModalOpen}
+        customer={customerToBook}
+        slots={allSlots}
+        blockedDates={blockedDates}
+        nailTechs={nailTechs}
+        selectedNailTechId={selectedNailTechId}
+        onClose={() => {
+          setBookSlotModalOpen(false);
+          setCustomerToBook(null);
+        }}
+        onConfirm={handleConfirmBookSlotForCustomer}
       />
 
       {cancelBookingModalOpen && cancellingBookingId && (() => {
