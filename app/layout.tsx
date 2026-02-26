@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { StructuredData } from "@/components/StructuredData";
+import MaintenancePage from "@/components/MaintenancePage";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.glammednailsbyjhen.com';
 const siteName = 'glammednailsbyjhen';
@@ -96,6 +97,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const isMaintenanceMode = process.env.MAINTENANCE_MODE === "true";
+  const estimatedReturn = process.env.MAINTENANCE_ESTIMATED_RETURN;
+
   return (
     <html lang="en">
       <head>
@@ -104,7 +108,11 @@ export default function RootLayout({
         <StructuredData />
       </head>
       <body className="antialiased">
-        {children}
+        {isMaintenanceMode ? (
+          <MaintenancePage estimatedReturn={estimatedReturn} />
+        ) : (
+          children
+        )}
       </body>
     </html>
   );
