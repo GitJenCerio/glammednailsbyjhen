@@ -1,4 +1,7 @@
 import Image from "next/image";
+import { IoLogoFacebook } from "react-icons/io5";
+
+const FACEBOOK_URL = "https://www.facebook.com/profile.php?id=61557672954391";
 
 interface MaintenancePageProps {
   /** Optional message, e.g. "We'll be back by Feb 27, 2025 at 6:00 PM" */
@@ -29,9 +32,24 @@ export default function MaintenancePage({ estimatedReturn }: MaintenancePageProp
           Site Under Maintenance
         </h1>
 
-        <p className="text-subtext text-base sm:text-lg mb-6" style={{ color: "#666666" }}>
+        <p className="text-subtext text-base sm:text-lg mb-4" style={{ color: "#666666" }}>
           We&apos;re currently making improvements. Please check back soon!
         </p>
+
+        <p className="text-black text-base sm:text-lg mb-6" style={{ fontFamily: "var(--font-lato), sans-serif" }}>
+          For bookings and concerns, please message us on our Facebook page.
+        </p>
+
+        <a
+          href={FACEBOOK_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 bg-black text-white px-5 py-3 rounded-lg hover:bg-gray-800 transition-colors text-sm sm:text-base font-medium mb-6"
+          aria-label="Message us on Facebook"
+        >
+          <IoLogoFacebook className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+          Message us on Facebook
+        </a>
 
         {estimatedReturn && (
           <p
